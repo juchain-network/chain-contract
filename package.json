@@ -1,0 +1,25 @@
+{
+  "name": "hbsc-contracts",
+  "version": "1.0.0",
+  "description": "hchain system contracts",
+  "main": "generate-contracts.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "chai": "^4.3.4",
+    "dotenv": "^14.2.0",
+    "ethereum-waffle": "^3.4.0",
+    "ethers": "^5.5.3",
+    "nunjucks": "^3.2.2"
+  },
+  "devDependencies": {
+    "@openzeppelin/test-helpers": "^0.5.9"
+  },
+  "scripts": {
+    "test": "truffle test"
+  },
+  "author": "",
+  "license": "ISC"
+}
