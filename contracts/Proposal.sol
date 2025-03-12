@@ -91,9 +91,12 @@ contract Proposal is Params {
         removeThreshold = 48;
         decreaseRate = 24;
         withdrawProfitPeriod = 28800;
-        increasePeriod = 20*60*24*365; //增发周期 1分钟 * 60 * 24 * 365
         initialized = true;
-        receiverAddr = 0xc70DaecFA436538A93C406C3AC4ADaa5936b31da;
+//        increasePeriod = 20*60*24*365; //增发周期 1分钟 * 60 * 24 * 365
+//        receiverAddr = 0xc70DaecFA436538A93C406C3AC4ADaa5936b31da;
+
+        increasePeriod = 60*60*24; //增发周期 1分钟 * 60 * 24
+        receiverAddr = 0xf869b51b53F72036d84e3EDF3Ba09c5dd3D89a66;
     }
 
     function createProposal(
