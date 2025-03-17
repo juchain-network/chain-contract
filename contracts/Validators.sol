@@ -134,6 +134,8 @@ contract Validators is Params {
         validatorInfo[validator].status = Status.Active;
 
         emit LogActive(validator, block.timestamp);
+
+        return true;
     }
 
     // feeAddr can withdraw profits of it's validator
