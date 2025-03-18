@@ -27,7 +27,8 @@ punish:
 	@rm $(SRC_CONTRACTJu)/combined.json
 
 validators:
-	@solc --allow-paths $(ALLOW_PATH) --optimize --combined-json abi,bin,userdoc,devdoc  $(SRC_CONTRACTJu)/Validators.sol -o $(SRC_CONTRACTJu)/ --overwrite
+	@#solc --allow-paths $(ALLOW_PATH) --optimize --combined-json abi,bin,userdoc,devdoc  $(SRC_CONTRACTJu)/Validators.sol -o $(SRC_CONTRACTJu)/ --overwrite
+	@npx solcjs --optimize --combined-json abi --base-path $(ALLOW_PATH) $(SRC_CONTRACTJu)/Validators.sol > $(SRC_CONTRACTJu)/output.json
 	@abigen --combined-json $(SRC_CONTRACTJu)/combined.json --pkg $(PACKAGE) --out $(GO_OUT4Ju)/validators.go
 	@rm $(SRC_CONTRACTJu)/combined.json
 
@@ -35,7 +36,7 @@ validators:
 
 
 clean:
-	@rm -fr $(GO_OUT)/*
+	@rm -fr $(GO_OUT4Ju)/*
 
 
 asmExample:
