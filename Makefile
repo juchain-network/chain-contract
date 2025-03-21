@@ -1,5 +1,5 @@
 ##
-##编译solidity，并产生bin文件，abi文件，和相应的go文件 solc版本0.5.16
+##编译solidity，并产生bin文件，abi文件，和相应的go文件 solc版本0.7.6
 
 currentDir := `pwd`
 
