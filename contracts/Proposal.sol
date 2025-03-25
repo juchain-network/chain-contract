@@ -92,7 +92,7 @@ contract Proposal is Params {
         punishThreshold = 24;
         removeThreshold = 48;
         decreaseRate = 24;
-        withdrawProfitPeriod = 28800;
+        withdrawProfitPeriod = 86400;
         initialized = true;
 //        increasePeriod = 20*60*24*365; //增发周期 1分钟 * 60 * 24 * 365
 //        receiverAddr = 0xc70DaecFA436538A93C406C3AC4ADaa5936b31da;
