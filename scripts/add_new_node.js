@@ -19,7 +19,7 @@ async function main() {
     let miner2 = signers[1];
     let miner3 = signers[2];
     // 新加入矿工的地址
-    let toAdd = "0x12c7510ec198ec43e639dfecfe30cb609c946665";
+    let toAdd = "0x9e6a23508aa763c709d45f671d7a3a068025abc0";
     const Proposal = await hre.ethers.getContractFactory("Proposal");
     const proposal = await Proposal.attach("0x000000000000000000000000000000000000F002");
 

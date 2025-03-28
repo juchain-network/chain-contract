@@ -29,7 +29,7 @@ module.exports = {
     },
     networks: {
         juchain: {
-            url: 'http://54.179.61.125:8545/',
+            url: 'https://testnet-rpc.juchain.org/',
             accounts: [
                 {
                     privateKey: "0xca881281fb10b53a87d00cbfae29f7cf8cfe8ac7c8389b3d20b24fc6bc3f3ff9",
