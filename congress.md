@@ -85,7 +85,7 @@ Time: 1743154658
 >
 ```shell
 # step1 创建提案交易，并签名发送
-./congress create_proposal -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -t 0x029DAB47e268575D4AC167De64052FB228B5fA41 -o remove  --rpc_laddr https://testnet-rpc.juchain.org 
+./congress create_proposal -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -t c9ebc132a89aab349d9232d8ce70a2c2fea0a096 -o add  --rpc_laddr https://testnet-rpc.juchain.org 
 ./congress sign -f createProposal.json -k miner1.key -p juchain  --chainId 202599 
 ./congress send  -f createProposal_signed.json -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b  --rpc_laddr https://testnet-rpc.juchain.org 
 # 这条命令执行后可以获取到提案ID
@@ -108,6 +108,6 @@ Time: 1743154658
 
 
 # step3 查看新增矿工的信息
-./congress miner  --rpc_laddr https://testnet-rpc.juchain.org  -a 0x029DAB47e268575D4AC167De64052FB228B5fA41
+./congress miner  --rpc_laddr https://testnet-rpc.juchain.org  -a c9ebc132a89aab349d9232d8ce70a2c2fea0a096
 ./congress miners  --rpc_laddr https://testnet-rpc.juchain.org
 ```
