@@ -43,8 +43,10 @@ func createProposalTx(cmd *cobra.Command, _ []string) {
 	flag := true
 	if operation == "add" {
 		flag = true
+		fmt.Printf("create add new miner tx\n")
 	} else if operation == "remove" {
 		flag = false
+		fmt.Printf("create remove miner tx\n")
 	} else {
 		fmt.Printf("Invalid operation %s\n", operation)
 		return
