@@ -92,17 +92,17 @@ Time: 1743154658
 
 # step2 3个矿工对提案进行投票
 # miner1
-./congress vote_proposal -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -i  2ff96b6f050e8bd407f502b1dc2a39ee66b0291cbfab0e46f2e4bae46f8d40fc -a true  --rpc_laddr https://testnet-rpc.juchain.org 
+./congress vote_proposal -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -i  67404978f480bc30f767728475c05f9569f9ddea568235175281649c4ce13c41 -a true  --rpc_laddr https://testnet-rpc.juchain.org 
 ./congress sign -f voteProposal.json -k miner1.key -p juchain  --chainId 202599 
 ./congress send  -f voteProposal_signed.json -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b  --rpc_laddr https://testnet-rpc.juchain.org 
 
 # miner2
-./congress vote_proposal -s 0x81f7a79a51edba249efa812eb2d5478f696f7558 -i  2ff96b6f050e8bd407f502b1dc2a39ee66b0291cbfab0e46f2e4bae46f8d40fc -a true  --rpc_laddr https://testnet-rpc.juchain.org 
+./congress vote_proposal -s 0x81f7a79a51edba249efa812eb2d5478f696f7558 -i  67404978f480bc30f767728475c05f9569f9ddea568235175281649c4ce13c41 -a true  --rpc_laddr https://testnet-rpc.juchain.org 
 ./congress sign -f voteProposal.json -k miner2.key -p juchain  --chainId 202599 
 ./congress send  -f voteProposal_signed.json -p 0x81f7a79a51edba249efa812eb2d5478f696f7558  --rpc_laddr https://testnet-rpc.juchain.org 
 
 # miner3
-./congress vote_proposal -s 0x578c39eaf09a4e1abf428c423970b59bb8baf42e -i  2ff96b6f050e8bd407f502b1dc2a39ee66b0291cbfab0e46f2e4bae46f8d40fc -a true  --rpc_laddr https://testnet-rpc.juchain.org 
+./congress vote_proposal -s 0x578c39eaf09a4e1abf428c423970b59bb8baf42e -i  67404978f480bc30f767728475c05f9569f9ddea568235175281649c4ce13c41 -a true  --rpc_laddr https://testnet-rpc.juchain.org 
 ./congress sign -f voteProposal.json -k miner3.key -p juchain  --chainId 202599 
 ./congress send  -f voteProposal_signed.json -p 0x578c39eaf09a4e1abf428c423970b59bb8baf42e  --rpc_laddr https://testnet-rpc.juchain.org 
 
