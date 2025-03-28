@@ -25,7 +25,7 @@ func signRawTxCmdFlags(cmd *cobra.Command) {
 	_ = cmd.MarkFlagRequired("file")
 	cmd.Flags().StringP("key", "k", "", "singer wallet file")
 	_ = cmd.MarkFlagRequired("key")
-	cmd.Flags().StringP("password", "p", "", "singer wallet file password ")
+	cmd.Flags().StringP("password", "p", "", "singer  password file ")
 	_ = cmd.MarkFlagRequired("password")
 }
 
@@ -33,7 +33,13 @@ func signRawTx(cmd *cobra.Command, _ []string) {
 	chainId, _ := cmd.Flags().GetInt64("chainId")
 	file, _ := cmd.Flags().GetString("file")
 	key, _ := cmd.Flags().GetString("key")
-	password, _ := cmd.Flags().GetString("password")
+	passwordFile, _ := cmd.Flags().GetString("password")
+
+	password, err := ReadFileToString(passwordFile)
+	if err != nil {
+		fmt.Printf("read password file error: %v", err)
+		return
+	}
 
 	privateKey, err := ReadKeystoreFile(key, password)
 	if err != nil {

@@ -313,3 +313,11 @@ func WriteJsonFile(data map[string]interface{}, fileName string) error {
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(data)
 }
+
+func ReadFileToString(filepath string) (string, error) {
+	data, err := os.ReadFile(filepath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %v", err)
+	}
+	return string(data), nil
+}
