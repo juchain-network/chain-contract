@@ -2,12 +2,11 @@ package cmd
 
 import (
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
-	"juchain.org/chain/contract/contracts/generated/validators"
+	"juchain.org/chain/contract/contracts/generated"
 )
 
 func ValidatorsCmd() *cobra.Command {
@@ -29,7 +28,7 @@ func listValidators(cmd *cobra.Command, _ []string) {
 	}
 	// 获取validator信息
 	contractAddress := common.HexToAddress(validatorAddr)
-	instance, err := validators.NewValidators(contractAddress, client)
+	instance, err := generated.NewValidators(contractAddress, client)
 	if err != nil {
 		fmt.Printf("Failed to instantiate contract: %v", err)
 		return
@@ -71,7 +70,7 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 	}
 
 	contractAddress := common.HexToAddress(validatorAddr)
-	instance, err := validators.NewValidators(contractAddress, client)
+	instance, err := generated.NewValidators(contractAddress, client)
 	if err != nil {
 		fmt.Printf("Failed to instantiate contract: %v", err)
 	}
@@ -79,7 +78,7 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 	queryOneInfo(addr, instance, client)
 }
 
-func queryOneInfo(addr string, instance *validators.Validators, client *ethclient.Client) {
+func queryOneInfo(addr string, instance *generated.Validators, client *ethclient.Client) {
 	feeAddr, status, aacIncoming, totalJailedHB, lastWithdrawProfitsBlock, err := instance.GetValidatorInfo(&bind.CallOpts{}, common.HexToAddress(addr))
 	if err != nil {
 		fmt.Printf("Failed to call GetValidatorInfo address %v: %v", addr, err)
