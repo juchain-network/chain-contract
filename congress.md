@@ -114,3 +114,64 @@ Time: 1743154658
 ./congress miner  --rpc_laddr https://testnet-rpc.juchain.org  -a 0x029DAB47e268575D4AC167De64052FB228B5fA41
 ./congress miners  --rpc_laddr https://testnet-rpc.juchain.org
 ```
+
+## 5. 主网恢复矿工身份操作
+> 现有5个矿工地址，miner1-miner5地址如下：
+```
+0xccafa71c31bc11ba24d526fd27ba57d743152807
+0xd5da2b33c1f620a94bf2039b9cb540853e7928d7
+0x311b37f01c04b84d1f94645bfbd58d82fc03f709
+0xde0e48c5337db3ca7b3710c27e9728e68bf220b3
+0x4d432df142823ca25b21bc3f9744ed21a275bdea
+```
+
+> 其中miner5状态异常，可以通过如下命令查询该矿工状态：
+```shell
+./congress miner  --rpc_laddr https://rpc.juchain.org  -a 0x4d432df142823ca25b21bc3f9744ed21a275bdea
+
+# 输出信息中“活动状态 2”，表示异常状态，1 为正常
+```
+### 具体操作步骤
+> 下面的操作通过
+> minner1 创建提案，重新提案 miner5 作为活动矿工， 创建完提案后，miner1,miner2,miner3 投票通过提案，即可让miner5恢复活动状态
+>
+> ！！！注意！！！  在对新矿工投票之前，确保新矿工节点已经同步到最新状态，否则投票通过后没及时出块，被被再次踢出矿工列表！
+>
+```shell
+# step1 创建提案交易，并签名发送，其中 -p 参数为创建提案的矿工，-t 参数为新增的矿工
+./congress create_proposal -p 0xccafa71c31bc11ba24d526fd27ba57d743152807 -t 0x4d432df142823ca25b21bc3f9744ed21a275bdea -o add  --rpc_laddr https://rpc.juchain.org 
+
+./congress sign -f createProposal.json -k miner1.key -p password.file  --chainId 210000
+
+./congress send  -f createProposal_signed.json -p 0xccafa71c31bc11ba24d526fd27ba57d743152807  --rpc_laddr https://rpc.juchain.org 
+# 这条命令执行后可以获取到提案ID，后面的 80bae77feed9dbc69d162ed81160b1b32fa56a1e91b724ef0d846cb83780b26d 即为生成的提案ID
+# Proposal ID: 80bae77feed9dbc69d162ed81160b1b32fa56a1e91b724ef0d846cb83780b26d
+
+# step2 3个矿工对提案进行投票（注意！！！ 先将 命令中的PROPOSALID 替换为上一步生成的提案ID）
+# miner1 投票通过， -s 参数为投票签名矿工, -i参数为上一步生成的提案id，-a true表示通过提案
+./congress vote_proposal -s 0xccafa71c31bc11ba24d526fd27ba57d743152807 -i  PROPOSALID -a true  --rpc_laddr https://rpc.juchain.org 
+
+./congress sign -f voteProposal.json -k miner1.key -p password.file  --chainId 210000 
+
+./congress send  -f voteProposal_signed.json -p 0xccafa71c31bc11ba24d526fd27ba57d743152807  --rpc_laddr https://rpc.juchain.org 
+
+# miner2
+./congress vote_proposal -s 0xd5da2b33c1f620a94bf2039b9cb540853e7928d7 -i  PROPOSALID -a true  --rpc_laddr https://rpc.juchain.org 
+
+./congress sign -f voteProposal.json -k miner2.key -p password.file  --chainId 210000 
+
+./congress send  -f voteProposal_signed.json -p 0xd5da2b33c1f620a94bf2039b9cb540853e7928d7  --rpc_laddr https://rpc.juchain.org 
+
+# miner3
+./congress vote_proposal -s 0x311b37f01c04b84d1f94645bfbd58d82fc03f709 -i  PROPOSALID -a true  --rpc_laddr https://rpc.juchain.org 
+
+./congress sign -f voteProposal.json -k miner3.key -p password.file  --chainId 210000 
+
+./congress send  -f voteProposal_signed.json -p 0x311b37f01c04b84d1f94645bfbd58d82fc03f709  --rpc_laddr https://rpc.juchain.org 
+
+
+# step3 查看新增矿工的信息 (活动状态为 1 表示Active)
+./congress miner  --rpc_laddr https://rpc.juchain.org  -a 0x4d432df142823ca25b21bc3f9744ed21a275bdea
+# 查看当前所有矿工信息
+./congress miners  --rpc_laddr https://rpc.juchain.org
+```
