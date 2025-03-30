@@ -14,22 +14,11 @@ PACKAGE := generated
 proj := "build"
 .PHONY: default build clean registry bridgeBank setup
 
-default: proposal punish validators
+default: proposal
 
 proposal:
 	@solc --allow-paths $(ALLOW_PATH) --optimize --combined-json abi,bin,userdoc,devdoc  $(SRC_CONTRACTJu)/Proposal.sol -o $(SRC_CONTRACTJu)/ --overwrite
 	@abigen --combined-json $(SRC_CONTRACTJu)/combined.json --pkg $(PACKAGE) --out $(GO_OUT4Ju)/proposal.go
-	@rm $(SRC_CONTRACTJu)/combined.json
-
-punish:
-	@solc --allow-paths $(ALLOW_PATH) --optimize --combined-json abi,bin,userdoc,devdoc  $(SRC_CONTRACTJu)/Punish.sol -o $(SRC_CONTRACTJu)/ --overwrite
-	@abigen --combined-json $(SRC_CONTRACTJu)/combined.json --pkg $(PACKAGE) --out $(GO_OUT4Ju)/punish.go
-	@rm $(SRC_CONTRACTJu)/combined.json
-
-validators:
-	@#solc --allow-paths $(ALLOW_PATH) --optimize --combined-json abi,bin,userdoc,devdoc  $(SRC_CONTRACTJu)/Validators.sol -o $(SRC_CONTRACTJu)/ --overwrite
-	@npx solcjs --optimize --combined-json abi --base-path $(ALLOW_PATH) $(SRC_CONTRACTJu)/Validators.sol > $(SRC_CONTRACTJu)/output.json
-	@abigen --combined-json $(SRC_CONTRACTJu)/combined.json --pkg $(PACKAGE) --out $(GO_OUT4Ju)/validators.go
 	@rm $(SRC_CONTRACTJu)/combined.json
 
 build:

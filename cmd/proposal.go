@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
-	"juchain.org/chain/contract/contracts/generated/proposal"
+	"juchain.org/chain/contract/contracts/generated"
 )
 
 const (
@@ -56,7 +56,7 @@ func createProposalTx(cmd *cobra.Command, _ []string) {
 }
 
 func innerCreateProposal(proposer, target string, flag bool, rpc string) {
-	proposalAbi, err := abi.JSON(strings.NewReader(proposal.ProposalABI))
+	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
 	if err != nil {
 		fmt.Println("JSON NewReader Err:", err)
 		return
@@ -106,7 +106,7 @@ func voteProposalTx(cmd *cobra.Command, _ []string) {
 
 func innerVoteProposal(signer, proposalId string, flag bool, rpc string) {
 
-	proposalAbi, err := abi.JSON(strings.NewReader(proposal.ProposalABI))
+	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
 	if err != nil {
 		fmt.Println("JSON NewReader Err:", err)
 		return
