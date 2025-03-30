@@ -20,7 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"golang.org/x/crypto/sha3"
-	"juchain.org/chain/contract/contracts/generated/proposal"
+	"juchain.org/chain/contract/contracts/generated"
 )
 
 func CreateRawTx(
@@ -245,7 +245,7 @@ func buildId(
 
 // 查询生成的提案ID
 func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Client) (error, string) {
-	instance, err := proposal.NewProposal(common.HexToAddress(proposalAddr), client)
+	instance, err := generated.NewProposal(common.HexToAddress(proposalAddr), client)
 	if err != nil {
 		fmt.Printf("Failed to instantiate contract: %v", err)
 		return err, ""
