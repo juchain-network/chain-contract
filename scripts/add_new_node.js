@@ -19,12 +19,12 @@ async function main() {
     let miner2 = signers[1];
     let miner3 = signers[2];
     // 新加入矿工的地址
-    let toAdd = "0x50f98e9e9dd4725e17b2f93ae7abdda0bc5718aa";
+    let toAdd = "0x9e6a23508aa763c709d45f671d7a3a068025abc0";
     const Proposal = await hre.ethers.getContractFactory("Proposal");
     const proposal = await Proposal.attach("0x000000000000000000000000000000000000F002");
 
     // 矿工创建提案
-    let tx = await proposal.connect(miner1).createProposal(toAdd, true, "test proposal");
+    let tx = await proposal.connect(miner1).createProposal(toAdd, true, "miner4");
     let receipt = await tx.wait();
     console.log("miner1 create proposal tx:", tx.hash);
     let ev = receipt.events.find(event => event.event == "LogCreateProposal");
