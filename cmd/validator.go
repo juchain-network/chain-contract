@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -38,7 +39,7 @@ func listValidators(cmd *cobra.Command, _ []string) {
 		fmt.Printf("Failed to call GetValidatorInfo: %v", err)
 	} else {
 		for _, val := range vals {
-			queryOneInfo(val.Hex(), instance, client)
+			queryOneInfo(val.Hex(), instance)
 			// fmt.Printf("miner%v %v\n", i, val)
 		}
 	}
@@ -75,10 +76,10 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 		fmt.Printf("Failed to instantiate contract: %v", err)
 	}
 
-	queryOneInfo(addr, instance, client)
+	queryOneInfo(addr, instance)
 }
 
-func queryOneInfo(addr string, instance *generated.Validators, client *ethclient.Client) {
+func queryOneInfo(addr string, instance *generated.Validators) {
 	feeAddr, status, aacIncoming, totalJailedHB, lastWithdrawProfitsBlock, err := instance.GetValidatorInfo(&bind.CallOpts{}, common.HexToAddress(addr))
 	if err != nil {
 		fmt.Printf("Failed to call GetValidatorInfo address %v: %v", addr, err)

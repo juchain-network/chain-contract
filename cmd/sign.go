@@ -3,8 +3,8 @@ package cmd
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -52,7 +52,7 @@ func signRawTx(cmd *cobra.Command, _ []string) {
 }
 
 func fethchKeyFromFile(path string) (string, error) {
-	text, err := ioutil.ReadFile(path)
+	text, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}

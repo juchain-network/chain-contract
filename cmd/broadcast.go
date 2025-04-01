@@ -17,8 +17,8 @@ func SendSignedTxCmd() *cobra.Command {
 }
 
 func sendSignedTxCmdFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("proposer", "p", "", "proposer addr (must be valid validator)")
-	_ = cmd.MarkFlagRequired("proposer")
+	// cmd.Flags().StringP("proposer", "p", "", "proposer addr (must be valid validator)")
+	// _ = cmd.MarkFlagRequired("proposer")
 	cmd.Flags().StringP("file", "f", "", "signed tx file")
 	_ = cmd.MarkFlagRequired("file")
 }
@@ -26,13 +26,13 @@ func sendSignedTxCmdFlags(cmd *cobra.Command) {
 func sendSignedTx(cmd *cobra.Command, _ []string) {
 	file, _ := cmd.Flags().GetString("file")
 	rpc, _ := cmd.Flags().GetString("rpc_laddr")
-	proposer, _ := cmd.Flags().GetString("proposer")
+	// proposer, _ := cmd.Flags().GetString("proposer")
 
-	innerSendSignedTx(proposer, file, rpc)
+	innerSendSignedTx(file, rpc)
 }
 
-func innerSendSignedTx(proposer, file, rpc string) {
-	_, err := SendSignedTx(proposer, rpc, file)
+func innerSendSignedTx(file, rpc string) {
+	_, err := SendSignedTx(rpc, file)
 	if err != nil {
 		fmt.Println("send tx Err:", err)
 		return
