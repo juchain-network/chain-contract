@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"time"
@@ -127,7 +126,7 @@ func SignRawTx(
 	return os.WriteFile(outputFile, signedData, 0644)
 }
 
-func SendSignedTx(proposer, rpcURL string, signedTxFile string) (common.Hash, error) {
+func SendSignedTx(rpcURL string, signedTxFile string) (common.Hash, error) {
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to connect to RPC: %v", err)
@@ -145,6 +144,12 @@ func SendSignedTx(proposer, rpcURL string, signedTxFile string) (common.Hash, er
 		return common.Hash{}, fmt.Errorf("invalid signed tx: %v", err)
 	}
 
+	tx.ChainId()
+
+	sender, err := types.Sender(types.NewEIP155Signer(tx.ChainId()), &tx)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("invalid signed tx: %v", err)
+	}
 	// Broadcast
 	err = client.SendTransaction(context.Background(), &tx)
 	if err != nil {
@@ -157,6 +162,8 @@ func SendSignedTx(proposer, rpcURL string, signedTxFile string) (common.Hash, er
 		return tx.Hash(), err
 	}
 	time.Sleep(3 * time.Second)
+	proposer := sender.Hex()
+	fmt.Printf("read sender from signed tx is %s\n", proposer)
 	err, _ = QueryProposalId(blockHeight.Uint64(), proposer, client)
 	return tx.Hash(), err
 }
@@ -288,7 +295,7 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 
 func ReadKeystoreFile(filepath, password string) (*ecdsa.PrivateKey, error) {
 	// 1. Read the keystore file
-	keyjson, err := ioutil.ReadFile(filepath)
+	keyjson, err := os.ReadFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read keystore: %v", err)
 	}

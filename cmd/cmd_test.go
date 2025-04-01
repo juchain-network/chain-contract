@@ -31,10 +31,10 @@ func TestSignTx(t *testing.T) {
 }
 
 func TestSendTx(t *testing.T) {
-	proposer := "0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b"
+	// proposer := "0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b"
 	file := "createProposal_signed.json"
 	rpc := "https://testnet-rpc.juchain.org"
-	innerSendSignedTx(proposer, file, rpc)
+	innerSendSignedTx(file, rpc)
 }
 
 func TestBuldProposalId(t *testing.T) {
@@ -64,4 +64,13 @@ func TestBuldProposalId(t *testing.T) {
 	fmt.Printf("build proposal id %s \n", proposalId)
 	expected := "13013b639ad153f5207ec6b0aa168b142168cddba47e077f91df7c40aaba44b8"
 	assert.Equal(t, expected, proposalId, "Proposal ID mismatch")
+}
+
+func TestReadPassword(t *testing.T) {
+	data, err := ReadFileToString("abc.file")
+	if err != nil {
+		fmt.Printf("read file error %v\n", err)
+		return
+	}
+	fmt.Printf("%s \n", data)
 }
