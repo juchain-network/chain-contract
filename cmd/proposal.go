@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -68,6 +69,53 @@ func innerCreateProposal(proposer, target string, flag bool, rpc string) {
 		return
 	}
 	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(proposalAddr), nil, abiData, rpc, "createProposal.json")
+	if err != nil {
+		fmt.Println("create tx Err:", err)
+		return
+	}
+	fmt.Println("crete tx success!")
+}
+
+func CreateConfigProposalCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "create_config_proposal",
+		Short: "create update config proposal tx",
+		Run:   createConfigProposalTx,
+	}
+	createConfigProposalFlags(cmd)
+	return cmd
+}
+
+func createConfigProposalFlags(cmd *cobra.Command) {
+	cmd.Flags().StringP("proposer", "p", "", "proposer addr (must be valid validator)")
+	_ = cmd.MarkFlagRequired("proposer")
+	cmd.Flags().Int64P("cid", "i", 0, "config id (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod)")
+	_ = cmd.MarkFlagRequired("cid")
+	cmd.Flags().Int64P("value", "v", 0, "new config value")
+	_ = cmd.MarkFlagRequired("value")
+}
+
+func createConfigProposalTx(cmd *cobra.Command, _ []string) {
+	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	proposer, _ := cmd.Flags().GetString("proposer")
+	cid, _ := cmd.Flags().GetInt64("cid")
+	cvalue, _ := cmd.Flags().GetInt64("value")
+	innerCreateConfigProposal(proposer, cid, cvalue, rpc)
+}
+
+func innerCreateConfigProposal(proposer string, cid, cvalue int64, rpc string) {
+	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
+	if err != nil {
+		fmt.Println("JSON NewReader Err:", err)
+		return
+	}
+
+	abiData, err := proposalAbi.Pack("createUpdateConfigProposal", big.NewInt(cid), big.NewInt(cvalue))
+	if err != nil {
+		fmt.Println("proposalAbi.Pack createUpdateConfigProposal Err:", err)
+		return
+	}
+	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(proposalAddr), nil, abiData, rpc, "createUpdateConfigProposal.json")
 	if err != nil {
 		fmt.Println("create tx Err:", err)
 		return

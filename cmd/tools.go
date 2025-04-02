@@ -264,19 +264,18 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 		End:     &blockHeight, // 结束区块号（nil 表示最新区块）
 		Context: context.Background(),
 	}
-
 	// 查询事件日志
 	logs, err := instance.FilterLogCreateProposal(filterOpts, nil, []common.Address{common.HexToAddress(proposer)}, nil)
 	if err != nil {
 		fmt.Printf("Failed to filter LogCreateProposal events: %v", err)
 		return err, ""
 	}
-
 	// 遍历日志
 	proposalId := "0x"
 	for logs.Next() {
 		event := logs.Event
 		proposalId = hex.EncodeToString(event.Id[:])
+		fmt.Println("--------CreateProposal----------")
 		fmt.Printf("Proposal ID: %s\n", proposalId)
 		fmt.Printf("Proposer: %s\n", event.Proposer.Hex())
 		fmt.Printf("Destination: %s\n", event.Dst.Hex())
@@ -285,11 +284,36 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 		fmt.Printf("Block: %d\n", event.Raw.BlockNumber)
 		fmt.Println("-----")
 	}
-
 	if logs.Error() != nil {
 		fmt.Printf("Error reading logs: %v", logs.Error())
 		return logs.Error(), ""
 	}
+
+	// 查询事件日志
+	logs1, err := instance.FilterLogCreateConfigProposal(filterOpts, nil, []common.Address{common.HexToAddress(proposer)})
+	if err != nil {
+		fmt.Printf("Failed to filter LogCreateConfigProposal events: %v", err)
+		return err, ""
+	}
+	// 遍历日志
+	proposalId = "0x"
+	for logs1.Next() {
+		event := logs1.Event
+		proposalId = hex.EncodeToString(event.Id[:])
+		fmt.Println("--------CreateConfigProposal----------")
+		fmt.Printf("Proposal ID: %s\n", proposalId)
+		fmt.Printf("Proposer: %s\n", event.Proposer.Hex())
+		fmt.Printf("CID: %s\n", event.Cid)
+		fmt.Printf("NewValue: %v\n", event.NewValue)
+		fmt.Printf("Time: %d\n", event.Time)
+		fmt.Printf("Block: %d\n", event.Raw.BlockNumber)
+		fmt.Println("-----")
+	}
+	if logs.Error() != nil {
+		fmt.Printf("Error reading logs: %v", logs.Error())
+		return logs.Error(), ""
+	}
+
 	return nil, proposalId
 }
 
