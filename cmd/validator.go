@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -86,4 +88,46 @@ func queryOneInfo(addr string, instance *generated.Validators) {
 	} else {
 		fmt.Println("矿工 ", addr, "奖励地址", feeAddr, "活动状态", status, "累计奖励", aacIncoming, "罚没奖励", totalJailedHB, "上次提取奖励区块", lastWithdrawProfitsBlock)
 	}
+}
+
+func WithdrawProfitsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "withdraw_profits",
+		Short: "claim miner's reward",
+		Run:   validatorClaim,
+	}
+	validatorClaimFlags(cmd)
+	return cmd
+}
+
+func validatorClaimFlags(cmd *cobra.Command) {
+	cmd.Flags().StringP("addr", "a", "", "validator address to claim")
+	_ = cmd.MarkFlagRequired("addr")
+}
+
+func validatorClaim(cmd *cobra.Command, _ []string) {
+	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	addr, _ := cmd.Flags().GetString("addr")
+	innerValidatorClaim(addr, rpc)
+}
+
+func innerValidatorClaim(addr string, rpc string) {
+	validatorAbi, err := abi.JSON(strings.NewReader(generated.ValidatorsABI))
+	if err != nil {
+		fmt.Println("JSON NewReader Err:", err)
+		return
+	}
+
+	abiData, err := validatorAbi.Pack("withdrawProfits", common.HexToAddress(addr))
+	if err != nil {
+		fmt.Println("validatorAbi.Pack withdrawProfits Err:", err)
+		return
+	}
+	err = CreateRawTx(common.HexToAddress(addr), common.HexToAddress(validatorAddr), nil, abiData, rpc, "withdrawProfits.json")
+	if err != nil {
+		fmt.Println("create tx Err:", err)
+		return
+	}
+	fmt.Println("crete tx success!")
+
 }
