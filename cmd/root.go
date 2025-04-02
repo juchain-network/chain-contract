@@ -25,6 +25,7 @@ func init() {
 
 	rootCmd.AddCommand(
 		CreateProposalCmd(),
+		CreateConfigProposalCmd(),
 		VoteProposalCmd(),
 		SignRawTxCmd(),
 		SendSignedTxCmd(),

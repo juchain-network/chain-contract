@@ -29,7 +29,7 @@
 
 ### 1.3. 发送交易
 ```shell
-./congress send  -f createProposal_signed.json -p 提案矿工地址  --rpc_laddr https://rpc.juchain.org 
+./congress send  -f createProposal_signed.json  --rpc_laddr https://rpc.juchain.org 
 
 # 测试样例文件
 ./congress send  -f createProposal_signed.json  --rpc_laddr https://testnet-rpc.juchain.org 
@@ -66,7 +66,7 @@ Time: 1743154658
 
 ### 2.3. 发送交易
 ```shell
-./congress send  -f voteProposal_signed.json -p 提案矿工地址  --rpc_laddr https://rpc.juchain.org 
+./congress send  -f voteProposal_signed.json  --rpc_laddr https://rpc.juchain.org 
 
 # 测试样例文件
 ./congress send  -f voteProposal_signed.json  --rpc_laddr https://testnet-rpc.juchain.org 
@@ -82,6 +82,20 @@ Time: 1743154658
 ```shell
 ./congress miner  --rpc_laddr https://rpc.juchain.org -a 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
 ```
+
+##  4.修改参数配置
+### 4.1. 创建原始交易
+```shell
+# 配置项ID对应的配置项信息
+# 0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod
+./congress create_config_proposal -p 提案矿工地址 -c 配置项ID -v 配置项取值  --rpc_laddr https://rpc.juchain.org 
+
+# 测试样例命令
+./congress create_config_proposal -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -c 0 -v 86400  --rpc_laddr https://testnet-rpc.juchain.org 
+
+```
+> 交易的发送和签名，以及后面的投票流程和前面一致，不再重复
+
 
 ##  4.测试交易
 > minner1 创建提案，新增 0x029DAB47e268575D4AC167De64052FB228B5fA41 作为新的矿工， 创建完提案后，miner1,miner2,miner3 投票通过
