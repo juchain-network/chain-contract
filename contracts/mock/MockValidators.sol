@@ -38,11 +38,11 @@ contract MockValidators {
         proposal.setUnpassed(who);
     }
 
-    function tryRemoveValidator(address who) public returns (bool) {
+    function tryRemoveValidator(address /* who */) public pure returns (bool) {
         return true;
     }
 
-    function tryActive(address who) public returns (bool) {
+    function tryActive(address /* who */) public pure returns (bool) {
         return true;
     }
 }

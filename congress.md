@@ -10,6 +10,7 @@
 ```
 
 ### 1.1. 创建原始交易
+
 ```shell
 ./congress create_proposal -p 提案矿工地址 -t 新矿工地址 -o add  --rpc_laddr https://rpc.juchain.org 
 
@@ -18,8 +19,8 @@
 
 ```
 
-
 ### 1.2. 签名交易
+
 ```shell
 ./congress sign -f createProposal.json -k 钱包文件 -p 钱包密码文件  --chainId 210000 
 
@@ -28,13 +29,16 @@
 ```
 
 ### 1.3. 发送交易
+
 ```shell
 ./congress send  -f createProposal_signed.json  --rpc_laddr https://rpc.juchain.org 
 
 # 测试样例文件
 ./congress send  -f createProposal_signed.json  --rpc_laddr https://testnet-rpc.juchain.org 
 ```
->  执行成功后会生成提案信息，如下(后面投票会用到Proposal ID)：
+
+> 执行成功后会生成提案信息，如下(后面投票会用到Proposal ID)：
+
 ```
 Wait for tx to be finished executing with hash 0x50a0b73f5dc2f8f2f4acb7611d07ca1fc3e6f1f6bc51f9b30bd02d79ad7d186d
 tx confirmed in block 780439
@@ -48,6 +52,7 @@ Time: 1743154658
 ## 2.提案投票
 
 ### 2.1. 创建原始交易
+
 ```shell
 ./congress vote_proposal -s 签名矿工地址 -i 提案ID -a 是否通过  --rpc_laddr https://rpc.juchain.org 
 
@@ -57,6 +62,7 @@ Time: 1743154658
 ```
 
 ### 2.2. 签名交易
+
 ```shell
 ./congress sign -f voteProposal.json -k 钱包文件 -p 钱包密码文件  --chainId 210000 
 
@@ -65,6 +71,7 @@ Time: 1743154658
 ```
 
 ### 2.3. 发送交易
+
 ```shell
 ./congress send  -f voteProposal_signed.json  --rpc_laddr https://rpc.juchain.org 
 
@@ -73,18 +80,23 @@ Time: 1743154658
 ```
 
 ## 3. 查询操作
+>
 > 查询所有活动矿工
+
 ```shell
 ./congress miners  --rpc_laddr https://rpc.juchain.org 
 ```
 
 > 查询单个矿工
+
 ```shell
 ./congress miner  --rpc_laddr https://rpc.juchain.org -a 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
 ```
 
-##  4.修改参数配置
+## 4.修改参数配置
+
 ### 4.1. 创建原始交易
+
 ```shell
 # 配置项ID对应的配置项信息
 # 0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod
@@ -94,11 +106,13 @@ Time: 1743154658
 ./congress create_config_proposal -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -c 0 -v 86400  --rpc_laddr https://testnet-rpc.juchain.org 
 
 ```
+
 > 交易的发送和签名，以及后面的投票流程和前面一致，不再重复
 
+## 5.矿工收益提取
 
-##  5.矿工收益提取
 ### 5.1. 创建原始交易
+
 ```shell
 # 配置项ID对应的配置项信息
 ./congress withdraw_profits -a 矿工地址 --rpc_laddr https://rpc.juchain.org 
@@ -107,9 +121,11 @@ Time: 1743154658
 ./congress withdraw_profits -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b --rpc_laddr https://testnet-rpc.juchain.org 
 
 ```
+
 > 交易的发送和签名，以及后面的投票流程和前面一致，不再重复
-> 
-##  6.测试交易
+>
+## 6.测试交易
+>
 > minner1 创建提案，新增 0x029DAB47e268575D4AC167De64052FB228B5fA41 作为新的矿工， 创建完提案后，miner1,miner2,miner3 投票通过
 >
 ```shell
@@ -142,7 +158,9 @@ Time: 1743154658
 ```
 
 ## 7. 主网恢复矿工身份操作
+>
 > 现有5个矿工地址，miner1-miner5地址如下：
+
 ```
 0xccafa71c31bc11ba24d526fd27ba57d743152807
 0xd5da2b33c1f620a94bf2039b9cb540853e7928d7
@@ -152,12 +170,15 @@ Time: 1743154658
 ```
 
 > 其中miner5状态异常，可以通过如下命令查询该矿工状态：
+
 ```shell
 ./congress miner  --rpc_laddr https://rpc.juchain.org  -a 0x4d432df142823ca25b21bc3f9744ed21a275bdea
 
 # 输出信息中“活动状态 2”，表示异常状态，1 为正常
 ```
+
 ### 7.1 创建提案
+>
 > 下面的操作通过
 > minner1 创建提案，重新提案 miner5 作为活动矿工， 创建完提案后，miner1,miner2,miner3 投票通过提案，即可让miner5恢复活动状态
 >
@@ -175,6 +196,7 @@ Time: 1743154658
 ```
 
 ### 7.2 验证者投票
+
 ```shell
 # step2 3个矿工对提案进行投票（注意！！！ 先将 命令中的PROPOSALID 替换为上一步生成的提案ID）
 # miner1 投票通过， -s 参数为投票签名矿工, -i参数为上一步生成的提案id，-a true表示通过提案
@@ -206,7 +228,9 @@ Time: 1743154658
 ```
 
 ## 8. 主网修改配置
+
 ### 8.1 创建提案
+
 ```shell
 # 配置项ID对应的配置项信息
 # 0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod
@@ -221,10 +245,11 @@ Time: 1743154658
 ```
 
 ### 8.2 验证者投票
+>
 > 投票步骤与之前相同，请参考 [7.2 验证者投票](#72-验证者投票)
 
-
 ## 9. 主网矿工收益提取
+
 ```shell
 # step1 创建原始交易
 ./congress withdraw_profits -a 矿工地址 --rpc_laddr https://rpc.juchain.org 
