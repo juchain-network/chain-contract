@@ -1,4 +1,4 @@
-module juchain.org/chain/contract
+module juchain.org/chain/congress-cli
 
 go 1.23.0
 

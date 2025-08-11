@@ -19,7 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"golang.org/x/crypto/sha3"
-	"juchain.org/chain/contract/contracts/generated"
+	"juchain.org/chain/congress-cli/contracts/generated"
 )
 
 func CreateRawTx(

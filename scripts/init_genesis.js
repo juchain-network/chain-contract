@@ -15,13 +15,21 @@ const CONTRACT_ADDRESSES = {
 
 // 读取合约字节码
 function getContractBytecode(contractName) {
-    const artifactPath = path.join(__dirname, '..', 'artifacts', 'contracts', `${contractName}.sol`, `${contractName}.json`);
+    // Try Foundry first (out directory)
+    const foundryPath = path.join(__dirname, '..', 'out', `${contractName}.sol`, `${contractName}.json`);
     try {
-        const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
-        return artifact.deployedBytecode;
-    } catch (error) {
-        console.error(`❌ 无法读取 ${contractName} 合约字节码:`, error.message);
-        return null;
+        const artifact = JSON.parse(fs.readFileSync(foundryPath, 'utf8'));
+        return artifact.deployedBytecode?.object || artifact.bytecode?.object;
+    } catch (foundryError) {
+        // Fallback to Hardhat artifacts
+        const artifactPath = path.join(__dirname, '..', 'artifacts', 'contracts', `${contractName}.sol`, `${contractName}.json`);
+        try {
+            const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
+            return artifact.deployedBytecode;
+        } catch (error) {
+            console.error(`❌ 无法读取 ${contractName} 合约字节码:`, error.message);
+            return null;
+        }
     }
 }
 
@@ -107,7 +115,7 @@ function verifyContracts() {
     }
     
     if (!allContractsReady) {
-        console.log('\n❌ 请先编译合约: npx hardhat compile');
+        console.log('\n❌ 请先编译合约: forge build 或 npx hardhat compile');
         process.exit(1);
     }
     
