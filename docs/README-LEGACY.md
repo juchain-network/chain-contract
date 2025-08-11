@@ -1,4 +1,4 @@
-# aac-contracts
+# ju-contracts
 
 ## Prepare
 
