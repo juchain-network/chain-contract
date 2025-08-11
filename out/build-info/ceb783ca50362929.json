@@ -1,1 +1,0 @@
-{"id":"ceb783ca50362929","source_id_to_path":{"0":"contracts/Migrations.sol","1":"contracts/Params.sol","2":"contracts/Proposal.sol","3":"contracts/Punish.sol","4":"contracts/Validators.sol","5":"contracts/library/SafeMath.sol","6":"contracts/mock/MockValidators.sol","7":"forge-tests/Proposal.t.sol"},"language":"Solidity"}

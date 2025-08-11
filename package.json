@@ -9,7 +9,7 @@
   "scripts": {
     "generate": "node generate-contracts.js",
     "generate:mock": "node generate-contracts.js --mock",
-    "update-genesis": "node scripts/init_genesis.js",
+    "init-genesis": "node init_genesis.js",
     "forge:test": "forge test",
     "forge:build": "forge build"
   },
