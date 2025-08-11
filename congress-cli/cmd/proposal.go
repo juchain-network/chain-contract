@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
-	"juchain.org/chain/contract/contracts/generated"
+	"juchain.org/chain/congress-cli/contracts/generated"
 )
 
 const (

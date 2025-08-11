@@ -1,6 +1,6 @@
 package main
 
-import "juchain.org/chain/contract/cmd"
+import "juchain.org/chain/congress-cli/cmd"
 
 func main() {
 	cmd.Execute()
