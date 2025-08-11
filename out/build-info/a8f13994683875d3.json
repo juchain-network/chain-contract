@@ -1,0 +1,1 @@
+{"id":"a8f13994683875d3","source_id_to_path":{"0":"contracts/Params.sol","1":"contracts/Proposal.sol","2":"contracts/Punish.sol","3":"contracts/Validators.sol","4":"contracts/library/SafeMath.sol","5":"forge-tests/BaseSetup.t.sol","6":"forge-tests/ProposalFoundry.t.sol","7":"forge-tests/PunishFoundry.t.sol","8":"forge-tests/ValidatorsFoundry.t.sol"},"language":"Solidity"}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.8.20;
 
 import './Params.sol';
 import './Proposal.sol';
@@ -111,7 +111,7 @@ contract Validators is Params {
     ) external onlyInitialized returns (bool) {
         require(feeAddr != address(0), 'Invalid fee address');
         require(validateDescription(moniker, identity, website, email, details), 'Invalid description');
-        address payable validator = msg.sender;
+    address payable validator = payable(msg.sender);
         require(proposal.pass(validator), 'You must be authorized first');
 
         if (validatorInfo[validator].feeAddr != feeAddr) {

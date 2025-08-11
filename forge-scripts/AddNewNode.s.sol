@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {BaseSetup} from "../forge-tests/BaseSetup.t.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Validators} from "../contracts/Validators.sol";
+
+// Minimal script without forge-std dependency; uses BaseSetup helpers for addresses only.
+contract AddNewNodeScript is BaseSetup {
+    function run(address toAdd) external {
+        // assumes validators already initialized and msg.sender is a validator
+        Proposal p = Proposal(PRO);
+        // create proposal
+        p.createProposal(toAdd, true, "");
+        // cannot compute id robustly here without freezing timestamp; instead, read pass after external votes
+        // This script is a thin wrapper suitable for broadcast as a validator to create the proposal only.
+    }
+}

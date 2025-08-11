@@ -15,7 +15,7 @@ const CONTRACT_ADDRESSES = {
 
 // 读取合约字节码
 function getContractBytecode(contractName) {
-    const artifactPath = path.join(__dirname, 'artifacts', 'contracts', `${contractName}.sol`, `${contractName}.json`);
+    const artifactPath = path.join(__dirname, '..', 'artifacts', 'contracts', `${contractName}.sol`, `${contractName}.json`);
     try {
         const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
         return artifact.deployedBytecode;
@@ -42,7 +42,7 @@ function generateExtraData() {
 
 // 更新 Genesis 文件
 function updateGenesisFile() {
-    const genesisPath = path.join(__dirname, '..', 'genesis.json');
+    const genesisPath = path.join(__dirname, '..', '..', 'genesis.json');
     
     try {
         // 读取现有的 Genesis 文件
