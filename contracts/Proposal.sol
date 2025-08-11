@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.8.20;
 
 import './Params.sol';
 import './Validators.sol';
@@ -208,7 +208,7 @@ contract Proposal is Params {
         } else if (cid == 5) {
             increasePeriod = value;
         } else if (cid == 6) {
-            receiverAddr = address(value);
+            receiverAddr = address(uint160(value));
         }
     }
 

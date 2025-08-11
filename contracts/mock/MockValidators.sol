@@ -1,4 +1,5 @@
-pragma solidity >=0.6.0 <0.8.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
 import '../Proposal.sol';
 
@@ -7,7 +8,7 @@ contract MockValidators {
 
     Proposal proposal;
 
-    constructor(address[] memory vals_, address proposal_) public {
+    constructor(address[] memory vals_, address proposal_) {
         for (uint256 i = 0; i < vals_.length; i++) {
             vals.push(vals_[i]);
         }
