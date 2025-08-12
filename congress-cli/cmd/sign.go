@@ -36,19 +36,45 @@ func signRawTx(cmd *cobra.Command, _ []string) {
 	key, _ := cmd.Flags().GetString("key")
 	passwordFile, _ := cmd.Flags().GetString("password")
 
+	// 验证输入参数
+	if err := ValidateChainID(chainId); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateFile(file); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateFile(key); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateFile(passwordFile); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo(fmt.Sprintf("Signing transaction from file: %s", file))
+
 	password, err := fethchKeyFromFile(passwordFile)
 	if err != nil {
-		fmt.Printf("read password file error: %v", err)
+		PrintError("Failed to read password file", err)
 		return
 	}
 
 	privateKey, err := ReadKeystoreFile(key, password)
 	if err != nil {
-		fmt.Printf("read wallet file error: %v", err)
+		PrintError("Failed to decrypt keystore file", err)
 		return
 	}
 
-	innerSignRawTx(chainId, file, privateKey)
+	if err := innerSignRawTx(chainId, file, privateKey); err != nil {
+		PrintError("Failed to sign transaction", err)
+		return
+	}
 }
 
 func fethchKeyFromFile(path string) (string, error) {
@@ -64,20 +90,17 @@ func fethchKeyFromFile(path string) (string, error) {
 	return lines[0], nil
 }
 
-func innerSignRawTx(chainId int64, file string, privateKey *ecdsa.PrivateKey) {
-	// key = strings.TrimPrefix(key, "0x")
-	// privateKey, err := crypto.HexToECDSA(key)
-	// if err != nil {
-	// 	fmt.Printf("invalid private key: %v", err)
-	// 	return
-	// }
+func innerSignRawTx(chainId int64, file string, privateKey *ecdsa.PrivateKey) error {
+	outputFile := addSuffixToFilename(file, "_signed")
 
-	err := SignRawTx(file, privateKey, big.NewInt(chainId), addSuffixToFilename(file, "_signed"))
+	err := SignRawTx(file, privateKey, big.NewInt(chainId), outputFile)
 	if err != nil {
-		fmt.Println("sign tx Err:", err)
-		return
+		return fmt.Errorf("failed to sign transaction: %w", err)
 	}
-	fmt.Println("sign tx success!")
+
+	PrintSuccess("Transaction signed successfully!")
+	PrintInfo(fmt.Sprintf("Signed transaction saved to: %s", outputFile))
+	return nil
 }
 
 func addSuffixToFilename(filename, suffix string) string {

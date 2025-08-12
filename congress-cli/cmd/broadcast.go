@@ -26,16 +26,32 @@ func sendSignedTxCmdFlags(cmd *cobra.Command) {
 func sendSignedTx(cmd *cobra.Command, _ []string) {
 	file, _ := cmd.Flags().GetString("file")
 	rpc, _ := cmd.Flags().GetString("rpc_laddr")
-	// proposer, _ := cmd.Flags().GetString("proposer")
 
-	innerSendSignedTx(file, rpc)
-}
-
-func innerSendSignedTx(file, rpc string) {
-	_, err := SendSignedTx(rpc, file)
-	if err != nil {
-		fmt.Println("send tx Err:", err)
+	// 验证输入参数
+	if err := ValidateFile(file); err != nil {
+		PrintValidationError(err)
 		return
 	}
-	fmt.Println("send tx success!")
+
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo(fmt.Sprintf("Broadcasting signed transaction from: %s", file))
+	if err := innerSendSignedTx(file, rpc); err != nil {
+		PrintError("Failed to broadcast transaction", err)
+		return
+	}
+}
+
+func innerSendSignedTx(file, rpc string) error {
+	txHash, err := SendSignedTx(rpc, file)
+	if err != nil {
+		return fmt.Errorf("failed to send transaction: %w", err)
+	}
+
+	PrintSuccess("Transaction broadcast successfully!")
+	PrintInfo(fmt.Sprintf("Transaction hash: %s", txHash.Hex()))
+	return nil
 }

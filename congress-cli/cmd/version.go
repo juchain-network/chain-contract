@@ -2,15 +2,25 @@ package cmd
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/spf13/cobra"
 )
 
+const (
+	Version   = "1.1.0"
+	BuildDate = "2025-08-12"
+)
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Print the version number",
+	Short: "Print version information",
+	Long:  "Print detailed version information including Go version and build details",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("v1.0.0")
+		fmt.Printf("Congress CLI Version: %s\n", Version)
+		fmt.Printf("Build Date: %s\n", BuildDate)
+		fmt.Printf("Go Version: %s\n", runtime.Version())
+		fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 	},
 }
 
