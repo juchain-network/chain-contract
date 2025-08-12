@@ -10,30 +10,30 @@
 
 #### 原有 Foundry 测试 (已修复并优化)
 
-- **forge-tests/ProposalFoundry.t.sol** (7 tests): 提案创建、投票、约束检查、配置更新
-- **forge-tests/ValidatorsFoundry.t.sol** (2 tests): 基础验证者奖励分发和利润提取
-- **forge-tests/PunishFoundry.t.sol** (3 tests): 惩罚阈值、监禁状态、错过区块处理
+- **test/ProposalFoundry.t.sol** (7 tests): 提案创建、投票、约束检查、配置更新
+- **test/ValidatorsFoundry.t.sol** (2 tests): 基础验证者奖励分发和利润提取
+- **test/PunishFoundry.t.sol** (3 tests): 惩罚阈值、监禁状态、错过区块处理
 
 #### 新增完整测试套件
 
-- **forge-tests/ValidatorsCompleteFoundry.t.sol** (13 tests):
+- **test/ValidatorsCompleteFoundry.t.sol** (13 tests):
   - 验证者生命周期管理 (创建/编辑、授权检查)
   - 提案流程 (添加/移除验证者)
   - 奖励分发和利润提取的完整场景
   - 验证者集合更新
   - 所有错误情况处理
 
-- **forge-tests/RewardFoundry.t.sol** (4 tests):
+- **test/RewardFoundry.t.sol** (4 tests):
   - 无质押情况下的平均奖励分发
   - 惩罚验证者的奖励重新分配
   - 监禁验证者无法获得奖励
   - 监禁验证者无法从惩罚中获利
 
-- **forge-tests/Proposal.t.sol** (1 test): 接收地址初始化检查
+- **test/Proposal.t.sol** (1 test): 接收地址初始化检查
 
 #### BaseSetup 测试基础设施
 
-- **forge-tests/BaseSetup.t.sol**:
+- **test/BaseSetup.t.sol**:
   - 提供统一的系统合约部署到固定地址
   - 实现 vm cheatcodes 接口
   - 地址生成和资金分配辅助函数
@@ -74,7 +74,7 @@
 
 - **foundry.toml**:
   - Solidity 0.8.20
-  - 正确的路径映射 (src=contracts, test=forge-tests)
+  - 正确的路径映射 (src=contracts, test=test)
   - OpenZeppelin 依赖重新映射
 
 #### 文档更新

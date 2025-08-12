@@ -32,7 +32,7 @@ truffle test
 
 Foundry tests mirror the Hardhat JS tests and run fully against the same contracts at fixed system addresses.
 
-- Configure: foundry.toml is set to solc 0.8.20, src=contracts, test=forge-tests.
+- Configure: foundry.toml is set to solc 0.8.20, src=contracts, test=test.
 - Run tests:
 
 ```bash

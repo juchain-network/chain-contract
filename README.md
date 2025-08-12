@@ -20,7 +20,7 @@ sys-contract/
 ├── contracts/           # Solidity source code
 ├── congress-cli/        # Congress POA management CLI tool
 ├── forge-scripts/       # Foundry deployment scripts
-├── forge-tests/         # Foundry test suites
+├── test/         # Foundry test suites
 ├── legacy-scripts/      # Legacy Node.js scripts
 ├── docs/               # Project documentation
 ├── out/                # Compiled contract artifacts (Foundry)
@@ -189,7 +189,7 @@ forge test --match-contract Punish
 
 - Solidity version: 0.8.20
 - Source directory: `contracts/`
-- Test directory: `forge-tests/`
+- Test directory: `test/`
 - Output directory: `out/`
 
 ### **Node.js** (`package.json`)

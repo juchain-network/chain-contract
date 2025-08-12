@@ -22,13 +22,13 @@ contract PunishMissingFoundryTest is BaseSetup {
 
     // 辅助函数：检查验证者是否被监禁
     function isJailed(address validator) internal view returns (bool) {
-        (, Validators.Status status, , , ) = Validators(VAL).getValidatorInfo(validator);
+        (, Validators.Status status, , , ) = Validators(VALIDATORS).getValidatorInfo(validator);
         return status == Validators.Status.Jailed;
     }
 
     function testPunishInitialization() public view {
         // 对应 "test punish contract deployment and basic setup"
-        Punish punish = Punish(PUN);
+        Punish punish = Punish(PUNISH);
         
         // 验证初始状态
         require(punish.initialized(), "contract should be initialized");
@@ -42,11 +42,11 @@ contract PunishMissingFoundryTest is BaseSetup {
 
     function testJailedValidatorReactivation() public {
         // 对应 "jailed record will be cleaned if validator repass proposal"
-        Punish punish = Punish(PUN);
+        Punish punish = Punish(PUNISH);
         
         // 首先惩罚验证者直到被监禁
-        vm.coinbase(VAL); // 设置 coinbase 为 VAL 合约地址
-        vm.startPrank(VAL);
+        vm.coinbase(VALIDATORS); // 设置 coinbase 为 VALIDATORS 合约地址
+        vm.startPrank(VALIDATORS);
         for (uint256 i = 0; i < 48; i++) {
             vm.roll(block.number + 1); // 移动到下一个区块
             punish.punish(v1);
@@ -61,11 +61,11 @@ contract PunishMissingFoundryTest is BaseSetup {
         vm.warp(5_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), v1, true, "", block.timestamp));
         vm.prank(address(this));
-        require(true == Proposal(PRO).createProposal(v1, true, ""), "should create proposal");
+        require(true == Proposal(PROPOSAL).createProposal(v1, true, ""), "should create proposal");
         
         // 投票通过提案
-        vm.prank(v2); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v3); Proposal(PRO).voteProposal(id, true);
+        vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
         
         // 验证者应该不再被监禁且惩罚记录被清除
         require(!isJailed(v1), "v1 should not be jailed");
@@ -74,11 +74,11 @@ contract PunishMissingFoundryTest is BaseSetup {
 
     function testComplexPunishWorkflow() public {
         // 对应复杂的惩罚工作流测试
-        Punish punish = Punish(PUN);
+        Punish punish = Punish(PUNISH);
         
         // 测试多个验证者的惩罚流程
-        vm.coinbase(VAL);
-        vm.startPrank(VAL);
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
         
         // v1 惩罚到移除收入阈值
         for (uint256 i = 0; i < 24; i++) {
@@ -101,8 +101,8 @@ contract PunishMissingFoundryTest is BaseSetup {
         require(punish.getPunishRecord(v2) == 0, "v2 punish record should be reset after removal");
         
         // 继续惩罚 v1 直到被移除
-        vm.coinbase(VAL);
-        vm.startPrank(VAL);
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
         for (uint256 i = 0; i < 24; i++) {
             vm.roll(block.number + 1);
             punish.punish(v1);
@@ -114,38 +114,38 @@ contract PunishMissingFoundryTest is BaseSetup {
         // 需要至少2票才能通过，但只有1个活跃验证者，所以提案无法通过
         vm.warp(6_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), v1, true, "", block.timestamp));
-        Proposal(PRO).createProposal(v1, true, "");
+        Proposal(PROPOSAL).createProposal(v1, true, "");
         
-        vm.prank(v3); Proposal(PRO).voteProposal(id, true);
+        vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
         
         // 提案不应该通过，因为只有1票，需要至少2票
-        require(!Proposal(PRO).pass(v1), "proposal should not pass with only 1 vote");
+        require(!Proposal(PROPOSAL).pass(v1), "proposal should not pass with only 1 vote");
         require(isJailed(v1), "v1 should still be jailed");
     }
 
     function testPunishPermission() public {
         // 测试只有 Validators 合约可以调用 punish
-        Punish punish = Punish(PUN);
+        Punish punish = Punish(PUNISH);
         
         // 随机地址调用应该失败
         vm.prank(makeAddr("random"));
         (bool success, ) = address(punish).call(abi.encodeWithSelector(punish.punish.selector, v1));
         require(!success, "should fail when called by non-validator contract");
         
-        // 只有 VAL 合约可以调用
-        vm.coinbase(VAL);
-        vm.prank(VAL);
+        // 只有 VALIDATORS 合约可以调用
+        vm.coinbase(VALIDATORS);
+        vm.prank(VALIDATORS);
         punish.punish(v1);
-        require(punish.getPunishRecord(v1) == 1, "punish should succeed from VAL contract");
+        require(punish.getPunishRecord(v1) == 1, "punish should succeed from VALIDATORS contract");
     }
 
     function testPunishRecordCleaning() public {
         // 测试惩罚记录清理机制
-        Punish punish = Punish(PUN);
+        Punish punish = Punish(PUNISH);
         
         // 先惩罚但不到移除收入阈值
-        vm.coinbase(VAL);
-        vm.startPrank(VAL);
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
         for (uint256 i = 0; i < 10; i++) {
             vm.roll(block.number + 1);
             punish.punish(v1);
@@ -157,16 +157,16 @@ contract PunishMissingFoundryTest is BaseSetup {
         
         // 直接通过 Validators 合约测试清理记录
         // 这模拟了当验证者重新激活时的场景
-        vm.prank(PRO);
-        bool success = Validators(VAL).tryActive(v1);
+        vm.prank(PROPOSAL);
+        bool success = Validators(VALIDATORS).tryActive(v1);
         require(success, "tryActive should succeed");
         
         // 惩罚记录应该保持不变，因为验证者没有被监禁
         require(punish.getPunishRecord(v1) == 10, "punish record should remain unchanged for active validator");
         
         // 现在监禁验证者然后重新激活
-        vm.coinbase(VAL);
-        vm.startPrank(VAL);
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
         for (uint256 i = 0; i < 38; i++) { // 总共48次达到移除阈值
             vm.roll(block.number + 1);
             punish.punish(v1);
@@ -177,8 +177,8 @@ contract PunishMissingFoundryTest is BaseSetup {
         require(punish.getPunishRecord(v1) == 0, "punish record should be reset after removal");
         
         // 重新激活时记录已经被清理了
-        vm.prank(PRO);
-        success = Validators(VAL).tryActive(v1);
+        vm.prank(PROPOSAL);
+        success = Validators(VALIDATORS).tryActive(v1);
         require(success, "tryActive should succeed");
         require(punish.getPunishRecord(v1) == 0, "punish record should remain clean");
     }

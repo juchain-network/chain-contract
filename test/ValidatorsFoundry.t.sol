@@ -24,16 +24,16 @@ contract ValidatorsFoundryTest is BaseSetup {
     function testDistributeBlockRewardEqually() public {
         // send 1 ether from coinbase
         vm.startPrank(miner);
-        (bool ok, ) = address(Validators(VAL)).call{value: 1 ether}(
+        (bool ok, ) = address(Validators(VALIDATORS)).call{value: 1 ether}(
             abi.encodeWithSelector(Validators.distributeBlockReward.selector)
         );
         vm.stopPrank();
         require(ok, "distribute failed");
 
         // read validator profits (aacIncoming)
-        ( , , uint256 a1,,) = Validators(VAL).getValidatorInfo(v1);
-        ( , , uint256 a2,,) = Validators(VAL).getValidatorInfo(v2);
-        ( , , uint256 a3,,) = Validators(VAL).getValidatorInfo(v3);
+        ( , , uint256 a1,,) = Validators(VALIDATORS).getValidatorInfo(v1);
+        ( , , uint256 a2,,) = Validators(VALIDATORS).getValidatorInfo(v2);
+        ( , , uint256 a3,,) = Validators(VALIDATORS).getValidatorInfo(v3);
 
     // 1 ether / 3 with integer division, remainder to last non-jailed
     uint256 per = uint256(1 ether) / uint256(3);
@@ -45,7 +45,7 @@ contract ValidatorsFoundryTest is BaseSetup {
 
     function testWithdrawProfitsAfterPeriod() public {
         // configure withdrawProfitPeriod small via proposal
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         bytes32 id;
         vm.warp(2_000_000);
         id = keccak256(abi.encodePacked(address(this), uint256(4), uint256(2), block.timestamp));
@@ -56,7 +56,7 @@ contract ValidatorsFoundryTest is BaseSetup {
 
         // distribute some reward
         vm.startPrank(miner);
-        (bool ok, ) = address(Validators(VAL)).call{value: 9 ether}(
+        (bool ok, ) = address(Validators(VALIDATORS)).call{value: 9 ether}(
             abi.encodeWithSelector(Validators.distributeBlockReward.selector)
         );
         vm.stopPrank();
@@ -68,7 +68,7 @@ contract ValidatorsFoundryTest is BaseSetup {
     // fee addr defaults to validator addr, must call as fee receiver
     uint256 balBefore = miner.balance;
     vm.prank(miner);
-    Validators(VAL).withdrawProfits(miner);
+    Validators(VALIDATORS).withdrawProfits(miner);
     uint256 balAfter = miner.balance;
         require(balAfter > balBefore, "profits withdrawn");
     }

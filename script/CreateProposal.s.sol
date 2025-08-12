@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {BaseSetup} from "../forge-tests/BaseSetup.t.sol";
+import {BaseSetup} from "../test/BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 
 // 对应 scripts/add-node/create_proposal.js 的增强版本
@@ -18,7 +18,7 @@ contract CreateProposalScript is BaseSetup {
         // 计算提案 ID (需要与合约逻辑一致)
         bytes32 id = keccak256(abi.encodePacked(msg.sender, target, isAdd, details, block.timestamp));
         
-        Proposal(PRO).createProposal(target, isAdd, details);
+        Proposal(PROPOSAL).createProposal(target, isAdd, details);
         
         emit ProposalCreated(id, msg.sender, target, isAdd);
         return id;

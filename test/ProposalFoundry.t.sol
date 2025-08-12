@@ -22,12 +22,12 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testInitOnlyOnce() public {
         bytes memory err;
-        try Proposal(PRO).initialize(new address[](0)) { revert("should revert"); } catch (bytes memory e) { err = e; }
+        try Proposal(PROPOSAL).initialize(new address[](0)) { revert("should revert"); } catch (bytes memory e) { err = e; }
         require(err.length > 0, "expected revert");
     }
 
     function testCreateProposalConstraints() public {
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         // can't remove a not passed dst (choose an address not initialized)
         address notPassed = makeAddr("np");
         (bool ok1, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, notPassed, false, ""));
@@ -53,7 +53,7 @@ contract ProposalFoundryTest is BaseSetup {
     }
 
     function testCreateAndVoteAddProposalPass() public {
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         // freeze timestamp to compute deterministic id
         vm.warp(1_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), address(0xBEEF), true, "", block.timestamp));
@@ -70,12 +70,12 @@ contract ProposalFoundryTest is BaseSetup {
         bool passed = p.pass(address(0xBEEF));
         require(passed, "should pass");
         // also ensure validator became top
-        bool isTop = Validators(VAL).isTopValidator(address(0xBEEF));
+        bool isTop = Validators(VALIDATORS).isTopValidator(address(0xBEEF));
         require(isTop, "should be top validator");
     }
 
     function testOnlyValidatorCanVote() public {
-    Proposal p = Proposal(PRO);
+    Proposal p = Proposal(PROPOSAL);
     vm.warp(1_111_111);
     bytes32 id = keccak256(abi.encodePacked(address(this), address(0xCAFE), true, "", block.timestamp));
     p.createProposal(address(0xCAFE), true, "");
@@ -87,7 +87,7 @@ contract ProposalFoundryTest is BaseSetup {
     }
 
     function testValidatorCanOnlyVoteOnceAndExpire() public {
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         vm.warp(2_222_222);
         bytes32 id = keccak256(abi.encodePacked(address(this), address(0xDEAD), true, "", block.timestamp));
         p.createProposal(address(0xDEAD), true, "");
@@ -106,7 +106,7 @@ contract ProposalFoundryTest is BaseSetup {
     }
 
     function testRemoveProposalPass() public {
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         // remove an existing validator (v1)
         vm.warp(3_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), v1, false, "", block.timestamp));
@@ -118,7 +118,7 @@ contract ProposalFoundryTest is BaseSetup {
     }
 
     function testConfigUpdateAll() public {
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         uint256[7] memory cids = [uint256(0),1,2,3,4,5,6];
         uint256[6] memory vals = [uint256(100),200,300,400,500,600];
         address recv = makeAddr("recv");

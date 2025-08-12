@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
@@ -21,22 +22,22 @@ abstract contract BaseSetup {
     // hevm cheatcode address
     Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    // Fixed system addresses
-    address constant VAL = 0x000000000000000000000000000000000000f000;
-    address constant PUN = 0x000000000000000000000000000000000000F001;
-    address constant PRO = 0x000000000000000000000000000000000000F002;
+    // Fixed system addresses (consistent with deployment)
+    address constant VALIDATORS = 0x000000000000000000000000000000000000f000;
+    address constant PUNISH = 0x000000000000000000000000000000000000F001;
+    address constant PROPOSAL = 0x000000000000000000000000000000000000F002;
 
     // Deploy runtime code of contracts to fixed addresses and initialize them
     function deploySystem(address[] memory initVals) internal {
-        // place runtime code at fixed addresses
-        vm.etch(VAL, type(Validators).runtimeCode);
-        vm.etch(PUN, type(Punish).runtimeCode);
-        vm.etch(PRO, type(Proposal).runtimeCode);
+        // place runtime code at fixed addresses (consistent with deployment)
+        vm.etch(VALIDATORS, type(Validators).runtimeCode);
+        vm.etch(PUNISH, type(Punish).runtimeCode);
+        vm.etch(PROPOSAL, type(Proposal).runtimeCode);
 
         // initialize with provided validators
-        Proposal(PRO).initialize(initVals);
-        Validators(VAL).initialize(initVals);
-        Punish(PUN).initialize();
+        Proposal(PROPOSAL).initialize(initVals);
+        Validators(VALIDATORS).initialize(initVals);
+        Punish(PUNISH).initialize();
     }
 
     // helper to make deterministic pseudo addresses and fund them

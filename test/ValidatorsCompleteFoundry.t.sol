@@ -27,7 +27,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     function testCanOnlyInitOnce() public {
         // 对应 "can only init once"
         bytes memory err;
-        try Validators(VAL).initialize(new address[](0)) { 
+        try Validators(VALIDATORS).initialize(new address[](0)) { 
             revert("should revert"); 
         } catch (bytes memory e) { 
             err = e; 
@@ -40,7 +40,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // 对应 "can't create validator if fee addr == address(0)"
         address validator = makeAddr("validator");
         vm.prank(validator);
-        (bool ok, ) = address(Validators(VAL)).call(
+        (bool ok, ) = address(Validators(VALIDATORS)).call(
             abi.encodeWithSelector(
                 Validators.createOrEditValidator.selector,
                 address(0), "", "", "", "", ""
@@ -54,7 +54,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         address validator = makeAddr("validator");
         string memory tooLongMoniker = _generateLongString(71); // > 70 limit
         vm.prank(validator);
-        (bool ok, ) = address(Validators(VAL)).call(
+        (bool ok, ) = address(Validators(VALIDATORS)).call(
             abi.encodeWithSelector(
                 Validators.createOrEditValidator.selector,
                 payable(validator), tooLongMoniker, "", "", "", ""
@@ -67,7 +67,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // 对应 "can't create validator if not pass propose"
         address validator = makeAddr("validator");
         vm.prank(validator);
-        (bool ok, ) = address(Validators(VAL)).call(
+        (bool ok, ) = address(Validators(VALIDATORS)).call(
             abi.encodeWithSelector(
                 Validators.createOrEditValidator.selector,
                 payable(validator), "", "", "", "", ""
@@ -85,11 +85,11 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // 创建验证者
         vm.prank(validator);
-        bool success = Validators(VAL).createOrEditValidator(payable(validator), "", "", "", "", "");
+        bool success = Validators(VALIDATORS).createOrEditValidator(payable(validator), "", "", "", "", "");
         require(success, "create validator should succeed");
         
         // 检查状态
-        (, Validators.Status status,,,) = Validators(VAL).getValidatorInfo(validator);
+        (, Validators.Status status,,,) = Validators(VALIDATORS).getValidatorInfo(validator);
         require(uint256(status) == Active, "validator should be active");
     }
 
@@ -101,15 +101,15 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // 先授权并创建
         _passProposal(validator, true);
         vm.prank(validator);
-        Validators(VAL).createOrEditValidator(payable(validator), "", "", "", "", "");
+        Validators(VALIDATORS).createOrEditValidator(payable(validator), "", "", "", "", "");
         
         // 编辑 fee 地址
         vm.prank(validator);
-        bool success = Validators(VAL).createOrEditValidator(payable(feeAddr), "", "", "", "", "");
+        bool success = Validators(VALIDATORS).createOrEditValidator(payable(feeAddr), "", "", "", "", "");
         require(success, "edit should succeed");
         
         // 检查 fee 地址已更新
-        (address payable actualFeeAddr,,,,) = Validators(VAL).getValidatorInfo(validator);
+        (address payable actualFeeAddr,,,,) = Validators(VALIDATORS).getValidatorInfo(validator);
         require(actualFeeAddr == feeAddr, "fee address should be updated");
     }
 
@@ -119,28 +119,28 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         address nval = makeAddr("newval");
         
         // 初始不是验证者
-        require(!Validators(VAL).isTopValidator(nval), "should not be validator initially");
+        require(!Validators(VALIDATORS).isTopValidator(nval), "should not be validator initially");
         
         // 创建并投票通过提案
         _passProposal(nval, true);
         
         // 现在应该是验证者
-        require(Validators(VAL).isTopValidator(nval), "should be validator after proposal");
-        require(Proposal(PRO).pass(nval), "should be marked as passed");
+        require(Validators(VALIDATORS).isTopValidator(nval), "should be validator after proposal");
+        require(Proposal(PROPOSAL).pass(nval), "should be marked as passed");
     }
 
     function testProposeRemoveValidator() public {
         // 对应 "propose remove a val"
         
         // v1 初始是验证者
-        require(Validators(VAL).isTopValidator(v1), "v1 should be validator initially");
+        require(Validators(VALIDATORS).isTopValidator(v1), "v1 should be validator initially");
         
         // 创建并投票通过移除提案
         _passProposal(v1, false);
         
         // 现在应该不是验证者
-        require(!Validators(VAL).isTopValidator(v1), "v1 should not be validator after removal");
-        require(!Proposal(PRO).pass(v1), "v1 should not be marked as passed");
+        require(!Validators(VALIDATORS).isTopValidator(v1), "v1 should not be validator after removal");
+        require(!Proposal(PROPOSAL).pass(v1), "v1 should not be marked as passed");
     }
 
     // 区块奖励分发测试
@@ -150,12 +150,12 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         uint256 expectPerFee = 0.1 ether;
         
         vm.prank(miner);
-        Validators(VAL).distributeBlockReward{value: fee}();
+        Validators(VALIDATORS).distributeBlockReward{value: fee}();
         
         // 检查每个验证者获得的奖励
         for (uint i = 0; i < 3; i++) {
             address val = i == 0 ? v1 : (i == 1 ? v2 : v3);
-            (, , uint256 aacIncoming,,) = Validators(VAL).getValidatorInfo(val);
+            (, , uint256 aacIncoming,,) = Validators(VALIDATORS).getValidatorInfo(val);
             require(aacIncoming == expectPerFee, "should get expected fee");
         }
     }
@@ -164,13 +164,13 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // 对应 "update withdraw profit wait block"
         vm.warp(5_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), uint256(4), uint256(10), block.timestamp));
-        Proposal(PRO).createUpdateConfigProposal(4, 10);
+        Proposal(PROPOSAL).createUpdateConfigProposal(4, 10);
         
-        vm.prank(v1); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v2); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v3); Proposal(PRO).voteProposal(id, true);
+        vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
         
-        require(Proposal(PRO).withdrawProfitPeriod() == 10, "withdraw period should be updated");
+        require(Proposal(PROPOSAL).withdrawProfitPeriod() == 10, "withdraw period should be updated");
     }
 
     function testValidatorWithdrawProfits() public {
@@ -179,7 +179,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // 分发奖励
         vm.prank(miner);
-        Validators(VAL).distributeBlockReward{value: fee}();
+        Validators(VALIDATORS).distributeBlockReward{value: fee}();
         
         // 设置短的提取周期
         _updateWithdrawPeriod(1);
@@ -187,7 +187,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         uint256 balBefore = miner.balance;
         vm.prank(miner);
-        Validators(VAL).withdrawProfits(miner);
+        Validators(VALIDATORS).withdrawProfits(miner);
         uint256 balAfter = miner.balance;
         
         require(balAfter > balBefore, "should receive profits");
@@ -195,17 +195,17 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // 测试不同的 fee 地址
         address feeAddr = makeAddr("feeAddr");
         vm.prank(miner);
-        Validators(VAL).createOrEditValidator(payable(feeAddr), "", "", "", "", "");
+        Validators(VALIDATORS).createOrEditValidator(payable(feeAddr), "", "", "", "", "");
         
         // 再次分发
         vm.prank(miner);
-        Validators(VAL).distributeBlockReward{value: 0.5 ether}();
+        Validators(VALIDATORS).distributeBlockReward{value: 0.5 ether}();
         
         vm.roll(block.number + 2);
         
         uint256 feeBalBefore = feeAddr.balance;
         vm.prank(feeAddr);
-        Validators(VAL).withdrawProfits(miner);
+        Validators(VALIDATORS).withdrawProfits(miner);
         uint256 feeBalAfter = feeAddr.balance;
         
         require(feeBalAfter > feeBalBefore, "fee address should receive profits");
@@ -218,7 +218,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         vm.roll(block.number + 2);
         
         vm.prank(feeAddr);
-        (bool ok, ) = address(Validators(VAL)).call(
+        (bool ok, ) = address(Validators(VALIDATORS)).call(
             abi.encodeWithSelector(Validators.withdrawProfits.selector, miner)
         );
         require(!ok, "should fail without profits");
@@ -236,10 +236,10 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         vm.roll(targetBlock);
         
         vm.prank(miner);
-        Validators(VAL).updateActiveValidatorSet(newSet, epoch);
+        Validators(VALIDATORS).updateActiveValidatorSet(newSet, epoch);
         
         // 验证新的验证者集合
-        address[] memory activeSet = Validators(VAL).getActiveValidators();
+        address[] memory activeSet = Validators(VALIDATORS).getActiveValidators();
         require(activeSet.length == 2, "should have 2 active validators");
         require(activeSet[0] == v1, "should contain v1");
         require(activeSet[1] == v2, "should contain v2");
@@ -249,21 +249,21 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     function _passProposal(address target, bool flag) internal {
         vm.warp(block.timestamp + 1000000);
         bytes32 id = keccak256(abi.encodePacked(address(this), target, flag, "", block.timestamp));
-        Proposal(PRO).createProposal(target, flag, "");
+        Proposal(PROPOSAL).createProposal(target, flag, "");
         
-        vm.prank(v1); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v2); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v3); Proposal(PRO).voteProposal(id, true);
+        vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
     }
 
     function _updateWithdrawPeriod(uint256 period) internal {
         vm.warp(block.timestamp + 1000000);
         bytes32 id = keccak256(abi.encodePacked(address(this), uint256(4), period, block.timestamp));
-        Proposal(PRO).createUpdateConfigProposal(4, period);
+        Proposal(PROPOSAL).createUpdateConfigProposal(4, period);
         
-        vm.prank(v1); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v2); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v3); Proposal(PRO).voteProposal(id, true);
+        vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
     }
 
     function _generateLongString(uint256 length) internal pure returns (string memory) {

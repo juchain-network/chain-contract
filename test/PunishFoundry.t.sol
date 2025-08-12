@@ -24,42 +24,42 @@ contract PunishFoundryTest is BaseSetup {
 
     function testPunishThresholdRemovesIncoming() public {
         // read threshold
-        uint256 thr = Proposal(PRO).punishThreshold();
+        uint256 thr = Proposal(PROPOSAL).punishThreshold();
         for (uint256 i = 0; i < thr; i++) {
             vm.coinbase(miner);
             vm.prank(miner);
-            Punish(PUN).punish(miner);
+            Punish(PUNISH).punish(miner);
             vm.roll(block.number + 1);
         }
-        (, , uint256 aac,,) = Validators(VAL).getValidatorInfo(miner);
+        (, , uint256 aac,,) = Validators(VALIDATORS).getValidatorInfo(miner);
         require(aac == 0, "incoming removed at punish threshold");
     }
 
     function testRemoveThresholdJails() public {
-        uint256 thr = Proposal(PRO).removeThreshold();
+        uint256 thr = Proposal(PROPOSAL).removeThreshold();
         for (uint256 i = 0; i < thr; i++) {
             vm.coinbase(miner);
             vm.prank(miner);
-            Punish(PUN).punish(miner);
+            Punish(PUNISH).punish(miner);
             vm.roll(block.number + 1);
         }
-        (, Validators.Status status,,,) = Validators(VAL).getValidatorInfo(miner);
+        (, Validators.Status status,,,) = Validators(VALIDATORS).getValidatorInfo(miner);
         require(uint256(status) == uint256(Validators.Status.Jailed), "jailed at remove threshold");
     }
 
     function testDecreaseMissedBlocksCounter() public {
-        uint256 thr = Proposal(PRO).removeThreshold();
-        uint256 dec = Proposal(PRO).decreaseRate();
+        uint256 thr = Proposal(PROPOSAL).removeThreshold();
+        uint256 dec = Proposal(PROPOSAL).decreaseRate();
         // accumulate some missed blocks on v2 and v3
         for (uint256 i = 0; i < thr / dec; i++) {
             vm.coinbase(miner);
             vm.prank(miner);
-            Punish(PUN).punish(v2);
+            Punish(PUNISH).punish(v2);
             vm.roll(block.number + 1);
         }
         vm.coinbase(miner);
         vm.prank(miner);
-        Punish(PUN).punish(v3);
+        Punish(PUNISH).punish(v3);
         vm.roll(block.number + 1);
 
         // reach an epoch boundary: roll to next multiple of 30
@@ -67,10 +67,10 @@ contract PunishFoundryTest is BaseSetup {
         uint256 blocksToNext = epoch - (block.number % epoch);
         vm.roll(block.number + blocksToNext);
         vm.prank(miner);
-        Punish(PUN).decreaseMissedBlocksCounter(epoch);
+        Punish(PUNISH).decreaseMissedBlocksCounter(epoch);
 
-    uint256 r2 = Punish(PUN).getPunishRecord(v2);
-    uint256 r3 = Punish(PUN).getPunishRecord(v3);
+    uint256 r2 = Punish(PUNISH).getPunishRecord(v2);
+    uint256 r3 = Punish(PUNISH).getPunishRecord(v3);
     require(r2 == 0, "v2 decreased to zero or reset");
     require(r3 == 0, "v3 decreased to zero or reset");
     }

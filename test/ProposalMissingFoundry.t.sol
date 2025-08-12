@@ -23,7 +23,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
 
     function testAnyoneCanCreateProposal() public {
         // 对应 "anyone can create proposal"
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         address candidate = makeAddr("candidate");
         
         // 测试多个不同账户都可以创建提案
@@ -40,7 +40,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
 
     function testProposalReject() public {
         // 对应 "normal vote(2 agree, 3 reject)"
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         address candidate = makeAddr("candidate");
         
         vm.warp(2_000_000);
@@ -68,7 +68,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
 
     function testValidateCandidateInfo() public {
         // 对应 "Validate candidate's info"
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         address candidate = makeAddr("candidate");
         address proposer = makeAddr("proposer");
         
@@ -104,7 +104,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
 
     function testSetUnpassedPermission() public {
         // 对应 "only validator can set val unpass"
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         address candidate = v1; // 使用已存在的验证者
         
         // 非验证者合约调用应该失败
@@ -120,21 +120,21 @@ contract ProposalMissingFoundryTest is BaseSetup {
         address candidate = v1;
         
         // 确认候选人初始是通过的
-        require(Proposal(PRO).pass(candidate), "candidate should initially pass");
+        require(Proposal(PROPOSAL).pass(candidate), "candidate should initially pass");
         
         // 模拟 Validators 合约调用 setUnpassed
         // 在实际测试中，这通过惩罚流程或移除提案自动触发
         // 我们通过移除验证者提案来测试这个功能
         vm.warp(4_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), candidate, false, "", block.timestamp));
-        Proposal(PRO).createProposal(candidate, false, "");
+        Proposal(PROPOSAL).createProposal(candidate, false, "");
         
         // 投票移除
-        vm.prank(v2); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v3); Proposal(PRO).voteProposal(id, true);
-        vm.prank(v4); Proposal(PRO).voteProposal(id, true);
+        vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
+        vm.prank(v4); Proposal(PROPOSAL).voteProposal(id, true);
         
         // 验证候选人现在不通过
-        require(!Proposal(PRO).pass(candidate), "candidate should not pass after removal");
+        require(!Proposal(PROPOSAL).pass(candidate), "candidate should not pass after removal");
     }
 }
