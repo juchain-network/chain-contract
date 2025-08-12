@@ -121,10 +121,25 @@ func queryOneInfo(addr string, instance *generated.Validators) {
 
 	fmt.Printf("Address: %s\n", addr)
 	fmt.Printf("Fee Address: %s\n", feeAddr.Hex())
-	fmt.Printf("Status: %d\n", status)
+	// Print friendly status label instead of raw number
+	fmt.Printf("Status: %s\n", formatValidatorStatus(uint64(status)))
 	fmt.Printf("Accumulated Rewards: %s\n", aacIncoming.String())
-	fmt.Printf("Total Jailed Blocks: %s\n", totalJailedHB.String())
+	// totalJailedHB represents total penalized (forfeited) rewards
+	fmt.Printf("Penalized Rewards: %s\n", totalJailedHB.String())
 	fmt.Printf("Last Withdraw Block: %s\n", lastWithdrawProfitsBlock.String())
+}
+
+// formatValidatorStatus converts numeric status to a concise, friendly label
+// 1 -> "Active ✅"; 2 -> "Inactive ❌"; others -> "Unknown"
+func formatValidatorStatus(status uint64) string {
+	switch status {
+	case 1:
+		return "Active ✅"
+	case 2:
+		return "Inactive ❌"
+	default:
+		return "Unknown"
+	}
 }
 
 func WithdrawProfitsCmd() *cobra.Command {
