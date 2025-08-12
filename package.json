@@ -4,7 +4,8 @@
   "description": "AAC blockchain system contracts",
   "main": "generate-contracts.js",
   "dependencies": {
-    "nunjucks": "^3.2.2"
+    "nunjucks": "^3.2.2",
+    "js-sha3": "^0.8.0"
   },
   "scripts": {
     "generate": "node generate-contracts.js",
