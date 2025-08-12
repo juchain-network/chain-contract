@@ -24,26 +24,43 @@ func ValidatorsCmd() *cobra.Command {
 func listValidators(cmd *cobra.Command, _ []string) {
 	rpc, _ := cmd.Flags().GetString("rpc_laddr")
 
-	client, err := ethclient.Dial(rpc)
-	if err != nil {
-		fmt.Printf("Failed to connect to the Ethereum client: %v", err)
+	// 验证RPC URL
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
 		return
 	}
+
+	client, err := ethclient.Dial(rpc)
+	if err != nil {
+		PrintError("Failed to connect to RPC endpoint", err)
+		return
+	}
+	defer client.Close()
+
 	// 获取validator信息
 	contractAddress := common.HexToAddress(validatorAddr)
 	instance, err := generated.NewValidators(contractAddress, client)
 	if err != nil {
-		fmt.Printf("Failed to instantiate contract: %v", err)
+		PrintError("Failed to instantiate validator contract", err)
 		return
 	}
+
+	PrintInfo("Fetching validator information...")
 	vals, err := instance.GetTopValidators(&bind.CallOpts{})
 	if err != nil {
-		fmt.Printf("Failed to call GetValidatorInfo: %v", err)
-	} else {
-		for _, val := range vals {
-			queryOneInfo(val.Hex(), instance)
-			// fmt.Printf("miner%v %v\n", i, val)
-		}
+		PrintError("Failed to get validators", err)
+		return
+	}
+
+	if len(vals) == 0 {
+		PrintInfo("No validators found")
+		return
+	}
+
+	PrintInfo(fmt.Sprintf("Found %d validators:", len(vals)))
+	for i, val := range vals {
+		fmt.Printf("\n--- Validator %d ---\n", i+1)
+		queryOneInfo(val.Hex(), instance)
 	}
 }
 
@@ -66,28 +83,48 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 	rpc, _ := cmd.Flags().GetString("rpc_laddr")
 	addr, _ := cmd.Flags().GetString("addr")
 
-	client, err := ethclient.Dial(rpc)
-	if err != nil {
-		fmt.Printf("Failed to connect to the Ethereum client: %v", err)
+	// 验证输入参数
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
 		return
 	}
+
+	if err := ValidateAddress(addr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	client, err := ethclient.Dial(rpc)
+	if err != nil {
+		PrintError("Failed to connect to RPC endpoint", err)
+		return
+	}
+	defer client.Close()
 
 	contractAddress := common.HexToAddress(validatorAddr)
 	instance, err := generated.NewValidators(contractAddress, client)
 	if err != nil {
-		fmt.Printf("Failed to instantiate contract: %v", err)
+		PrintError("Failed to instantiate validator contract", err)
+		return
 	}
 
+	PrintInfo(fmt.Sprintf("Querying validator information for: %s", addr))
 	queryOneInfo(addr, instance)
 }
 
 func queryOneInfo(addr string, instance *generated.Validators) {
 	feeAddr, status, aacIncoming, totalJailedHB, lastWithdrawProfitsBlock, err := instance.GetValidatorInfo(&bind.CallOpts{}, common.HexToAddress(addr))
 	if err != nil {
-		fmt.Printf("Failed to call GetValidatorInfo address %v: %v", addr, err)
-	} else {
-		fmt.Println("矿工 ", addr, "奖励地址", feeAddr, "活动状态", status, "累计奖励", aacIncoming, "罚没奖励", totalJailedHB, "上次提取奖励区块", lastWithdrawProfitsBlock)
+		PrintError(fmt.Sprintf("Failed to get validator info for %s", addr), err)
+		return
 	}
+
+	fmt.Printf("Address: %s\n", addr)
+	fmt.Printf("Fee Address: %s\n", feeAddr.Hex())
+	fmt.Printf("Status: %d\n", status)
+	fmt.Printf("Accumulated Rewards: %s\n", aacIncoming.String())
+	fmt.Printf("Total Jailed Blocks: %s\n", totalJailedHB.String())
+	fmt.Printf("Last Withdraw Block: %s\n", lastWithdrawProfitsBlock.String())
 }
 
 func WithdrawProfitsCmd() *cobra.Command {
@@ -108,26 +145,43 @@ func validatorClaimFlags(cmd *cobra.Command) {
 func validatorClaim(cmd *cobra.Command, _ []string) {
 	rpc, _ := cmd.Flags().GetString("rpc_laddr")
 	addr, _ := cmd.Flags().GetString("addr")
-	innerValidatorClaim(addr, rpc)
+
+	// 验证输入参数
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(addr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo(fmt.Sprintf("Creating withdraw profits transaction for validator: %s", addr))
+	if err := innerValidatorClaim(addr, rpc); err != nil {
+		PrintError("Failed to create withdraw transaction", err)
+		return
+	}
 }
 
-func innerValidatorClaim(addr string, rpc string) {
+func innerValidatorClaim(addr string, rpc string) error {
 	validatorAbi, err := abi.JSON(strings.NewReader(generated.ValidatorsABI))
 	if err != nil {
-		fmt.Println("JSON NewReader Err:", err)
-		return
+		return fmt.Errorf("failed to parse validator ABI: %w", err)
 	}
 
 	abiData, err := validatorAbi.Pack("withdrawProfits", common.HexToAddress(addr))
 	if err != nil {
-		fmt.Println("validatorAbi.Pack withdrawProfits Err:", err)
-		return
+		return fmt.Errorf("failed to pack withdrawProfits data: %w", err)
 	}
-	err = CreateRawTx(common.HexToAddress(addr), common.HexToAddress(validatorAddr), nil, abiData, rpc, "withdrawProfits.json")
-	if err != nil {
-		fmt.Println("create tx Err:", err)
-		return
-	}
-	fmt.Println("crete tx success!")
 
+	err = CreateRawTx(common.HexToAddress(addr), common.HexToAddress(validatorAddr), nil, abiData, rpc, WithdrawProfitsFile)
+	if err != nil {
+		return fmt.Errorf("failed to create withdraw transaction: %w", err)
+	}
+
+	PrintSuccess("Withdraw profits transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", WithdrawProfitsFile))
+	PrintWarning("Note: Withdrawal has minimum waiting period restrictions")
+	return nil
 }

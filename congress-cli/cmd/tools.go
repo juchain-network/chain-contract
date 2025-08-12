@@ -57,7 +57,7 @@ func CreateRawTx(
 	if err != nil {
 		return fmt.Errorf("gas estimation failed: %v", err)
 	}
-	gasLimit = gasLimit * 120 / 100
+	gasLimit = gasLimit * DefaultGasMultiplier / 100
 
 	tx := types.NewTransaction(
 		nonce,
@@ -169,22 +169,24 @@ func SendSignedTx(rpcURL string, signedTxFile string) (common.Hash, error) {
 }
 
 func waitEthTxFinished(client *ethclient.Client, txhash common.Hash) (error, *big.Int) {
-	fmt.Printf("Wait for tx to be finished executing with hash %s\n", txhash.String())
-	timeout := time.NewTimer(30 * time.Second)
-	oneSecondtimeout := time.NewTicker(5 * time.Second)
+	PrintInfo(fmt.Sprintf("Waiting for transaction confirmation: %s", txhash.String()))
+	timeout := time.NewTimer(DefaultTimeout * time.Second)
+	ticker := time.NewTicker(DefaultCheckInterval * time.Second)
+	defer timeout.Stop()
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-timeout.C:
-			fmt.Println("tx timeout")
-			return errors.New("eth tx timeout"), nil
-		case <-oneSecondtimeout.C:
+			return errors.New("transaction confirmation timeout"), nil
+		case <-ticker.C:
 			receipt, err := client.TransactionReceipt(context.Background(), txhash)
 			if err == ethereum.NotFound {
 				continue
 			} else if err != nil {
 				return err, nil
 			}
-			fmt.Printf("tx confirmed in block %v\n", receipt.BlockNumber)
+			PrintSuccess(fmt.Sprintf("Transaction confirmed in block %v", receipt.BlockNumber))
 			return nil, receipt.BlockNumber
 		}
 	}
@@ -271,7 +273,7 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 		return err, ""
 	}
 	// 遍历日志
-	proposalId := "0x"
+	var proposalId string
 	for logs.Next() {
 		event := logs.Event
 		proposalId = hex.EncodeToString(event.Id[:])

@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	validatorAddr = "0x000000000000000000000000000000000000f000"
-	punishAddr    = "0x000000000000000000000000000000000000f001"
-	proposalAddr  = "0x000000000000000000000000000000000000f002"
+	validatorAddr = ValidatorContractAddr
+	punishAddr    = PunishContractAddr
+	proposalAddr  = ProposalContractAddr
 )
 
 func CreateProposalCmd() *cobra.Command {
@@ -41,39 +41,55 @@ func createProposalTx(cmd *cobra.Command, _ []string) {
 	proposer, _ := cmd.Flags().GetString("proposer")
 	target, _ := cmd.Flags().GetString("target")
 	operation, _ := cmd.Flags().GetString("operation")
-	flag := true
-	if operation == "add" {
-		flag = true
-		fmt.Printf("create add new miner tx\n")
-	} else if operation == "remove" {
-		flag = false
-		fmt.Printf("create remove miner tx\n")
-	} else {
-		fmt.Printf("Invalid operation %s\n", operation)
+
+	// 验证输入参数
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
 		return
 	}
 
-	innerCreateProposal(proposer, target, flag, rpc)
+	if err := ValidateAddresses(proposer, target); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateOperation(operation); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	flag := operation == OperationAdd
+	if flag {
+		PrintInfo("Creating proposal to add new validator")
+	} else {
+		PrintInfo("Creating proposal to remove validator")
+	}
+
+	if err := innerCreateProposal(proposer, target, flag, rpc); err != nil {
+		PrintError("Failed to create proposal", err)
+		return
+	}
 }
 
-func innerCreateProposal(proposer, target string, flag bool, rpc string) {
+func innerCreateProposal(proposer, target string, flag bool, rpc string) error {
 	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
 	if err != nil {
-		fmt.Println("JSON NewReader Err:", err)
-		return
+		return fmt.Errorf("failed to parse proposal ABI: %w", err)
 	}
 
 	abiData, err := proposalAbi.Pack("createProposal", common.HexToAddress(target), flag, "")
 	if err != nil {
-		fmt.Println("proposalAbi.Pack createProposal Err:", err)
-		return
+		return fmt.Errorf("failed to pack proposal data: %w", err)
 	}
-	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(proposalAddr), nil, abiData, rpc, "createProposal.json")
+
+	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(proposalAddr), nil, abiData, rpc, CreateProposalFile)
 	if err != nil {
-		fmt.Println("create tx Err:", err)
-		return
+		return fmt.Errorf("failed to create raw transaction: %w", err)
 	}
-	fmt.Println("crete tx success!")
+
+	PrintSuccess("Proposal transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", CreateProposalFile))
+	return nil
 }
 
 func CreateConfigProposalCmd() *cobra.Command {
@@ -100,27 +116,56 @@ func createConfigProposalTx(cmd *cobra.Command, _ []string) {
 	proposer, _ := cmd.Flags().GetString("proposer")
 	cid, _ := cmd.Flags().GetInt64("cid")
 	cvalue, _ := cmd.Flags().GetInt64("value")
-	innerCreateConfigProposal(proposer, cid, cvalue, rpc)
+
+	// 验证输入参数
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(proposer); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateConfigID(cid); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if cvalue < 0 {
+		PrintValidationError(fmt.Errorf("config value must be non-negative: %d", cvalue))
+		return
+	}
+
+	PrintInfo(fmt.Sprintf("Creating config update proposal for %s (ID: %d) with value: %d",
+		GetConfigIDName(cid), cid, cvalue))
+
+	if err := innerCreateConfigProposal(proposer, cid, cvalue, rpc); err != nil {
+		PrintError("Failed to create config proposal", err)
+		return
+	}
 }
 
-func innerCreateConfigProposal(proposer string, cid, cvalue int64, rpc string) {
+func innerCreateConfigProposal(proposer string, cid, cvalue int64, rpc string) error {
 	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
 	if err != nil {
-		fmt.Println("JSON NewReader Err:", err)
-		return
+		return fmt.Errorf("failed to parse proposal ABI: %w", err)
 	}
 
 	abiData, err := proposalAbi.Pack("createUpdateConfigProposal", big.NewInt(cid), big.NewInt(cvalue))
 	if err != nil {
-		fmt.Println("proposalAbi.Pack createUpdateConfigProposal Err:", err)
-		return
+		return fmt.Errorf("failed to pack config proposal data: %w", err)
 	}
-	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(proposalAddr), nil, abiData, rpc, "createUpdateConfigProposal.json")
+
+	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(proposalAddr), nil, abiData, rpc, CreateConfigProposalFile)
 	if err != nil {
-		fmt.Println("create tx Err:", err)
-		return
+		return fmt.Errorf("failed to create raw transaction: %w", err)
 	}
-	fmt.Println("crete tx success!")
+
+	PrintSuccess("Config proposal transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", CreateConfigProposalFile))
+	return nil
 }
 
 func VoteProposalCmd() *cobra.Command {
@@ -134,30 +179,51 @@ func VoteProposalCmd() *cobra.Command {
 }
 
 func voteProposalCmdFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("signer", "s", "", "singer addr (must be valid validator)")
+	cmd.Flags().StringP("signer", "s", "", "signer addr (must be valid validator)")
 	_ = cmd.MarkFlagRequired("signer")
-	cmd.Flags().StringP("proposalId", "i", "", "proposal id")
+	cmd.Flags().StringP("proposalId", "i", "", "proposal id (64-character hex string)")
 	_ = cmd.MarkFlagRequired("proposalId")
-	cmd.Flags().BoolP("approve", "a", false, "approve this proposal or not")
-	_ = cmd.MarkFlagRequired("approve")
+	cmd.Flags().BoolP("approve", "a", false, "approve this proposal (use -a for YES, omit for NO)")
 }
 
 func voteProposalTx(cmd *cobra.Command, _ []string) {
 	rpc, _ := cmd.Flags().GetString("rpc_laddr")
-
 	signer, _ := cmd.Flags().GetString("signer")
 	proposalId, _ := cmd.Flags().GetString("proposalId")
 	approve, _ := cmd.Flags().GetBool("approve")
 
-	innerVoteProposal(signer, proposalId, approve, rpc)
+	// 验证输入参数
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(signer); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateProposalID(proposalId); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	voteType := "REJECT"
+	if approve {
+		voteType = "APPROVE"
+	}
+	PrintInfo(fmt.Sprintf("Voting %s on proposal: %s", voteType, proposalId))
+
+	if err := innerVoteProposal(signer, proposalId, approve, rpc); err != nil {
+		PrintError("Failed to vote on proposal", err)
+		return
+	}
 }
 
-func innerVoteProposal(signer, proposalId string, flag bool, rpc string) {
-
+func innerVoteProposal(signer, proposalId string, flag bool, rpc string) error {
 	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
 	if err != nil {
-		fmt.Println("JSON NewReader Err:", err)
-		return
+		return fmt.Errorf("failed to parse proposal ABI: %w", err)
 	}
 
 	var proposalIdBytes [32]byte
@@ -165,13 +231,15 @@ func innerVoteProposal(signer, proposalId string, flag bool, rpc string) {
 
 	abiData, err := proposalAbi.Pack("voteProposal", proposalIdBytes, flag)
 	if err != nil {
-		fmt.Println("proposalAbi.Pack createProposal Err:", err)
-		return
+		return fmt.Errorf("failed to pack vote proposal data: %w", err)
 	}
-	err = CreateRawTx(common.HexToAddress(signer), common.HexToAddress(proposalAddr), nil, abiData, rpc, "voteProposal.json")
+
+	err = CreateRawTx(common.HexToAddress(signer), common.HexToAddress(proposalAddr), nil, abiData, rpc, VoteProposalFile)
 	if err != nil {
-		fmt.Printf("create tx error:%v", err)
-		return
+		return fmt.Errorf("failed to create vote transaction: %w", err)
 	}
-	fmt.Println("create tx success!")
+
+	PrintSuccess("Vote transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", VoteProposalFile))
+	return nil
 }

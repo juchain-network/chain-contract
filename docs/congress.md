@@ -10,6 +10,12 @@ make build
 # 生成的可执行文件位于 build/congress-cli
 ```
 
+> **📝 重要说明**：本文档已更新至 Congress CLI v1.1.0，所有命令都需要指定 `--chainId` 参数。
+> 
+> **💡 语法说明**：
+> - 测试网：`--chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org`
+> - 主网：`--chainId 210000 --rpc_laddr https://rpc.juchain.org`
+
 ## 1.创建提案
 
 ```shell
@@ -23,10 +29,10 @@ make build
 ### 1.1. 创建原始交易
 
 ```shell
-./build/congress-cli create_proposal -p 提案矿工地址 -t 新矿工地址 -o add --rpc_laddr https://rpc.juchain.org 
+./build/congress-cli create_proposal -p 提案矿工地址 -t 新矿地址 -o add --chainId 210000 --rpc_laddr https://rpc.juchain.org 
 
 # 测试样例命令
-./build/congress-cli create_proposal -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -t 0x029DAB47e268575D4AC167De64052FB228B5fA41 -o add --rpc_laddr https://testnet-rpc.juchain.org 
+./build/congress-cli create_proposal -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -t 0x029DAB47e268575D4AC167De64052FB228B5fA41 -o add --chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org 
 ```
 
 ### 1.2. 签名交易
@@ -68,11 +74,20 @@ send tx success!
 
 ### 2.1. 创建原始交易
 
-```shell
-./build/congress-cli vote_proposal -s 签名矿工地址 -i 提案ID -a 是否通过 --rpc_laddr https://rpc.juchain.org 
+⚠️ **重要更新**：投票语法已优化！使用 `-a` 表示赞成票，省略 `-a` 表示反对票。
 
-# 测试样例命令（使用上面生成的提案ID）
-./build/congress-cli vote_proposal -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf -a true --rpc_laddr https://testnet-rpc.juchain.org 
+```shell
+# 赞成票
+./build/congress-cli vote_proposal -s 签名矿工地址 -i 提案ID -a --chainId 210000 --rpc_laddr https://rpc.juchain.org 
+
+# 反对票（省略 -a 参数）
+./build/congress-cli vote_proposal -s 签名矿工地址 -i 提案ID --chainId 210000 --rpc_laddr https://rpc.juchain.org 
+
+# 测试样例命令（赞成票）
+./build/congress-cli vote_proposal -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf -a --chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org 
+
+# 测试样例命令（反对票）
+./build/congress-cli vote_proposal -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf --chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org 
 ```
 
 ### 2.2. 签名交易
@@ -98,19 +113,19 @@ send tx success!
 ### 3.1 查询所有活动矿工
 
 ```shell
-./build/congress-cli miners --rpc_laddr https://rpc.juchain.org 
+./build/congress-cli miners --chainId 210000 --rpc_laddr https://rpc.juchain.org 
 
 # 测试网示例
-./build/congress-cli miners --rpc_laddr https://testnet-rpc.juchain.org
+./build/congress-cli miners --chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org
 ```
 
 ### 3.2 查询单个矿工
 
 ```shell
-./build/congress-cli miner --rpc_laddr https://rpc.juchain.org -a 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
+./build/congress-cli miner --chainId 210000 --rpc_laddr https://rpc.juchain.org -a 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
 
 # 测试网示例
-./build/congress-cli miner --rpc_laddr https://testnet-rpc.juchain.org -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
+./build/congress-cli miner --chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
 ```
 
 > 输出示例：
@@ -132,10 +147,10 @@ send tx success!
 ```shell
 # 配置项ID对应的配置项信息
 # 0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod
-./build/congress-cli create_config_proposal -p 提案矿工地址 -i 配置项ID -v 配置项取值 --rpc_laddr https://rpc.juchain.org 
+./build/congress-cli create_config_proposal -p 提案矿工地址 -i 配置项ID -v 配置项取值 --chainId 210000 --rpc_laddr https://rpc.juchain.org 
 
 # 测试样例命令（注意：使用 -i 参数，不是 -c）
-./build/congress-cli create_config_proposal -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -i 0 -v 86400 --rpc_laddr https://testnet-rpc.juchain.org 
+./build/congress-cli create_config_proposal -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b -i 0 -v 86400 --chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org 
 ```
 
 > 交易的发送和签名，以及后面的投票流程和前面一致，不再重复
@@ -145,10 +160,10 @@ send tx success!
 ### 5.1. 创建原始交易
 
 ```shell
-./build/congress-cli withdraw_profits -a 矿工地址 --rpc_laddr https://rpc.juchain.org 
+./build/congress-cli withdraw_profits -a 矿工地址 --chainId 210000 --rpc_laddr https://rpc.juchain.org 
 
 # 测试样例命令
-./build/congress-cli withdraw_profits -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b --rpc_laddr https://testnet-rpc.juchain.org 
+./build/congress-cli withdraw_profits -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b --chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org 
 ```
 
 ### 5.2. 签名和发送
