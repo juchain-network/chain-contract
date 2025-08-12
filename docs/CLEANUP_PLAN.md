@@ -9,7 +9,7 @@
 ### 工具链分类
 
 1. **Go 工具链**: cmd/, go.mod, go.sum, main.go, Makefile, bin/
-2. **Foundry 工具链** (主要): forge-scripts/, forge-tests/, foundry.toml, out/, contracts/
+2. **Foundry 工具链** (主要): forge-scripts/, test/, foundry.toml, out/, contracts/
 3. **Node.js 工具链** (历史遗留): hardhat.config.js, package.json, truffle-config.js, etc.
 4. **项目文档**: docs/, *.md, generate-contracts.js
 
@@ -66,7 +66,7 @@
 sys-contract/
 ├── contracts/           # Solidity 源码
 ├── forge-scripts/       # Foundry 脚本
-├── forge-tests/         # Foundry 测试
+├── test/         # Foundry 测试
 ├── scripts/            # Node.js 脚本 (generate-contracts, update_genesis)
 ├── docs/               # 项目文档
 ├── cmd/                # Go 命令行工具 (如果需要)

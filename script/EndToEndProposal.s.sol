@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {BaseSetup} from "../forge-tests/BaseSetup.t.sol";
+import {BaseSetup} from "../test/BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
 
@@ -47,17 +47,17 @@ contract EndToEndProposalScript is BaseSetup {
         bytes32 id = keccak256(abi.encodePacked(msg.sender, configId, newValue, timestamp));
         
         // 创建配置更新提案
-        Proposal(PRO).createUpdateConfigProposal(configId, newValue);
+        Proposal(PROPOSAL).createUpdateConfigProposal(configId, newValue);
         
         // 验证者投票
         uint256 yesVotes = 0;
         for (uint i = 0; i < voters.length; i++) {
             // 检查是否为活跃验证者
-            if (Validators(VAL).isActiveValidator(voters[i])) {
+            if (Validators(VALIDATORS).isActiveValidator(voters[i])) {
                 // 这里简化处理，假设都投赞成票
                 // 在实际使用中，可以传入投票选择数组
                 vm.prank(voters[i]);
-                Proposal(PRO).voteProposal(id, true);
+                Proposal(PROPOSAL).voteProposal(id, true);
                 yesVotes++;
                 
                 emit VoteCast(id, voters[i], true);
@@ -65,10 +65,10 @@ contract EndToEndProposalScript is BaseSetup {
         }
         
         // 检查是否通过 (需要超过半数)
-        uint256 requiredVotes = Validators(VAL).getActiveValidators().length / 2 + 1;
+        uint256 requiredVotes = Validators(VALIDATORS).getActiveValidators().length / 2 + 1;
         success = yesVotes >= requiredVotes;
         
-        address[] memory topValidators = Validators(VAL).getTopValidators();
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
         emit ProposalResult(id, success, topValidators);
         
         return success;
@@ -80,22 +80,23 @@ contract EndToEndProposalScript is BaseSetup {
         string memory details,
         address[] memory voters
     ) internal returns (bool success) {
-        // 冻结时间戳以确保确定性 ID  
-        uint256 timestamp = block.timestamp;
-        bytes32 id = keccak256(abi.encodePacked(msg.sender, target, isAdd, details, timestamp));
+        // 创建提案并获取真实的ID（通过事件）
+        Proposal(PROPOSAL).createProposal(target, isAdd, details);
         
-        // 创建提案
-        Proposal(PRO).createProposal(target, isAdd, details);
+        // 注意：在实际环境中，我们需要从事件日志中获取真实的提案ID
+        // 这里为了演示，我们使用一个简化的ID计算
+        // 真实的ID应该从 LogCreateProposal 事件中获取
+        bytes32 id = keccak256(abi.encodePacked(msg.sender, target, isAdd, details, block.timestamp));
         emit ProposalCreated(id, msg.sender, target, isAdd);
         
         // 验证者投票
         uint256 yesVotes = 0;
         for (uint i = 0; i < voters.length; i++) {
             // 检查是否为活跃验证者
-            if (Validators(VAL).isActiveValidator(voters[i])) {
+            if (Validators(VALIDATORS).isActiveValidator(voters[i])) {
                 // 这里简化处理，假设都投赞成票
                 vm.prank(voters[i]);
-                Proposal(PRO).voteProposal(id, true);
+                Proposal(PROPOSAL).voteProposal(id, true);
                 yesVotes++;
                 
                 emit VoteCast(id, voters[i], true);
@@ -103,21 +104,21 @@ contract EndToEndProposalScript is BaseSetup {
         }
         
         // 检查是否通过
-        uint256 requiredVotes = Validators(VAL).getActiveValidators().length / 2 + 1;
+        uint256 requiredVotes = Validators(VALIDATORS).getActiveValidators().length / 2 + 1;
         success = yesVotes >= requiredVotes;
         
         // 验证最终状态
         if (success) {
             if (isAdd) {
-                require(Validators(VAL).isTopValidator(target), "Validator should be added");
-                require(Proposal(PRO).pass(target), "Target should be marked as passed");
+                require(Validators(VALIDATORS).isTopValidator(target), "Validator should be added");
+                require(Proposal(PROPOSAL).pass(target), "Target should be marked as passed");
             } else {
-                require(!Validators(VAL).isTopValidator(target), "Validator should be removed");
-                require(!Proposal(PRO).pass(target), "Target should be marked as not passed");
+                require(!Validators(VALIDATORS).isTopValidator(target), "Validator should be removed");
+                require(!Proposal(PROPOSAL).pass(target), "Target should be marked as not passed");
             }
         }
         
-        address[] memory topValidators = Validators(VAL).getTopValidators();
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
         emit ProposalResult(id, success, topValidators);
         
         return success;
@@ -125,11 +126,11 @@ contract EndToEndProposalScript is BaseSetup {
     
     // 便利函数：获取当前活跃验证者列表用于投票
     function getActiveValidators() external view returns (address[] memory) {
-        return Validators(VAL).getActiveValidators();
+        return Validators(VALIDATORS).getActiveValidators();
     }
     
     // 便利函数：获取当前顶级验证者列表
     function getTopValidators() external view returns (address[] memory) {
-        return Validators(VAL).getTopValidators();
+        return Validators(VALIDATORS).getTopValidators();
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {BaseSetup} from "../forge-tests/BaseSetup.t.sol";
+import {BaseSetup} from "../test/BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
 
@@ -9,7 +9,7 @@ import {Validators} from "../contracts/Validators.sol";
 contract AddNewNodeScript is BaseSetup {
     function run(address toAdd) external {
         // assumes validators already initialized and msg.sender is a validator
-        Proposal p = Proposal(PRO);
+        Proposal p = Proposal(PROPOSAL);
         // create proposal
         p.createProposal(toAdd, true, "");
         // cannot compute id robustly here without freezing timestamp; instead, read pass after external votes
