@@ -5,8 +5,8 @@
 这是一个 **Congress POA (Proof of Authority)** 共识机制的治理系统，包含四个核心合约：
 
 - **Validators.sol** - 验证者管理合约 (`0xf000`)
-- **Proposal.sol** - 提案治理合约 (`0xf002`)
 - **Punish.sol** - 惩罚机制合约 (`0xf001`)
+- **Proposal.sol** - 提案治理合约 (`0xf002`)
 - **Params.sol** - 系统参数基础合约
 
 ### 2. 核心功能架构

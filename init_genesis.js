@@ -36,16 +36,39 @@ function getContractBytecode(contractName) {
 // 生成初始验证者的 extraData
 // 使用预分配账户作为初始验证者
 function generateExtraData() {
-    // 这里使用一个简化的 extraData，您可以根据需要调整
-    const initialValidator = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
-    // 移除 '0x' 前缀并填充到64字节
-    const validatorHex = initialValidator.slice(2).toLowerCase().padStart(40, '0');
-    // 创建简单的 extraData: 32字节的vanity + validator列表 + 65字节的signature
-    const vanity = '0'.repeat(64); // 32字节的vanity
-    const validatorList = validatorHex.padEnd(40, '0'); // 验证者列表
-    const signature = '0'.repeat(130); // 65字节的signature
+    const crypto = require('crypto');
+    const { keccak256 } = require('js-sha3');
     
-    return '0x' + vanity + validatorList + signature;
+    // 初始验证者地址
+    const initialValidator = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+    
+    // 构建 extraData 结构:
+    // 32字节 vanity + N*20字节 validator addresses + 65字节 signature
+    const vanity = '0'.repeat(64); // 32字节的vanity (可以是任意数据)
+    
+    // 验证者地址列表 (去掉0x前缀，保持20字节)
+    const validatorHex = initialValidator.slice(2).toLowerCase();
+    
+    // 为了生成正确的签名，我们需要：
+    // 1. 构建要签名的数据（不包含签名部分）
+    const dataToSign = vanity + validatorHex;
+    
+    // 2. 对数据进行keccak256哈希
+    const hash = keccak256(Buffer.from(dataToSign, 'hex'));
+    
+    // 3. 生成一个简单的签名（在实际场景中，这应该是由验证者私钥签名）
+    // 这里我们使用一个确定性的方法来生成签名
+    const messageHash = Buffer.from(hash, 'hex');
+    
+    // 生成一个固定的签名（65字节：32字节r + 32字节s + 1字节v）
+    // 注意：这不是真正的ECDSA签名，只是为了格式正确
+    const r = crypto.createHash('sha256').update(messageHash).digest('hex').slice(0, 64);
+    const s = crypto.createHash('sha256').update(r + 'salt').digest('hex').slice(0, 64);
+    const v = '1c'; // recovery id (通常是1b或1c)
+    
+    const signature = r + s + v;
+    
+    return '0x' + vanity + validatorHex + signature;
 }
 
 // 更新 Genesis 文件
