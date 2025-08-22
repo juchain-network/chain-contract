@@ -88,12 +88,14 @@ make build
 ### 网络配置
 
 **测试网络**：
+
 ```bash
 # 全局参数模板
 ./build/congress-cli [command] -c 202599 -l https://testnet-rpc.juchain.org [其他参数]
 ```
 
 **主网络**：
+
 ```bash
 # 全局参数模板  
 ./build/congress-cli [command] -c 210000 -l https://rpc.juchain.org [其他参数]
@@ -137,6 +139,7 @@ Last Withdraw Block: 1206974
 ```
 
 **状态说明：**
+
 - Status 1 = Active (活跃)
 - Status 2 = Inactive (异常)
 
@@ -284,6 +287,7 @@ Block: 12535222
 ```
 
 ⚠️ **注意**：
+
 - 提取收益有最小等待块数限制
 - 收益提取不需要投票流程，验证者可以直接提取自己的收益
 - 需要等待足够的区块数才能提取（withdrawProfitPeriod 配置项控制）

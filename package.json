@@ -1,7 +1,7 @@
 {
   "name": "sys-contracts",
   "version": "1.0.0",
-  "description": "AAC blockchain system contracts",
+  "description": "Ju blockchain system contracts",
   "main": "generate-contracts.js",
   "dependencies": {
     "nunjucks": "^3.2.2",
