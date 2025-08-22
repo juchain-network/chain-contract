@@ -1,8 +1,8 @@
-# AAC System Contracts
+# Ju System Contracts
 
 > Congress POA 共识系统合约
 
-This repository contains the system contracts for the AAC blockchain's Congress Proof-of-Authority (POA) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and a comprehensive CLI tool for network administration.
+This repository contains the system contracts for the Ju blockchain's Congress Proof-of-Authority (POA) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and a comprehensive CLI tool for network administration.
 
 ## ✨ Features
 

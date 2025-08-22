@@ -11,8 +11,9 @@ make build
 ```
 
 > **📝 重要说明**：本文档已更新至 Congress CLI v1.1.0，所有命令都需要指定 `--chainId` 参数。
-> 
+>
 > **💡 语法说明**：
+>
 > - 测试网：`--chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org`
 > - 主网：`--chainId 210000 --rpc_laddr https://rpc.juchain.org`
 
