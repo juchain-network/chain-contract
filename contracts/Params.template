@@ -10,6 +10,7 @@ contract Params {
     address public PunishContractAddr;
     address public ProposalAddr;
     address public PROPOSAL_ADDR;
+    address public StakingContractAddr;
 
     // only for test
     address public miner;
@@ -22,6 +23,8 @@ contract Params {
         public constant PunishContractAddr = 0x000000000000000000000000000000000000F001;
     address
         public constant ProposalAddr = 0x000000000000000000000000000000000000F002;
+    address
+        public constant StakingContractAddr = 0x000000000000000000000000000000000000F003;
 
     {% endif %}
 
@@ -81,11 +84,20 @@ contract Params {
         _;
     }
 
+    modifier onlyStakingContract() {
+        require(
+            msg.sender == StakingContractAddr,
+            "Staking contract only"
+        );
+        _;
+    }
+
     {% if mock %}
-    function setContracts(address val, address punish, address proposal) public {
+    function setContracts(address val, address punish, address proposal, address staking) public {
         ValidatorContractAddr = val;
         PunishContractAddr = punish;
         ProposalAddr = proposal;
+        StakingContractAddr = staking;
     }
 
     function setMiner(address miner_) public {
