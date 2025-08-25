@@ -13,6 +13,8 @@ contract Params {
         public constant PunishContractAddr = 0x000000000000000000000000000000000000F001;
     address
         public constant ProposalAddr = 0x000000000000000000000000000000000000F002;
+    address
+        public constant StakingContractAddr = 0x000000000000000000000000000000000000F003;
 
     
 
@@ -58,6 +60,14 @@ contract Params {
         require(
             msg.sender == ProposalAddr,
             "Proposal contract only"
+        );
+        _;
+    }
+
+    modifier onlyStakingContract() {
+        require(
+            msg.sender == StakingContractAddr,
+            "Staking contract only"
         );
         _;
     }

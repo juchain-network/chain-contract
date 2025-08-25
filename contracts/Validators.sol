@@ -5,6 +5,7 @@ pragma solidity ^0.8.20;
 import './Params.sol';
 import './Proposal.sol';
 import './Punish.sol';
+import './Staking.sol';
 import './library/SafeMath.sol';
 
 contract Validators is Params {
@@ -48,6 +49,7 @@ contract Validators is Params {
     // System contracts
     Proposal proposal;
     Punish punish;
+    Staking staking;
 
     enum Operations {Distribute, UpdateValidators}
     // Record the operations is done or not.
@@ -79,6 +81,7 @@ contract Validators is Params {
     function initialize(address[] calldata vals) external onlyNotInitialized {
         proposal = Proposal(ProposalAddr);
         punish = Punish(PunishContractAddr);
+        staking = Staking(StakingContractAddr);
 
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
@@ -177,8 +180,27 @@ contract Validators is Params {
             return;
         }
 
-        // Jailed validator can't get profits.
-        addProfitsToActiveValidators(hb, address(0));
+        // For JPoSA: distribute rewards through staking contract
+        // Split rewards: 70% to staking rewards, 30% to validator directly
+        uint256 stakingReward = hb.mul(70).div(100);
+        uint256 validatorReward = hb.sub(stakingReward);
+        
+        // Distribute staking rewards only if validator is registered in staking contract
+        if (stakingReward > 0) {
+            // Check if validator exists in staking contract
+            (uint256 selfStake, , , , ) = staking.getValidatorInfo(val);
+            if (selfStake > 0) {
+                staking.distributeRewards{value: stakingReward}(val);
+            } else {
+                // If not in staking contract, add to validator direct rewards
+                validatorReward = validatorReward.add(stakingReward);
+            }
+        }
+        
+        // Jailed validator can't get direct profits.
+        if (validatorReward > 0) {
+            addProfitsToActiveValidators(validatorReward, address(0));
+        }
 
         emit LogDistributeBlockReward(val, hb, block.timestamp);
     }
@@ -196,6 +218,30 @@ contract Validators is Params {
         currentValidatorSet = newSet;
 
         emit LogUpdateValidator(newSet);
+    }
+
+    /**
+     * @dev Update validator set based on staking (JPoSA mechanism)
+     * This function is called by the consensus engine to update validators based on stake
+     */
+    function updateValidatorSetByStake(uint256 epoch)
+        public
+        onlyMiner
+        onlyNotUpdated
+        onlyInitialized
+        onlyBlockEpoch(epoch)
+    {
+        operationsDone[block.number][uint8(Operations.UpdateValidators)] = true;
+        
+        // Get top validators from staking contract
+        address[] memory topValidators = staking.getTopValidators(21); // Max 21 validators
+        require(topValidators.length > 0, 'No staked validators available');
+        
+        // Update both current and highest validator sets
+        currentValidatorSet = topValidators;
+        highestValidatorsSet = topValidators;
+        
+        emit LogUpdateValidator(topValidators);
     }
 
     function removeValidator(address val) external onlyPunishContract {
