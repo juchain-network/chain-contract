@@ -30,12 +30,12 @@ func validateGlobalFlags(cmd *cobra.Command, args []string) {
 	}
 
 	// Check if command requires RPC connection
-	requiresRPC := []string{"miners", "miner", "create_proposal", "create_config_proposal", "vote_proposal", "withdraw_profits", "send"}
+	requiresRPC := []string{"miners", "miner", "create_proposal", "create_config_proposal", "vote_proposal", "withdraw_profits", "send", "register-validator", "delegate", "undelegate", "claim-rewards", "query-validator", "query-delegation", "list-top-validators"}
 	cmdName := cmd.Name()
 
 	for _, name := range requiresRPC {
 		if cmdName == name {
-			rpc, _ := cmd.Flags().GetString("rpc_laddr")
+			rpc := GetRPCEndpoint(cmd) // Use config-aware function instead of flag only
 			if rpc == "" {
 				PrintValidationError(fmt.Errorf("RPC endpoint is required for command '%s'", cmdName))
 				os.Exit(1)
@@ -53,7 +53,7 @@ func validateGlobalFlags(cmd *cobra.Command, args []string) {
 
 	for _, name := range requiresChainID {
 		if cmdName == name {
-			chainID, _ := cmd.Flags().GetInt64("chainId")
+			chainID := GetChainID(cmd) // Use config-aware function instead of flag only
 			if chainID == 0 {
 				PrintValidationError(fmt.Errorf("chain ID is required for command '%s'", cmdName))
 				os.Exit(1)
@@ -75,12 +75,8 @@ func Execute() {
 }
 
 func init() {
-	// Global flags
-	rootCmd.PersistentFlags().StringP("rpc_laddr", "l", "", "RPC endpoint URL (e.g., http://localhost:8545)")
-	rootCmd.PersistentFlags().Int64P("chainId", "c", 0, "Chain ID (e.g., 202599)")
-
-	// Add subcommands
 	rootCmd.AddCommand(
+		ConfigCmd(),
 		CreateProposalCmd(),
 		CreateConfigProposalCmd(),
 		VoteProposalCmd(),
@@ -89,5 +85,6 @@ func init() {
 		WithdrawProfitsCmd(),
 		ValidatorsCmd(),
 		ValidatorCmd(),
+		StakingCmd(),
 	)
 }

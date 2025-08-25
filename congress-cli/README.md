@@ -109,22 +109,20 @@ make build
 
 ```bash
 # 测试网
-./build/congress-cli miners -c 202599 -l https://testnet-rpc.juchain.org
+./build/congress-cli miners
 
 # 主网
-./build/congress-cli miners -c 210000 -l https://rpc.juchain.org
+./build/congress-cli miners
 ```
 
 **查询特定验证者：**
 
 ```bash
 # 测试网示例
-./build/congress-cli miner -c 202599 -l https://testnet-rpc.juchain.org \
-  -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
+./build/congress-cli miner -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
 
 # 主网示例  
-./build/congress-cli miner -c 210000 -l https://rpc.juchain.org \
-  -a 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
+./build/congress-cli miner -a 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
 ```
 
 输出示例：
@@ -149,13 +147,13 @@ Last Withdraw Block: 1206974
 
 ```bash
 # 添加验证者 (测试网示例)
-./build/congress-cli create_proposal -c 202599 -l https://testnet-rpc.juchain.org \
+./build/congress-cli create_proposal \
   -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -t 0x029DAB47e268575D4AC167De64052FB228B5fA41 \
   -o add
 
 # 移除验证者 (主网示例)
-./build/congress-cli create_proposal -c 210000 -l https://rpc.juchain.org \
+./build/congress-cli create_proposal \
   -p 0xccafa71c31bc11ba24d526fd27ba57d743152807 \
   -t 0x4d432df142823ca25b21bc3f9744ed21a275bdea \
   -o remove
@@ -171,13 +169,13 @@ Last Withdraw Block: 1206974
 
 ```bash
 # 测试网示例：修改 proposalLastingPeriod 为 86400
-./build/congress-cli create_config_proposal -c 202599 -l https://testnet-rpc.juchain.org \
+./build/congress-cli create_config_proposal \
   -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -i 0 \
   -v 86400
 
 # 主网示例
-./build/congress-cli create_config_proposal -c 210000 -l https://rpc.juchain.org \
+./build/congress-cli create_config_proposal \
   -p 0xccafa71c31bc11ba24d526fd27ba57d743152807 \
   -i 0 \
   -v 86400
@@ -200,18 +198,18 @@ Last Withdraw Block: 1206974
 
 ```bash
 # 赞成票 (测试网示例)
-./build/congress-cli vote_proposal -c 202599 -l https://testnet-rpc.juchain.org \
+./build/congress-cli vote_proposal \
   -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf \
   -a
 
 # 反对票 (省略 -a 参数)
-./build/congress-cli vote_proposal -c 202599 -l https://testnet-rpc.juchain.org \
+./build/congress-cli vote_proposal \
   -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf
 
 # 主网示例 (赞成票)
-./build/congress-cli vote_proposal -c 210000 -l https://rpc.juchain.org \
+./build/congress-cli vote_proposal \
   -s 0xccafa71c31bc11ba24d526fd27ba57d743152807 \
   -i PROPOSAL_ID \
   -a
@@ -232,15 +230,13 @@ Last Withdraw Block: 1206974
 ./build/congress-cli sign \
   -f createProposal.json \
   -k /path/to/keystore/UTC--xxx \
-  -p /path/to/password.txt \
-  -c 202599
+  -p /path/to/password.txt
 
 # 主网示例
 ./build/congress-cli sign \
   -f createProposal.json \
   -k /path/to/keystore/miner1.key \
-  -p /path/to/password.file \
-  -c 210000
+  -p /path/to/password.file
 ```
 
 **发送已签名的交易：**
@@ -248,13 +244,11 @@ Last Withdraw Block: 1206974
 ```bash
 # 测试网示例
 ./build/congress-cli send \
-  -f createProposal_signed.json \
-  -l https://testnet-rpc.juchain.org
+  -f createProposal_signed.json
 
 # 主网示例
 ./build/congress-cli send \
-  -f createProposal_signed.json \
-  -l https://rpc.juchain.org
+  -f createProposal_signed.json
 ```
 
 **发送成功后的输出示例：**
@@ -278,12 +272,10 @@ Block: 12535222
 
 ```bash
 # 测试网示例
-./build/congress-cli withdraw_profits -c 202599 -l https://testnet-rpc.juchain.org \
-  -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
+./build/congress-cli withdraw_profits -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
 
 # 主网示例
-./build/congress-cli withdraw_profits -c 210000 -l https://rpc.juchain.org \
-  -a 0xccafa71c31bc11ba24d526fd27ba57d743152807
+./build/congress-cli withdraw_profits -a 0xccafa71c31bc11ba24d526fd27ba57d743152807
 ```
 
 ⚠️ **注意**：
@@ -299,13 +291,13 @@ Block: 12535222
 ### 1. 查询当前验证者状态
 
 ```bash
-./build/congress-cli miners -c 202599 -l https://testnet-rpc.juchain.org
+./build/congress-cli miners
 ```
 
 ### 2. 创建验证者添加提案
 
 ```bash
-./build/congress-cli create_proposal -c 202599 -l https://testnet-rpc.juchain.org \
+./build/congress-cli create_proposal \
   -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -t 0x029DAB47e268575D4AC167De64052FB228B5fA41 \
   -o add
@@ -318,13 +310,12 @@ Block: 12535222
   -f createProposal.json \
   -k miner1.key \
   -p password.file \
-  -c 202599
 ```
 
 ### 4. 发送交易
 
 ```bash
-./build/congress-cli send -f createProposal_signed.json -l https://testnet-rpc.juchain.org
+./build/congress-cli send -f createProposal_signed.json
 ```
 
 **输出示例（记录提案ID）：**
@@ -349,39 +340,37 @@ Block: 24805
 
 ```bash
 # miner1 赞成票
-./build/congress-cli vote_proposal -c 202599 -l https://testnet-rpc.juchain.org \
+./build/congress-cli vote_proposal \
   -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf \
   -a
-./build/congress-cli sign -f voteProposal.json -k miner1.key -p password.file -c 202599
-./build/congress-cli send -f voteProposal_signed.json -l https://testnet-rpc.juchain.org
-
+./build/congress-cli sign -f voteProposal.json -k miner1.key -p password.file
+./build/congress-cli send -f voteProposal_signed.json
 # miner2 赞成票
-./build/congress-cli vote_proposal -c 202599 -l https://testnet-rpc.juchain.org \
+./build/congress-cli vote_proposal \
   -s 0x81f7a79a51edba249efa812eb2d5478f696f7558 \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf \
   -a
-./build/congress-cli sign -f voteProposal.json -k miner2.key -p password.file -c 202599
-./build/congress-cli send -f voteProposal_signed.json -l https://testnet-rpc.juchain.org
+./build/congress-cli sign -f voteProposal.json -k miner2.key -p password.file
+./build/congress-cli send -f voteProposal_signed.json
 
 # miner3 赞成票
-./build/congress-cli vote_proposal -c 202599 -l https://testnet-rpc.juchain.org \
+./build/congress-cli vote_proposal \
   -s 0x578c39eaf09a4e1abf428c423970b59bb8baf42e \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf \
   -a
-./build/congress-cli sign -f voteProposal.json -k miner3.key -p password.file -c 202599
-./build/congress-cli send -f voteProposal_signed.json -l https://testnet-rpc.juchain.org
+./build/congress-cli sign -f voteProposal.json -k miner3.key -p password.file
+./build/congress-cli send -f voteProposal_signed.json
 ```
 
 ### 6. 验证结果
 
 ```bash
 # 查看新验证者信息
-./build/congress-cli miner -c 202599 -l https://testnet-rpc.juchain.org \
-  -a 0x029DAB47e268575D4AC167De64052FB228B5fA41
+./build/congress-cli miner -a 0x029DAB47e268575D4AC167De64052FB228B5fA41
 
 # 查看所有验证者
-./build/congress-cli miners -c 202599 -l https://testnet-rpc.juchain.org
+./build/congress-cli miners
 ```
 
 ## 配置文件

@@ -12,7 +12,7 @@ PACKAGE := generated
 
 # 项目信息
 PROJECT_NAME := congress-cli
-VERSION := 1.1.0
+VERSION := 1.2.0
 BUILD_DATE := $(shell date -u +'%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 

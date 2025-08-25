@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-08-25
+
+### Added
+
+- **JPoSA Staking Support**: Complete integration of Juchain Proof of Stake Authority consensus
+  - New `staking` command group with comprehensive validator and delegation management
+  - Support for validator registration with self-staking and commission rates
+  - Token delegation and undelegation with 7-day unbonding period
+  - Staking rewards claiming functionality
+  - Real-time validator and delegation status queries
+
+- **Staking Transaction Commands**
+  - `register-validator`: Register as a validator with minimum 10,000 JU stake
+  - `delegate`: Delegate tokens to existing validators for staking rewards
+  - `undelegate`: Start unbonding process to withdraw delegated tokens
+  - `claim-rewards`: Claim accumulated staking rewards from validation or delegation
+
+- **Staking Query Commands**
+  - `query-validator`: Get detailed validator information (stake, commission, jail status)
+  - `query-delegation`: View delegation details and pending rewards
+  - `list-top-validators`: List top validators ranked by total stake
+
+- **Enhanced Smart Contract Integration**
+  - Staking contract ABI integration for seamless interaction
+  - Support for Staking contract at address `0x000000000000000000000000000000000000f003`
+  - Automatic wei/JU conversion for user-friendly amount handling
+  - Comprehensive error handling for contract calls
+
+- **Improved Transaction Workflow**
+  - Consistent transaction file generation for all staking operations
+  - Generated files: `registerValidator.json`, `delegate.json`, `undelegate.json`, `claimRewards.json`
+  - Full compatibility with existing sign and send workflow
+  - Parameter validation for all staking operations
+
+- **Documentation and Testing**
+  - Comprehensive `STAKING_USAGE.md` guide with detailed examples
+  - Integration test script `test_staking.sh` for command validation
+  - Updated architecture documentation in `contracts/README.md`
+  - Complete CLI command examples and best practices
+
+### Changed
+
+- **Root Command Integration**
+  - Added staking commands to main CLI interface
+  - Updated help system to include staking operations
+  - Enhanced RPC validation to include staking commands
+
+- **Configuration Updates**
+  - Added `StakingContractAddr` constant for contract address management
+  - Extended transaction file naming conventions for staking operations
+  - Updated global flag validation to support new staking commands
+
+### Technical Improvements
+
+- **Code Architecture**
+  - Modular staking command implementation in `cmd/staking.go`
+  - Consistent error handling and user feedback patterns
+  - Reusable validation functions for addresses and amounts
+
+- **Smart Contract Interaction**
+  - Direct contract calls for query operations without transaction fees
+  - Proper ABI encoding/decoding for all staking contract methods
+  - Support for complex return types (structs, arrays)
+
+- **User Experience**
+  - Clear command descriptions and parameter explanations
+  - Helpful error messages for common validation failures
+  - Consistent output formatting across all staking commands
+
 ## [1.1.0] - 2025-08-12
 
 ### Added
@@ -108,6 +177,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validator management commands  
 - Transaction signing and broadcasting
 - RPC interaction capabilities
+
+---
+
+### Migration Guide from v1.1.0 to v1.2.0
+
+#### New Staking Commands
+
+The v1.2.0 release introduces comprehensive staking functionality for JPoSA consensus:
+
+```bash
+# Check available staking commands
+./congress-cli staking --help
+
+# Register as a validator (example)
+./congress-cli staking register-validator \
+  --rpc_laddr http://localhost:8545 \
+  --proposer 0x1234567890123456789012345678901234567890 \
+  --stake-amount 10000 \
+  --commission-rate 500
+
+# Query validator information
+./congress-cli staking query-validator \
+  --rpc_laddr http://localhost:8545 \
+  --address 0x1234567890123456789012345678901234567890
+```
+
+#### Breaking Changes
+
+None. All existing commands remain fully compatible.
+
+#### New Requirements
+
+- **Minimum Stake**: Validator registration requires minimum 10,000 JU tokens
+- **Commission Rate**: Must be between 0-10,000 basis points (0-100%)
+- **Unbonding Period**: Undelegation has a 7-day waiting period
+
+#### Recommended Workflow
+
+1. **Query Network**: Use `list-top-validators` to see active validators
+2. **Create Transactions**: Use staking commands to generate transaction files
+3. **Sign & Send**: Use existing `sign` and `send` commands for transaction broadcast
+4. **Monitor**: Use query commands to track staking status and rewards
 
 ---
 

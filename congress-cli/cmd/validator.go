@@ -22,7 +22,7 @@ func ValidatorsCmd() *cobra.Command {
 }
 
 func listValidators(cmd *cobra.Command, _ []string) {
-	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	rpc := GetRPCEndpoint(cmd) // Use config-aware function
 
 	// 验证RPC URL
 	if err := ValidateRPCURL(rpc); err != nil {
@@ -80,7 +80,7 @@ func queryValidatorFlags(cmd *cobra.Command) {
 }
 
 func queryValidator(cmd *cobra.Command, _ []string) {
-	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	rpc := GetRPCEndpoint(cmd) // Use config-aware function
 	addr, _ := cmd.Flags().GetString("addr")
 
 	// 验证输入参数
@@ -158,7 +158,7 @@ func validatorClaimFlags(cmd *cobra.Command) {
 }
 
 func validatorClaim(cmd *cobra.Command, _ []string) {
-	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	rpc := GetRPCEndpoint(cmd) // Use config-aware function
 	addr, _ := cmd.Flags().GetString("addr")
 
 	// 验证输入参数

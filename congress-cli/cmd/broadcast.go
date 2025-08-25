@@ -25,7 +25,7 @@ func sendSignedTxCmdFlags(cmd *cobra.Command) {
 
 func sendSignedTx(cmd *cobra.Command, _ []string) {
 	file, _ := cmd.Flags().GetString("file")
-	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	rpc := GetRPCEndpoint(cmd) // Use config-aware function
 
 	// 验证输入参数
 	if err := ValidateFile(file); err != nil {

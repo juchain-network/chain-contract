@@ -37,7 +37,7 @@ func createProposalFlags(cmd *cobra.Command) {
 }
 
 func createProposalTx(cmd *cobra.Command, _ []string) {
-	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	rpc := GetRPCEndpoint(cmd) // Use config-aware function
 	proposer, _ := cmd.Flags().GetString("proposer")
 	target, _ := cmd.Flags().GetString("target")
 	operation, _ := cmd.Flags().GetString("operation")
@@ -112,7 +112,7 @@ func createConfigProposalFlags(cmd *cobra.Command) {
 }
 
 func createConfigProposalTx(cmd *cobra.Command, _ []string) {
-	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	rpc := GetRPCEndpoint(cmd) // Use config-aware function
 	proposer, _ := cmd.Flags().GetString("proposer")
 	cid, _ := cmd.Flags().GetInt64("cid")
 	cvalue, _ := cmd.Flags().GetInt64("value")
@@ -187,7 +187,7 @@ func voteProposalCmdFlags(cmd *cobra.Command) {
 }
 
 func voteProposalTx(cmd *cobra.Command, _ []string) {
-	rpc, _ := cmd.Flags().GetString("rpc_laddr")
+	rpc := GetRPCEndpoint(cmd) // Use config-aware function
 	signer, _ := cmd.Flags().GetString("signer")
 	proposalId, _ := cmd.Flags().GetString("proposalId")
 	approve, _ := cmd.Flags().GetBool("approve")
