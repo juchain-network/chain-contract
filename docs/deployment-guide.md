@@ -1,8 +1,8 @@
-# Ju Congress POA 区块链部署指南
+# Ju Congress POSA 区块链部署指南
 
 ## 📋 概述
 
-Ju 是基于以太坊技术栈的 Congress POA (Proof of Authority) 共识区块链。本文档提供了完整的部署、配置和管理指南。
+Ju 是基于以太坊技术栈的 Congress POSA (Proof of Stake Authority) 共识区块链。本文档提供了完整的部署、配置和管理指南。
 
 ## 🏗️ 系统架构
 

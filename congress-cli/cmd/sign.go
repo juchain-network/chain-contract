@@ -31,7 +31,7 @@ func signRawTxCmdFlags(cmd *cobra.Command) {
 }
 
 func signRawTx(cmd *cobra.Command, _ []string) {
-	chainId, _ := cmd.Flags().GetInt64("chainId")
+	chainId := GetChainID(cmd) // Use config-aware function
 	file, _ := cmd.Flags().GetString("file")
 	key, _ := cmd.Flags().GetString("key")
 	passwordFile, _ := cmd.Flags().GetString("password")

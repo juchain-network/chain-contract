@@ -90,10 +90,10 @@ make build
 ./build/congress-cli help
 
 # Query miners
-./build/congress-cli miners --rpc_laddr https://testnet-rpc.juchain.org
+./build/congress-cli miners
 
 # Create proposal
-./build/congress-cli create_proposal -p PROPOSER_ADDR -t TARGET_ADDR -o add --rpc_laddr RPC_ENDPOINT
+./build/congress-cli create_proposal -p PROPOSER_ADDR -t TARGET_ADDR -o add
 ```
 
 ## 🧪 Testing
@@ -125,35 +125,33 @@ forge test --match-contract Punish
 
 ```bash
 # Query all active validators
-./build/congress-cli miners --rpc_laddr https://testnet-rpc.juchain.org
-
+./build/congress-cli miners
 # Query specific validator
-./build/congress-cli miner --rpc_laddr https://testnet-rpc.juchain.org -a VALIDATOR_ADDRESS
+./build/congress-cli miner -a VALIDATOR_ADDRESS
 ```
 
 ### **Proposal Management**
 
 ```bash
 # Create proposal to add new validator
-./build/congress-cli create_proposal -p PROPOSER_ADDR -t NEW_VALIDATOR_ADDR -o add --rpc_laddr RPC_ENDPOINT
+./build/congress-cli create_proposal -p PROPOSER_ADDR -t NEW_VALIDATOR_ADDR -o add
 
 # Sign transaction
-./build/congress-cli sign -f createProposal.json -k keyfile -p passwordfile --chainId CHAIN_ID
+./build/congress-cli sign -f createProposal.json -k keyfile -p passwordfile
 
 # Send transaction
-./build/congress-cli send -f createProposal_signed.json --rpc_laddr RPC_ENDPOINT
+./build/congress-cli send -f createProposal_signed.json
 ```
 
 ### **Voting Process**
 
 ```bash
 # Vote on proposal
-./build/congress-cli vote_proposal -s VOTER_ADDR -i PROPOSAL_ID -a true --rpc_laddr RPC_ENDPOINT
+./build/congress-cli vote_proposal -s VOTER_ADDR -i PROPOSAL_ID -a true
 
 # Sign and send vote
-./build/congress-cli sign -f voteProposal.json -k keyfile -p passwordfile --chainId CHAIN_ID
-./build/congress-cli send -f voteProposal_signed.json --rpc_laddr RPC_ENDPOINT
-```
+./build/congress-cli sign -f voteProposal.json -k keyfile -p passwordfile
+./build/congress-cli send -f voteProposal_signed.json
 
 ## 📋 System Contracts
 
@@ -173,10 +171,8 @@ forge test --match-contract Punish
 
 ## 📚 Documentation
 
-- **Congress CLI Guide**: `docs/congress.md` - Complete guide for Congress POA management
-- **Deployment Guide**: `docs/deploy.md`
-- **Migration Reports**: `docs/FOUNDRY_MIGRATION_COMPLETED.md`
-- **Coverage Analysis**: `docs/TEST_COVERAGE_FINAL.md`
+- **Congress CLI Guide**: `docs/congress-cli-guide.md` - Complete guide for Congress POA management
+- **Deployment Guide**: `docs/deployment-guide.md` - Complete deployment and configuration guide
 
 ## 🌐 Network Information
 
@@ -230,5 +226,5 @@ cd congress-cli && make build
 ## 📖 Further Reading
 
 - [Foundry Book](https://book.getfoundry.sh/)
-- [Congress Consensus Documentation](docs/congress.md)
-- [Deployment Guide](docs/deploy.md)
+- [Congress CLI Documentation](docs/congress-cli-guide.md)
+- [Deployment Guide](docs/deployment-guide.md)
