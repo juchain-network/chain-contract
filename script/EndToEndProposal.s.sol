@@ -6,12 +6,31 @@ import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
 
 // 端到端脚本：创建提案 + 多个验证者投票 + 检查结果
-// 对应 Hardhat 脚本中的完整流程
 contract EndToEndProposalScript is BaseSetup {
     
     event ProposalCreated(bytes32 indexed id, address proposer, address target, bool flag);
     event VoteCast(bytes32 indexed id, address voter, bool vote);
     event ProposalResult(bytes32 indexed id, bool passed, address[] topValidators);
+    
+    function run() external {
+        // 示例：端到端提案流程演示
+        address testTarget = 0xa0Ee7A142d267C1f36714E4a8F75612F20a79720;
+        
+        // 创建一个模拟的投票者数组（空数组，因为权限限制）
+        address[] memory voters = new address[](0);
+        
+        // 直接调用内部函数执行添加验证者流程
+        bool success = _runProposalFlow(
+            testTarget,
+            true, // 添加验证者
+            "End-to-end test: Adding validator",
+            voters
+        );
+        
+        if (success) {
+            emit ProposalResult(bytes32(uint256(uint160(testTarget))), true, Validators(VALIDATORS).getTopValidators());
+        }
+    }
     
     struct ProposalInfo {
         bytes32 id;

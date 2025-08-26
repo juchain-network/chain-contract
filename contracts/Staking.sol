@@ -26,6 +26,9 @@ contract Staking is Params {
     // Maximum validators in active set
     uint256 public constant MAX_VALIDATORS = 21;
     
+    // Minimum validators that must always be active
+    uint256 public constant MIN_VALIDATORS = 5;
+    
     // Commission rate precision (10000 = 100%)
     uint256 public constant COMMISSION_RATE_BASE = 10000;
     
@@ -79,6 +82,8 @@ contract Staking is Params {
 
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
     event ValidatorUpdated(address indexed validator, uint256 commissionRate);
+    event ValidatorStakeWithdrawn(address indexed validator, uint256 amount);
+    event ValidatorExited(address indexed validator, uint256 amount);
     event Delegated(address indexed delegator, address indexed validator, uint256 amount);
     event Undelegated(address indexed delegator, address indexed validator, uint256 amount);
     event UnbondingCompleted(address indexed delegator, address indexed validator, uint256 amount);
@@ -147,6 +152,63 @@ contract Staking is Params {
         
         validatorStakes[msg.sender].commissionRate = newCommissionRate;
         emit ValidatorUpdated(msg.sender, newCommissionRate);
+    }
+
+    /**
+     * @dev Start validator stake withdrawal (validator exit)
+     * @param amount Amount to withdraw from self-stake
+     */
+    function withdrawValidatorStake(uint256 amount) external onlyValidValidator(msg.sender) {
+        require(amount > 0, "Amount must be positive");
+        
+        ValidatorStake storage stake = validatorStakes[msg.sender];
+        require(stake.selfStake >= amount, "Insufficient self-stake");
+        
+        // Calculate remaining stake after withdrawal
+        uint256 remainingStake = stake.selfStake.sub(amount);
+        
+        // If this would make validator inactive, check minimum validator requirement
+        if (remainingStake < MIN_VALIDATOR_STAKE) {
+            uint256 activeValidatorCount = getActiveValidatorCount();
+            require(activeValidatorCount > MIN_VALIDATORS, "Cannot exit: minimum validators required");
+        }
+        
+        // If partial withdrawal, ensure remaining stake meets minimum
+        if (remainingStake > 0) {
+            require(remainingStake >= MIN_VALIDATOR_STAKE, "Remaining stake below minimum");
+        }
+        
+        stake.selfStake = remainingStake;
+        totalStaked = totalStaked.sub(amount);
+        
+        // If validator becomes inactive, handle cleanup
+        if (remainingStake < MIN_VALIDATOR_STAKE) {
+            // Note: We don't remove from allValidators array to preserve indices
+            // Validator will be filtered out in getTopValidators and other functions
+            emit ValidatorExited(msg.sender, amount);
+        } else {
+            emit ValidatorStakeWithdrawn(msg.sender, amount);
+        }
+        
+        // Transfer the withdrawn amount
+        payable(msg.sender).transfer(amount);
+    }
+
+    /**
+     * @dev Emergency exit for validator (withdraw all stake)
+     */
+    function emergencyExit() external onlyValidValidator(msg.sender) {
+        uint256 activeValidatorCount = getActiveValidatorCount();
+        require(activeValidatorCount > MIN_VALIDATORS, "Cannot exit: minimum validators required");
+        
+        ValidatorStake storage stake = validatorStakes[msg.sender];
+        uint256 withdrawAmount = stake.selfStake;
+        
+        stake.selfStake = 0;
+        totalStaked = totalStaked.sub(withdrawAmount);
+        
+        emit ValidatorExited(msg.sender, withdrawAmount);
+        payable(msg.sender).transfer(withdrawAmount);
     }
 
     /**
@@ -446,5 +508,31 @@ contract Staking is Params {
      */
     function getValidatorCount() external view returns (uint256) {
         return allValidators.length;
+    }
+
+    /**
+     * @dev Get number of active validators (meeting minimum stake and not jailed)
+     * @return Active validator count
+     */
+    function getActiveValidatorCount() public view returns (uint256) {
+        uint256 activeCount = 0;
+        
+        for (uint256 i = 0; i < allValidators.length; i++) {
+            address validator = allValidators[i];
+            if (validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE && 
+                (!validatorStakes[validator].isJailed || block.number >= validatorStakes[validator].jailUntilBlock)) {
+                activeCount++;
+            }
+        }
+        
+        return activeCount;
+    }
+
+    /**
+     * @dev Check if system has minimum required validators
+     * @return Whether system meets minimum validator requirement
+     */
+    function hasMinimumValidators() external view returns (bool) {
+        return getActiveValidatorCount() >= MIN_VALIDATORS;
     }
 }

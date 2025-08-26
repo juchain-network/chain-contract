@@ -201,7 +201,7 @@ Sign the transaction using your keystore:
   --file registerValidator.json \
   --key ./keystore/UTC--2023-... \
   --password ./password.txt \
-  --chainId 202599
+  --chainId 2025
 ```
 
 This creates `registerValidator_signed.json` with the signed transaction.
@@ -230,7 +230,7 @@ Common JuChain RPC endpoints:
 
 ### Chain IDs
 
-- **Mainnet**: `202599`
+- **Mainnet**: `2025`
 - **Testnet**: `202588`
 - **Local**: Your custom chain ID
 
@@ -341,7 +341,7 @@ Automate staking operations with shell scripts:
 RPC="http://localhost:8545"
 KEYSTORE="./keystore.json"
 PASSWORD="./password.txt"
-CHAIN_ID="202599"
+CHAIN_ID="2025"
 
 # Function to stake with a validator
 stake_with_validator() {

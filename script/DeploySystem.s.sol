@@ -5,6 +5,7 @@ import {Script, console} from "lib/forge-std/src/Script.sol";
 import "../contracts/Validators.sol";
 import "../contracts/Proposal.sol";
 import "../contracts/Punish.sol";
+import "../contracts/Staking.sol";
 
 /**
  * @title DeploySystemScript
@@ -15,9 +16,10 @@ contract DeploySystemScript is Script {
     address constant VALIDATOR_CONTRACT_ADDR = 0x000000000000000000000000000000000000f000;
     address constant PUNISH_CONTRACT_ADDR = 0x000000000000000000000000000000000000F001;
     address constant PROPOSAL_CONTRACT_ADDR = 0x000000000000000000000000000000000000F002;
+    address constant STAKING_CONTRACT_ADDR = 0x000000000000000000000000000000000000F003;
     
     // 事件
-    event SystemDeployed(address validators, address proposal, address punish);
+    event SystemDeployed(address validators, address proposal, address punish, address staking);
     event SystemInitialized(address[] validators);
     event SystemStatusChecked(bool validatorsInit, bool proposalInit, bool punishInit);
     
@@ -34,7 +36,7 @@ contract DeploySystemScript is Script {
         console.log("=== Starting Unified Contract Deployment ===");
 
         // 部署所有合约
-        (address validators, address proposal, address punish) = deployAllContracts();
+        (address validators, address proposal, address punish, address staking) = deployAllContracts();
         
         // 创建初始验证器数组
         address[] memory initialValidators = createInitialValidators();
@@ -46,7 +48,7 @@ contract DeploySystemScript is Script {
         checkAndLogSystemStatus();
         
         // 发出部署完成事件
-        emit SystemDeployed(validators, proposal, punish);
+        emit SystemDeployed(validators, proposal, punish, staking);
         
         console.log("=== Deployment Complete ===");
         logDeploymentSummary();
@@ -60,7 +62,8 @@ contract DeploySystemScript is Script {
     function deployAllContracts() internal returns (
         address validators,
         address proposal,
-        address punish
+        address punish,
+        address staking
     ) {
         console.log("Deploying contracts...");
         
@@ -82,15 +85,23 @@ contract DeploySystemScript is Script {
         punish = address(punishContract);
         console.log("Punish deployed at:", punish);
 
+        // 部署Staking
+        console.log("Deploying Staking...");
+        Staking stakingContract = new Staking();
+        staking = address(stakingContract);
+        console.log("Staking deployed at:", staking);
+
         // 使用etch将合约部署到预定义的系统地址
         vm.etch(VALIDATOR_CONTRACT_ADDR, validators.code);
         vm.etch(PUNISH_CONTRACT_ADDR, punish.code);
         vm.etch(PROPOSAL_CONTRACT_ADDR, proposal.code);
+        vm.etch(STAKING_CONTRACT_ADDR, staking.code);
 
         console.log("=== System Contracts Etched ===");
         console.log("Validators at:", VALIDATOR_CONTRACT_ADDR);
         console.log("Punish at:", PUNISH_CONTRACT_ADDR);
         console.log("Proposal at:", PROPOSAL_CONTRACT_ADDR);
+        console.log("Staking at:", STAKING_CONTRACT_ADDR);
     }
 
     /**
@@ -116,7 +127,7 @@ contract DeploySystemScript is Script {
         } catch Error(string memory reason) {
             console.log("Validators initialization failed:", reason);
         } catch {
-            console.log("Validators already initialized or other error");
+            console.log("Validators already initialized (OK)");
         }
 
         // 尝试初始化Proposal (如果未初始化) 
@@ -125,7 +136,7 @@ contract DeploySystemScript is Script {
         } catch Error(string memory reason) {
             console.log("Proposal initialization failed:", reason);
         } catch {
-            console.log("Proposal already initialized or other error");
+            console.log("Proposal already initialized (OK)");
         }
 
         // 尝试初始化Punish
@@ -134,7 +145,16 @@ contract DeploySystemScript is Script {
         } catch Error(string memory reason) {
             console.log("Punish initialization failed:", reason);
         } catch {
-            console.log("Punish already initialized or other error");
+            console.log("Punish already initialized (OK)");
+        }
+
+        // 尝试初始化Staking
+        try Staking(STAKING_CONTRACT_ADDR).initialize() {
+            console.log("Staking initialized successfully");
+        } catch Error(string memory reason) {
+            console.log("Staking initialization failed:", reason);
+        } catch {
+            console.log("Staking already initialized (OK)");
         }
 
         emit SystemInitialized(initialValidators);

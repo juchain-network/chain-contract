@@ -6,12 +6,12 @@ import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
 
 /**
- * @title SimpleProposalDemo
- * @dev 简化的提案演示脚本，避免ID计算问题
+ * @title ProposalWorkflow
+ * @dev 提案工作流程脚本，演示提案创建和投票流程
  */
-contract SimpleProposalDemo is BaseSetup {
+contract ProposalWorkflow is BaseSetup {
     
-    event DemoEvent(string message, address addr, bool result);
+    event WorkflowEvent(string message, address addr, bool result);
     
     function run() external {
         // 演示提案创建
@@ -19,36 +19,36 @@ contract SimpleProposalDemo is BaseSetup {
         
         // 1. 检查初始状态
         bool isValidatorBefore = Validators(VALIDATORS).isTopValidator(newValidator);
-        emit DemoEvent("Initial validator status", newValidator, isValidatorBefore);
+        emit WorkflowEvent("Initial validator status", newValidator, isValidatorBefore);
         
         // 2. 创建添加验证者的提案
-        bool createResult = Proposal(PROPOSAL).createProposal(newValidator, true, "Demo: Adding new validator");
-        emit DemoEvent("Proposal creation", newValidator, createResult);
+        bool createResult = Proposal(PROPOSAL).createProposal(newValidator, true, "Workflow: Adding new validator");
+        emit WorkflowEvent("Proposal creation", newValidator, createResult);
         
         // 3. 检查提案者是否为验证者
         bool isProposerValidator = Validators(VALIDATORS).isActiveValidator(msg.sender);
-        emit DemoEvent("Proposer is validator", msg.sender, isProposerValidator);
+        emit WorkflowEvent("Proposer is validator", msg.sender, isProposerValidator);
         
         // 4. 检查系统状态
         address[] memory activeValidators = Validators(VALIDATORS).getActiveValidators();
-        emit DemoEvent("Active validators count", address(uint160(activeValidators.length)), true);
+        emit WorkflowEvent("Active validators count", address(uint160(activeValidators.length)), true);
         
         // 5. 检查提案通过状态
         bool passStatus = Proposal(PROPOSAL).pass(newValidator);
-        emit DemoEvent("Target validator pass status", newValidator, passStatus);
+        emit WorkflowEvent("Target validator pass status", newValidator, passStatus);
     }
     
-    function runConfigDemo() external {
+    function runConfigWorkflow() external {
         // 演示配置更新提案
         uint256 configId = 2; // 示例配置ID
         uint256 newValue = 5000; // 新的配置值
         
         // 创建配置更新提案
         bool createResult = Proposal(PROPOSAL).createUpdateConfigProposal(configId, newValue);
-        emit DemoEvent("Config proposal creation", address(uint160(configId)), createResult);
+        emit WorkflowEvent("Config proposal creation", address(uint160(configId)), createResult);
         
         // 检查当前配置
         uint256 currentLastingPeriod = Proposal(PROPOSAL).proposalLastingPeriod();
-        emit DemoEvent("Current lasting period", address(uint160(currentLastingPeriod)), true);
+        emit WorkflowEvent("Current lasting period", address(uint160(currentLastingPeriod)), true);
     }
 }

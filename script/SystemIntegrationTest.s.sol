@@ -5,20 +5,22 @@ import {Script, console} from "lib/forge-std/src/Script.sol";
 import "../contracts/Validators.sol";
 import "../contracts/Proposal.sol";
 import "../contracts/Punish.sol";
+import "../contracts/Staking.sol";
 
 /**
- * @title RunAllScriptsDemo
- * @dev 运行所有脚本功能的演示脚本
+ * @title SystemIntegrationTest
+ * @dev 系统集成测试脚本，验证所有合约功能
  */
-contract RunAllScriptsDemo is Script {
+contract SystemIntegrationTest is Script {
     // 系统合约地址
     address constant VALIDATOR_CONTRACT_ADDR = 0x000000000000000000000000000000000000f000;
     address constant PROPOSAL_CONTRACT_ADDR = 0x000000000000000000000000000000000000F002;
     address constant PUNISH_CONTRACT_ADDR = 0x000000000000000000000000000000000000F001;
+    address constant STAKING_CONTRACT_ADDR = 0x000000000000000000000000000000000000F003;
     
     // 测试账户
     address constant PROPOSER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;  // Account 0
-    address constant NEW_VALIDATOR = 0x90F79bf6EB2c4f870365E785982E1f101E93b906; // Account 3
+    address constant NEW_VALIDATOR = 0xa0Ee7A142d267C1f36714E4a8F75612F20a79720; // 使用一个未存在的地址
     
     function setUp() public {}
 
@@ -27,7 +29,7 @@ contract RunAllScriptsDemo is Script {
         
         vm.startBroadcast(deployerPrivateKey);
 
-        console.log("=== Running All Script Functions Demo ===");
+        console.log("=== System Integration Test ===");
 
         // 1. 检查系统状态（DeploySystem功能）
         console.log("\n1. === System Status Check (DeploySystem) ===");
@@ -45,13 +47,17 @@ contract RunAllScriptsDemo is Script {
         console.log("\n4. === Checking Proposal Results ===");
         checkProposalResults(proposalId);
         
-        // 5. 尝试配置更新（UpdateConfig功能）
-        console.log("\n5. === Testing Config Update (UpdateConfig) ===");
+        // 5. 测试Staking系统（StakingOperations功能）
+        console.log("\n5. === Testing Staking System (StakingOperations) ===");
+        testStakingSystem();
+        
+        // 6. 尝试配置更新（UpdateConfig功能）
+        console.log("\n6. === Testing Config Update (UpdateConfig) ===");
         testConfigUpdate();
 
         vm.stopBroadcast();
         
-        console.log("\n=== All Script Functions Demo Complete ===");
+        console.log("\n=== System Integration Test Complete ===");
     }
     
     /**
@@ -186,6 +192,76 @@ contract RunAllScriptsDemo is Script {
     }
     
     /**
+     * @dev 测试Staking系统（StakingOperations脚本功能）
+     */
+    function testStakingSystem() internal {
+        console.log("Testing Staking system...");
+        
+        Staking stakingContract = Staking(STAKING_CONTRACT_ADDR);
+        Validators validatorsContract = Validators(VALIDATOR_CONTRACT_ADDR);
+        
+        // 1. 检查当前验证者状态
+        console.log("--- Current Validator Status ---");
+        address[] memory currentValidators = validatorsContract.getActiveValidators();
+        console.log("Current validators count:", currentValidators.length);
+        
+        // 2. 安全地检查Staking状态
+        try stakingContract.MIN_VALIDATORS() returns (uint256 minValidators) {
+            console.log("Minimum validators required:", minValidators);
+        } catch {
+            console.log("Cannot get minimum validators");
+        }
+        
+        try stakingContract.MIN_VALIDATOR_STAKE() returns (uint256 minStake) {
+            console.log("Minimum validator stake:", minStake);
+        } catch {
+            console.log("Cannot get minimum stake");
+        }
+        
+        // 3. 检查顶级验证者
+        try stakingContract.getTopValidators(3) returns (address[] memory topValidators) {
+            console.log("Top validators count:", topValidators.length);
+            
+            for (uint i = 0; i < topValidators.length && i < 3; i++) {
+                try stakingContract.getValidatorInfo(topValidators[i]) returns (
+                    uint256 selfStake,
+                    uint256 totalDelegated,
+                    uint256, // commissionRate
+                    bool, // isJailed
+                    uint256 // jailUntilBlock
+                ) {
+                    console.log("Validator", i, ":", topValidators[i]);
+                    console.log("  Self stake:", selfStake);
+                    console.log("  Total delegated:", totalDelegated);
+                } catch {
+                    console.log("Validator", i, ": info unavailable");
+                }
+            }
+        } catch {
+            console.log("Cannot get top validators");
+        }
+        
+        // 4. 展示委托信息示例
+        if (currentValidators.length > 0) {
+            address validator = currentValidators[0];
+            try stakingContract.getDelegationInfo(msg.sender, validator) returns (
+                uint256 delegatedAmount,
+                uint256 rewards,
+                uint256 unbondingAmount,
+                uint256 unbondingBlock
+            ) {
+                console.log("Delegation info for", validator);
+                console.log("  Delegated amount:", delegatedAmount);
+                console.log("  Pending rewards:", rewards);
+                console.log("  Unbonding amount:", unbondingAmount);
+                console.log("  Unbonding block:", unbondingBlock);
+            } catch {
+                console.log("Cannot get delegation info for", validator);
+            }
+        }
+    }
+    
+    /**
      * @dev 测试配置更新（UpdateConfig脚本功能）
      */
     function testConfigUpdate() internal {
@@ -207,10 +283,10 @@ contract RunAllScriptsDemo is Script {
     }
     
     /**
-     * @dev AddNewNode脚本功能演示
+     * @dev AddNewNode脚本功能测试
      */
-    function demonstrateAddNewNode(address newNode) external {
-        console.log("=== Add New Node Demo ===");
+    function testAddNewNode(address newNode) external {
+        console.log("=== Add New Node Test ===");
         console.log("Adding node:", newNode);
         
         try Proposal(PROPOSAL_CONTRACT_ADDR).createProposal(
@@ -225,10 +301,10 @@ contract RunAllScriptsDemo is Script {
     }
     
     /**
-     * @dev RemoveNode脚本功能演示
+     * @dev RemoveNode脚本功能测试
      */
-    function demonstrateRemoveNode(address nodeToRemove) external {
-        console.log("=== Remove Node Demo ===");
+    function testRemoveNode(address nodeToRemove) external {
+        console.log("=== Remove Node Test ===");
         console.log("Removing node:", nodeToRemove);
         
         try Proposal(PROPOSAL_CONTRACT_ADDR).createProposal(
@@ -250,7 +326,8 @@ contract RunAllScriptsDemo is Script {
         uint256 topValidatorCount,
         address proposalContract,
         address validatorContract,
-        address punishContract
+        address punishContract,
+        address stakingContract
     ) {
         address[] memory active = Validators(VALIDATOR_CONTRACT_ADDR).getActiveValidators();
         address[] memory top = Validators(VALIDATOR_CONTRACT_ADDR).getTopValidators();
@@ -260,7 +337,8 @@ contract RunAllScriptsDemo is Script {
             top.length,
             PROPOSAL_CONTRACT_ADDR,
             VALIDATOR_CONTRACT_ADDR,
-            PUNISH_CONTRACT_ADDR
+            PUNISH_CONTRACT_ADDR,
+            STAKING_CONTRACT_ADDR
         );
     }
 }
