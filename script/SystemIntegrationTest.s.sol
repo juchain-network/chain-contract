@@ -194,7 +194,7 @@ contract SystemIntegrationTest is Script {
     /**
      * @dev 测试Staking系统（StakingOperations脚本功能）
      */
-    function testStakingSystem() internal {
+    function testStakingSystem() internal view {
         console.log("Testing Staking system...");
         
         Staking stakingContract = Staking(STAKING_CONTRACT_ADDR);
