@@ -13,84 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Staking contract ABI (simplified for CLI usage)
-const stakingABI = `[
-	{
-		"inputs": [{"internalType": "uint256", "name": "commissionRate", "type": "uint256"}],
-		"name": "registerValidator",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
-	},
-	{
-		"inputs": [{"internalType": "address", "name": "validator", "type": "address"}],
-		"name": "delegate",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{"internalType": "address", "name": "validator", "type": "address"},
-			{"internalType": "uint256", "name": "amount", "type": "uint256"}
-		],
-		"name": "undelegate",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [{"internalType": "address", "name": "validator", "type": "address"}],
-		"name": "claimRewards",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [{"internalType": "address", "name": "validator", "type": "address"}],
-		"name": "getValidatorInfo",
-		"outputs": [
-			{"internalType": "uint256", "name": "selfStake", "type": "uint256"},
-			{"internalType": "uint256", "name": "totalDelegated", "type": "uint256"},
-			{"internalType": "uint256", "name": "commissionRate", "type": "uint256"},
-			{"internalType": "bool", "name": "isJailed", "type": "bool"},
-			{"internalType": "uint256", "name": "jailUntilBlock", "type": "uint256"}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{"internalType": "address", "name": "delegator", "type": "address"},
-			{"internalType": "address", "name": "validator", "type": "address"}
-		],
-		"name": "getDelegationInfo",
-		"outputs": [
-			{"internalType": "uint256", "name": "amount", "type": "uint256"},
-			{"internalType": "uint256", "name": "pendingRewards", "type": "uint256"},
-			{"internalType": "uint256", "name": "unbondingAmount", "type": "uint256"},
-			{"internalType": "uint256", "name": "unbondingBlock", "type": "uint256"}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [{"internalType": "uint256", "name": "limit", "type": "uint256"}],
-		"name": "getTopValidators",
-		"outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
-		"stateMutability": "view",
-		"type": "function"
-	}
-]`
-
-// Staking transaction file names
-const (
-	RegisterValidatorFile = "registerValidator.json"
-	DelegateFile          = "delegate.json"
-	UndelegateFile        = "undelegate.json"
-	ClaimRewardsFile      = "claimRewards.json"
-)
-
 // StakingCmd creates the main staking command
 func StakingCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -101,6 +23,7 @@ func StakingCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		registerValidatorCmd(),
+		editValidatorCmd(),
 		delegateCmd(),
 		undelegateCmd(),
 		claimRewardsCmd(),
@@ -128,6 +51,29 @@ func registerValidatorCmd() *cobra.Command {
 	cmd.MarkFlagRequired("proposer")
 	cmd.MarkFlagRequired("stake-amount")
 	cmd.MarkFlagRequired("commission-rate")
+
+	return cmd
+}
+
+// editValidatorCmd creates command for editing validator information
+func editValidatorCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit-validator",
+		Short: "Create edit validator transaction",
+		Long:  "Create a transaction to edit validator information including fee address and description",
+		Run:   createEditValidatorTx,
+	}
+
+	cmd.Flags().String("validator", "", "Validator address (required)")
+	cmd.Flags().String("fee-addr", "", "Fee address for receiving rewards (required)")
+	cmd.Flags().String("moniker", "", "Validator display name")
+	cmd.Flags().String("identity", "", "Validator identity (keybase signature)")
+	cmd.Flags().String("website", "", "Validator website URL")
+	cmd.Flags().String("email", "", "Validator contact email")
+	cmd.Flags().String("details", "", "Validator description details")
+
+	cmd.MarkFlagRequired("validator")
+	cmd.MarkFlagRequired("fee-addr")
 
 	return cmd
 }
@@ -239,6 +185,35 @@ func listTopValidatorsCmd() *cobra.Command {
 
 // Implementation functions
 
+func createEditValidatorTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorAddr, _ := cmd.Flags().GetString("validator")
+	feeAddr, _ := cmd.Flags().GetString("fee-addr")
+	moniker, _ := cmd.Flags().GetString("moniker")
+	identity, _ := cmd.Flags().GetString("identity")
+	website, _ := cmd.Flags().GetString("website")
+	email, _ := cmd.Flags().GetString("email")
+	details, _ := cmd.Flags().GetString("details")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddresses(validatorAddr, feeAddr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Creating edit validator transaction")
+
+	if err := innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, website, email, details, rpc); err != nil {
+		PrintError("Failed to create edit validator transaction", err)
+		return
+	}
+}
+
 func createRegisterValidatorTx(cmd *cobra.Command, args []string) {
 	rpc := GetRPCEndpoint(cmd)
 	proposer, _ := cmd.Flags().GetString("proposer")
@@ -306,6 +281,76 @@ func innerCreateRegisterValidatorTx(proposer string, stakeAmount, commissionRate
 	PrintInfo(fmt.Sprintf("Transaction file: %s", RegisterValidatorFile))
 	PrintInfo(fmt.Sprintf("Stake amount: %s wei", stakeAmount.String()))
 	PrintInfo(fmt.Sprintf("Commission rate: %s basis points", commissionRate.String()))
+	return nil
+}
+
+func innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, website, email, details, rpc string) error {
+	// Parse Validators contract ABI
+	validatorsAbi, err := abi.JSON(strings.NewReader(`[
+		{
+			"inputs": [
+				{"internalType": "address", "name": "feeAddr", "type": "address"},
+				{"internalType": "string", "name": "moniker", "type": "string"},
+				{"internalType": "string", "name": "identity", "type": "string"},
+				{"internalType": "string", "name": "website", "type": "string"},
+				{"internalType": "string", "name": "email", "type": "string"},
+				{"internalType": "string", "name": "details", "type": "string"}
+			],
+			"name": "createOrEditValidator",
+			"outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		}
+	]`))
+	if err != nil {
+		return fmt.Errorf("failed to parse validators ABI: %w", err)
+	}
+
+	// Use default values if not provided
+	if moniker == "" {
+		moniker = "validator6"
+	}
+	if identity == "" {
+		identity = ""
+	}
+	if website == "" {
+		website = ""
+	}
+	if email == "" {
+		email = ""
+	}
+	if details == "" {
+		details = "Validator6 node"
+	}
+
+	abiData, err := validatorsAbi.Pack("createOrEditValidator",
+		common.HexToAddress(feeAddr), moniker, identity, website, email, details)
+	if err != nil {
+		return fmt.Errorf("failed to pack createOrEditValidator data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(ValidatorsContractAddr), big.NewInt(0), abiData, rpc, EditValidatorFile)
+	if err != nil {
+		return fmt.Errorf("failed to create raw transaction: %w", err)
+	}
+
+	PrintSuccess("Edit validator transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", EditValidatorFile))
+	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
+	PrintInfo(fmt.Sprintf("Fee address: %s", feeAddr))
+	PrintInfo(fmt.Sprintf("Moniker: %s", moniker))
+	if identity != "" {
+		PrintInfo(fmt.Sprintf("Identity: %s", identity))
+	}
+	if website != "" {
+		PrintInfo(fmt.Sprintf("Website: %s", website))
+	}
+	if email != "" {
+		PrintInfo(fmt.Sprintf("Email: %s", email))
+	}
+	if details != "" {
+		PrintInfo(fmt.Sprintf("Details: %s", details))
+	}
 	return nil
 }
 

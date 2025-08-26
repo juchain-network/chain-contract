@@ -30,7 +30,12 @@ func validateGlobalFlags(cmd *cobra.Command, args []string) {
 	}
 
 	// Check if command requires RPC connection
-	requiresRPC := []string{"miners", "miner", "create_proposal", "create_config_proposal", "vote_proposal", "withdraw_profits", "send", "register-validator", "delegate", "undelegate", "claim-rewards", "query-validator", "query-delegation", "list-top-validators"}
+	requiresRPC := []string{
+		"miners", "miner", "create_proposal", "create_config_proposal",
+		"vote_proposal", "proposal", "proposals", "withdraw_profits",
+		"send", "register-validator", "edit-validator", "delegate", "undelegate",
+		"claim-rewards", "query-validator", "query-delegation", "list-top-validators",
+	}
 	cmdName := cmd.Name()
 
 	for _, name := range requiresRPC {
@@ -80,6 +85,8 @@ func init() {
 		CreateProposalCmd(),
 		CreateConfigProposalCmd(),
 		VoteProposalCmd(),
+		QueryProposalCmd(),
+		QueryProposalsCmd(),
 		SignRawTxCmd(),
 		SendSignedTxCmd(),
 		WithdrawProfitsCmd(),

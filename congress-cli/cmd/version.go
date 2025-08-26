@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// 版本信息常量
 const (
 	Version   = "1.2.0"
 	BuildDate = "2025-08-25"
