@@ -91,7 +91,7 @@ make build
 
 ```bash
 # 全局参数模板
-./build/congress-cli [command] -c 202599 -l https://testnet-rpc.juchain.org [其他参数]
+./build/congress-cli [command] -c 2025 -l https://testnet-rpc.juchain.org [其他参数]
 ```
 
 **主网络**：
@@ -407,7 +407,7 @@ send tx error only replay-protected (EIP-155) transactions allowed over RPC
 解决方案：签名时必须指定正确的链ID：
 
 ```bash
-./build/congress-cli sign -f transaction.json -k keystore -p password -c 202599
+./build/congress-cli sign -f transaction.json -k keystore -p password
 ```
 
 **2. 提取收益失败**

@@ -133,7 +133,7 @@ make build
 
 > **💡 语法说明**：
 >
-> - 本地测试：默认连接 `http://127.0.0.1:8545`，链ID `202599`
+> - 本地测试：默认连接 `http://127.0.0.1:8545`，链ID `2025`
 > - 测试网：`--chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org`
 > - 主网：`--chainId 210000 --rpc_laddr https://rpc.juchain.org`
 
@@ -200,10 +200,10 @@ Congress CLI v1.2.0 提供了便捷的配置查询和设置功能。
 
 ```shell
 # 设置本地测试环境
-./build/congress-cli config set --rpc http://127.0.0.1:8545 --chain-id 202599
+./build/congress-cli config set --rpc http://127.0.0.1:8545 --chain-id 2025
 
 # 设置测试网环境
-./build/congress-cli config set --rpc https://testnet-rpc.juchain.org --chain-id 202599
+./build/congress-cli config set --rpc https://testnet-rpc.juchain.org --chain-id 2025
 
 # 设置主网环境
 ./build/congress-cli config set --rpc https://rpc.juchain.org --chain-id 210000
@@ -1089,5 +1089,5 @@ chmod +x test_congress.sh
 
 ### 13.4 网络信息
 
-- **测试网**: `https://testnet-rpc.juchain.org` (Chain ID: 202599)
+- **测试网**: `https://testnet-rpc.juchain.org` (Chain ID: 2025)
 - **主网**: `https://rpc.juchain.org` (Chain ID: 210000)

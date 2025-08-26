@@ -54,7 +54,7 @@ func TestValidateChainID(t *testing.T) {
 	}{
 		{
 			name:    "valid chain ID",
-			chainID: 202599,
+			chainID: 2025,
 			wantErr: false,
 		},
 		{
