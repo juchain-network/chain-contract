@@ -128,12 +128,12 @@ make build
 
 ```shell
 ./build/congress-cli version
-# 输出: Congress CLI Version: 1.2.0, Build Date: 2025-08-25
+# 输出: Congress CLI Version: 1.2.0, Build Date: 202599-08-25
 ```
 
 > **💡 语法说明**：
 >
-> - 本地测试：默认连接 `http://127.0.0.1:8545`，链ID `2025`
+> - 本地测试：默认连接 `http://127.0.0.1:8545`，链ID `202599`
 > - 测试网：`--chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org`
 > - 主网：`--chainId 210000 --rpc_laddr https://rpc.juchain.org`
 
@@ -200,10 +200,10 @@ Congress CLI v1.2.0 提供了便捷的配置查询和设置功能。
 
 ```shell
 # 设置本地测试环境
-./build/congress-cli config set --rpc http://127.0.0.1:8545 --chain-id 2025
+./build/congress-cli config set --rpc http://127.0.0.1:8545 --chain-id 202599
 
 # 设置测试网环境
-./build/congress-cli config set --rpc https://testnet-rpc.juchain.org --chain-id 2025
+./build/congress-cli config set --rpc https://testnet-rpc.juchain.org --chain-id 202599
 
 # 设置主网环境
 ./build/congress-cli config set --rpc https://rpc.juchain.org --chain-id 210000
@@ -467,8 +467,8 @@ Block Number: 8829
 Content Hash: 0xed2e9ba8a0b3ca2b9b7a2c4b8f9a7b5c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
 Contract Address: 0x0000000000000000000000000000000000001000
 Current: 1
-Start Time: 2025-01-22 20:20:21 +0000 UTC
-End Time: 2025-01-23 20:20:21 +0000 UTC
+Start Time: 202599-01-22 20:20:21 +0000 UTC
+End Time: 202599-01-23 20:20:21 +0000 UTC
 ```
 
 ### 3.4 查询单个提案
@@ -493,8 +493,8 @@ Block Number: 8829
 Content Hash: 0xed2e9ba8a0b3ca2b9b7a2c4b8f9a7b5c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
 Contract Address: 0x0000000000000000000000000000000000001000
 Current: 1
-Start Time: 2025-01-22 20:20:21 +0000 UTC
-End Time: 2025-01-23 20:20:21 +0000 UTC
+Start Time: 202599-01-22 20:20:21 +0000 UTC
+End Time: 202599-01-23 20:20:21 +0000 UTC
 ```
 
 **提案状态说明：**
@@ -1089,5 +1089,5 @@ chmod +x test_congress.sh
 
 ### 13.4 网络信息
 
-- **测试网**: `https://testnet-rpc.juchain.org` (Chain ID: 2025)
+- **测试网**: `https://testnet-rpc.juchain.org` (Chain ID: 202599)
 - **主网**: `https://rpc.juchain.org` (Chain ID: 210000)

@@ -153,7 +153,7 @@ All staking commands generate unsigned transaction files that must be signed and
 congress-cli staking register-validator --proposer 0x... --stake-amount 10000 --commission-rate 500
 
 # 2. Sign transaction
-congress-cli sign --file registerValidator.json --key keystore.json --password password.txt --chainId 2025
+congress-cli sign --file registerValidator.json --key keystore.json --password password.txt --chainId 202599
 
 # 3. Broadcast transaction
 congress-cli send --file registerValidator_signed.json --rpc_laddr http://localhost:8545
@@ -405,7 +405,7 @@ struct EconomicParams {
 ### 硬分叉特性
 
 - **分叉名称**: "posa"
-- **激活时间**: 2025-08-25 14:21:06 CST (timestamp: 1756102866)
+- **激活时间**: 202599-08-25 14:21:06 CST (timestamp: 1756102866)
 - **主要变更**:
   - 日产出从 172,800 JU 降至 72,000 JU
   - 区块奖励从 2 JU 降至 0.833 JU
@@ -473,7 +473,7 @@ go build -o congress-cli ./cmd/congress-cli
 
 # 配置网络连接
 congress-cli config set-rpc http://localhost:8545
-congress-cli config set-chain-id 2025
+congress-cli config set-chain-id 202599
 ```
 
 ### 4. 验证者操作示例

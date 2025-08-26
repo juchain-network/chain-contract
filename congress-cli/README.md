@@ -91,7 +91,7 @@ make build
 
 ```bash
 # 全局参数模板
-./build/congress-cli [command] -c 2025 -l https://testnet-rpc.juchain.org [其他参数]
+./build/congress-cli [command] -c 202599 -l https://testnet-rpc.juchain.org [其他参数]
 ```
 
 **主网络**：
@@ -391,7 +391,7 @@ Block: 24805
 使用标准的 Ethereum keystore 格式，例如：
 
 ```
-UTC--2025-08-06T08-30-51.139143000Z--f39fd6e51aad88f6f4ce6ab8827279cffFb92266
+UTC--202599-08-06T08-30-51.139143000Z--f39fd6e51aad88f6f4ce6ab8827279cffFb92266
 ```
 
 ## 故障排除

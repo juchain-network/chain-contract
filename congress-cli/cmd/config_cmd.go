@@ -22,7 +22,7 @@ type Config struct {
 // Default configuration values
 var defaultConfig = Config{
 	RPCEndpoint: "http://localhost:8545",
-	ChainID:     2025,
+	ChainID:     202599,
 }
 
 // getConfigPath returns the configuration file path

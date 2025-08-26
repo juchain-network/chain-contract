@@ -15,8 +15,8 @@ response=$(curl -s -X POST -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' \
   http://localhost:8545)
 
-if [[ $response == *"2025"* ]]; then
-    echo "✅ RPC 连接成功，Chain ID: 2025"
+if [[ $response == *"202599"* ]]; then
+    echo "✅ RPC 连接成功，Chain ID: 202599"
 else
     echo "❌ RPC 连接失败"
     exit 1
