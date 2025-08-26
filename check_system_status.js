@@ -222,6 +222,115 @@ async function checkSystemStatus() {
     }
     
     console.log('='.repeat(80));
+    
+    // 5. 执行交易测试
+    console.log('\n💸 交易功能测试');
+    console.log('-'.repeat(40));
+    
+    try {
+        // 检查发送方余额
+        const fromAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+        const toAddress = '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc';
+        
+        const fromBalanceBefore = await web3.eth.getBalance(fromAddress);
+        const toBalanceBefore = await web3.eth.getBalance(toAddress);
+        
+        console.log(`📊 转账前余额:`);
+        console.log(`   发送方 (${fromAddress}): ${web3.utils.fromWei(fromBalanceBefore, 'ether')} ETH`);
+        console.log(`   接收方 (${toAddress}): ${web3.utils.fromWei(toBalanceBefore, 'ether')} ETH`);
+        
+        // 执行转账交易
+        const transferAmount = web3.utils.toWei('100', 'ether'); // 转账100 ETH
+        const gasPrice = web3.utils.toWei('20', 'gwei');
+        
+        console.log(`\n🚀 执行转账交易:`);
+        console.log(`   转账金额: 100 ETH`);
+        console.log(`   Gas 价格: 20 Gwei`);
+        
+        const txHash = await web3.eth.sendTransaction({
+            from: fromAddress,
+            to: toAddress,
+            value: transferAmount,
+            gas: 21000,
+            gasPrice: gasPrice
+        });
+        
+        console.log(`   ✅ 交易发送成功`);
+        console.log(`   📋 交易哈希: ${typeof txHash === 'object' ? txHash.transactionHash || JSON.stringify(txHash) : txHash}`);
+        
+        // 等待交易确认并获取收据
+        let receipt = null;
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        console.log(`   ⏳ 等待交易确认...`);
+        
+        const actualTxHash = typeof txHash === 'object' ? txHash.transactionHash : txHash;
+        
+        while (!receipt && attempts < maxAttempts) {
+            try {
+                receipt = await web3.eth.getTransactionReceipt(actualTxHash);
+                if (!receipt) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    attempts++;
+                    console.log(`   ⏳ 等待中... (${attempts}/${maxAttempts})`);
+                }
+            } catch (error) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                attempts++;
+                console.log(`   ⏳ 等待中... (${attempts}/${maxAttempts})`);
+            }
+        }
+        
+        if (receipt) {
+            console.log(`   ✅ 交易已确认`);
+            console.log(`   📦 区块号: ${receipt.blockNumber}`);
+            console.log(`   ⛽ Gas 使用: ${receipt.gasUsed}`);
+
+            const txStatus = receipt.status;
+            // Web3.js 返回的 status 是 BigInt 类型
+            const isSuccess = txStatus === BigInt(1) || txStatus === 1 || txStatus === '0x1' || txStatus === true;
+            console.log(`   📊 状态: ${isSuccess ? '成功' : '失败'} (原始值: ${txStatus}, 类型: ${typeof txStatus})`);
+            
+            // 检查转账后余额
+            const fromBalanceAfter = await web3.eth.getBalance(fromAddress);
+            const toBalanceAfter = await web3.eth.getBalance(toAddress);
+            
+            console.log(`\n📊 转账后余额:`);
+            console.log(`   发送方 (${fromAddress}): ${web3.utils.fromWei(fromBalanceAfter, 'ether')} ETH`);
+            console.log(`   接收方 (${toAddress}): ${web3.utils.fromWei(toBalanceAfter, 'ether')} ETH`);
+            
+            // 计算实际变化
+            const fromChange = BigInt(fromBalanceAfter) - BigInt(fromBalanceBefore);
+            const toChange = BigInt(toBalanceAfter) - BigInt(toBalanceBefore);
+            const gasCost = BigInt(receipt.gasUsed) * BigInt(gasPrice);
+            
+            console.log(`\n📈 余额变化:`);
+            console.log(`   发送方减少: ${web3.utils.fromWei((-fromChange).toString(), 'ether')} ETH`);
+            console.log(`   接收方增加: ${web3.utils.fromWei(toChange.toString(), 'ether')} ETH`);
+            console.log(`   Gas 费用: ${web3.utils.fromWei(gasCost.toString(), 'ether')} ETH`);
+            
+            // 验证余额变化是否正确
+            const expectedFromChange = -(BigInt(transferAmount) + gasCost);
+            const expectedToChange = BigInt(transferAmount);
+            
+            const fromCorrect = fromChange === expectedFromChange;
+            const toCorrect = toChange === expectedToChange;
+            
+            console.log(`\n✅ 验证结果:`);
+            console.log(`   发送方余额变化: ${fromCorrect ? '✅ 正确' : '❌ 错误'}`);
+            console.log(`   接收方余额变化: ${toCorrect ? '✅ 正确' : '❌ 错误'}`);
+            console.log(`   💸 交易测试: ${isSuccess ? '✅ 成功' : '❌ 失败'}`);
+            
+        } else {
+            console.log(`   ❌ 交易确认超时`);
+        }
+        
+    } catch (error) {
+        console.log(`   ❌ 交易测试失败: ${error.message}`);
+    }
+    
+    console.log('='.repeat(80));
 }
 
 checkSystemStatus().catch(error => {
