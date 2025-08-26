@@ -293,7 +293,7 @@ cd sys-contract/congress-cli
   -f createProposal.json \
   -k proposer.key \
   -p password.txt \
-  --chainId 2025
+  --chainId 202599
 
 # 发送交易
 ./build/congress-cli send \
@@ -312,7 +312,7 @@ cd sys-contract/congress-cli
   --rpc_laddr http://localhost:8545
 
 # 签名并发送投票
-./build/congress-cli sign -f voteProposal.json -k voter.key -p password.txt --chainId 2025
+./build/congress-cli sign -f voteProposal.json -k voter.key -p password.txt --chainId 202599
 ./build/congress-cli send -f voteProposal_signed.json --rpc_laddr http://localhost:8545
 ```
 
@@ -366,7 +366,7 @@ cd sys-contract/congress-cli
   --rpc_laddr http://localhost:8545
 
 # 签名并发送
-./build/congress-cli sign -f createUpdateConfigProposal.json -k proposer.key -p password.txt --chainId 2025
+./build/congress-cli sign -f createUpdateConfigProposal.json -k proposer.key -p password.txt --chainId 202599
 ./build/congress-cli send -f createUpdateConfigProposal_signed.json --rpc_laddr http://localhost:8545
 ```
 
@@ -387,7 +387,7 @@ cd sys-contract/congress-cli
   --rpc_laddr http://localhost:8545
 
 # 签名并发送
-./build/congress-cli sign -f withdrawProfits.json -k validator.key -p password.txt --chainId 2025
+./build/congress-cli sign -f withdrawProfits.json -k validator.key -p password.txt --chainId 202599
 ./build/congress-cli send -f withdrawProfits_signed.json --rpc_laddr http://localhost:8545
 ```
 

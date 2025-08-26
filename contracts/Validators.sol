@@ -170,7 +170,12 @@ contract Validators is Params {
     }
 
     // distributeBlockReward distributes block reward to all active validators
-    function distributeBlockReward() external payable onlyMiner onlyNotRewarded onlyInitialized {
+    function distributeBlockReward() external payable onlyMiner onlyInitialized {
+        // Check if block reward has already been distributed for this block
+        if (operationsDone[block.number][uint8(Operations.Distribute)] == true) {
+            return;
+        }
+        
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
         address val = msg.sender;
         uint256 hb = msg.value;
