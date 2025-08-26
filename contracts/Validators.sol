@@ -171,36 +171,31 @@ contract Validators is Params {
 
     // distributeBlockReward distributes block reward to all active validators
     function distributeBlockReward() external payable onlyMiner onlyInitialized {
+        address val = msg.sender;
+        uint256 hb = msg.value;
+        
+        // Only the block's coinbase (actual producer) should distribute rewards
+        // Others should skip gracefully to avoid state conflicts
+        if (tx.origin != block.coinbase) {
+            // Silently return without reverting to avoid consensus issues
+            return;
+        }
+
         // Check if block reward has already been distributed for this block
         if (operationsDone[block.number][uint8(Operations.Distribute)] == true) {
             return;
         }
         
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
-        address val = msg.sender;
-        uint256 hb = msg.value;
 
         // never reach this
         if (validatorInfo[val].status == Status.NotExist) {
             return;
         }
 
-        // For JPoSA: distribute rewards through staking contract
-        // Split rewards: 70% to staking rewards, 30% to validator directly
-        uint256 stakingReward = hb.mul(70).div(100);
-        uint256 validatorReward = hb.sub(stakingReward);
-        
-        // Distribute staking rewards only if validator is registered in staking contract
-        if (stakingReward > 0) {
-            // Check if validator exists in staking contract
-            (uint256 selfStake, , , , ) = staking.getValidatorInfo(val);
-            if (selfStake > 0) {
-                staking.distributeRewards{value: stakingReward}(val);
-            } else {
-                // If not in staking contract, add to validator direct rewards
-                validatorReward = validatorReward.add(stakingReward);
-            }
-        }
+        // For JPoSA: For now, distribute all rewards directly to validators
+        // TODO: Implement proper staking reward distribution after fixing revert issues
+        uint256 validatorReward = hb;
         
         // Jailed validator can't get direct profits.
         if (validatorReward > 0) {
