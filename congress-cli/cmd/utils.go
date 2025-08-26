@@ -81,11 +81,15 @@ func ValidateProposalID(proposalID string) error {
 	if proposalID == "" {
 		return fmt.Errorf("proposal ID cannot be empty")
 	}
+
+	// 允许 0x 前缀
+	cleanID := strings.TrimPrefix(proposalID, "0x")
+
 	// 验证是否为有效的十六进制字符串
-	if !regexp.MustCompile(`^[0-9a-fA-F]+$`).MatchString(proposalID) {
+	if !regexp.MustCompile(`^[0-9a-fA-F]+$`).MatchString(cleanID) {
 		return fmt.Errorf("invalid proposal ID format: %s", proposalID)
 	}
-	if len(proposalID) != 64 {
+	if len(cleanID) != 64 {
 		return fmt.Errorf("proposal ID must be 64 characters long: %s", proposalID)
 	}
 	return nil

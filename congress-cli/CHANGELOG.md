@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2025-08-26
+
+### Fixed
+
+- **Critical: JPoSA Epoch Update Issue**: Fixed execution revert error during epoch transitions
+  - **Root Cause**: `updateValidatorSetByStake` function fails because existing validators in Validators contract are not registered in Staking contract
+  - **Impact**: All validators encounter "Can't update validators by stake" and "Do something at epoch failed" errors at epoch boundaries
+  - **Error Pattern**: `execution reverted` when calling `staking.getTopValidators(21)` returns empty array
+  - **Requirement**: Validators must be registered in Staking contract with minimum 10,000 JU stake for JPoSA to function
+  - **Temporary Workaround**: Validators need to register themselves in Staking contract or disable JPoSA validation
+
+### Technical Details
+
+- **Affected Code**: `chain/consensus/congress/congress.go:updateValidatorsByStake()`
+- **Contract Interaction**: Validators.sol:227 → Staking.sol:312 `getTopValidators()`
+- **Validation Logic**: Staking contract requires `MIN_VALIDATOR_STAKE = 10000 ether` per validator
+- **Error Location**: `require(topValidators.length > 0, 'No staked validators available')`
+
+### Known Issues
+
+- **Migration Gap**: Existing validators from Congress-only consensus are not automatically migrated to JPoSA
+- **Genesis Configuration**: Need mechanism to pre-register genesis validators in Staking contract
+- **Backward Compatibility**: JPoSA activation requires manual validator registration process
+
 ## [1.2.0] - 2025-08-25
 
 ### Added

@@ -1,20 +1,18 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
 	"juchain.org/chain/congress-cli/contracts/generated"
-)
-
-const (
-	validatorAddr = ValidatorContractAddr
-	punishAddr    = PunishContractAddr
-	proposalAddr  = ProposalContractAddr
 )
 
 func CreateProposalCmd() *cobra.Command {
@@ -242,4 +240,265 @@ func innerVoteProposal(signer, proposalId string, flag bool, rpc string) error {
 	PrintSuccess("Vote transaction created successfully!")
 	PrintInfo(fmt.Sprintf("Transaction file: %s", VoteProposalFile))
 	return nil
+}
+
+// QueryProposalCmd creates a command to query a specific proposal
+func QueryProposalCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "proposal",
+		Short: "query proposal by ID",
+		Run:   queryProposalTx,
+	}
+	queryProposalFlags(cmd)
+	return cmd
+}
+
+func queryProposalFlags(cmd *cobra.Command) {
+	cmd.Flags().StringP("id", "i", "", "proposal ID (64-character hex string)")
+	_ = cmd.MarkFlagRequired("id")
+}
+
+func queryProposalTx(cmd *cobra.Command, _ []string) {
+	rpc := GetRPCEndpoint(cmd)
+	proposalId, _ := cmd.Flags().GetString("id")
+
+	// 验证输入参数
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateProposalID(proposalId); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Fetching proposal details...")
+
+	if err := innerQueryProposal(proposalId, rpc); err != nil {
+		PrintError("Failed to query proposal", err)
+		return
+	}
+}
+
+func innerQueryProposal(proposalId string, rpc string) error {
+	client, err := ethclient.Dial(rpc)
+	if err != nil {
+		return fmt.Errorf("failed to connect to RPC: %w", err)
+	}
+	defer client.Close()
+
+	proposalContract, err := generated.NewProposal(common.HexToAddress(proposalAddr), client)
+	if err != nil {
+		return fmt.Errorf("failed to instantiate proposal contract: %w", err)
+	}
+
+	var proposalIdBytes [32]byte
+	copy(proposalIdBytes[:], common.HexToHash(proposalId).Bytes())
+
+	proposal, err := proposalContract.Proposals(nil, proposalIdBytes)
+	if err != nil {
+		return fmt.Errorf("failed to query proposal: %w", err)
+	}
+
+	// 显示提案信息
+	fmt.Println("📋 Proposal Details:")
+	fmt.Printf("Proposal ID: %s\n", proposalId)
+	fmt.Printf("Proposer: %s (验证者地址)\n", proposal.Proposer.Hex())
+
+	// 根据提案类型显示不同信息
+	if proposal.ProposalType.Int64() == 1 { // 验证者管理提案
+		if proposal.Flag {
+			fmt.Printf("Target Address: %s (待添加验证者)\n", proposal.Dst.Hex())
+			fmt.Printf("Action: Add New Validator (Flag: true)\n")
+		} else {
+			fmt.Printf("Target Address: %s (待移除验证者)\n", proposal.Dst.Hex())
+			fmt.Printf("Action: Remove Validator (Flag: false)\n")
+		}
+	} else if proposal.ProposalType.Int64() == 2 { // 配置更新提案
+		fmt.Printf("Config ID: %s (%s)\n", proposal.Cid.String(), getConfigIDName(proposal.Cid.Int64()))
+		fmt.Printf("New Value: %s\n", proposal.NewValue.String())
+		fmt.Printf("Action: Update Configuration\n")
+	}
+
+	fmt.Printf("Proposal Type: %s (%s)\n", proposal.ProposalType.String(), getProposalTypeName(proposal.ProposalType.Int64()))
+	fmt.Printf("Create Time: %s\n", timeToString(proposal.CreateTime.Int64()))
+
+	if proposal.Details != "" {
+		fmt.Printf("Details: %s\n", proposal.Details)
+	}
+
+	return nil
+}
+
+// 获取提案类型名称
+func getProposalTypeName(proposalType int64) string {
+	switch proposalType {
+	case 1:
+		return "Validator Management 验证者管理"
+	case 2:
+		return "Configuration Update 配置更新"
+	default:
+		return "Unknown Type 未知类型"
+	}
+}
+
+// 获取配置项名称
+func getConfigIDName(cid int64) string {
+	switch cid {
+	case 0:
+		return "Proposal Lasting Period 提案持续时间"
+	case 1:
+		return "Punish Threshold 惩罚阈值"
+	case 2:
+		return "Remove Threshold 移除阈值"
+	case 3:
+		return "Decrease Rate 减少率"
+	case 4:
+		return "Withdraw Profit Period 提取收益周期"
+	default:
+		return "Unknown Config 未知配置"
+	}
+}
+
+// QueryProposalsCmd creates a command to query all proposals
+func QueryProposalsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "proposals",
+		Short: "query all proposals",
+		Run:   queryProposalsTx,
+	}
+	return cmd
+}
+
+func queryProposalsTx(cmd *cobra.Command, _ []string) {
+	rpc := GetRPCEndpoint(cmd)
+
+	// 验证输入参数
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Fetching all proposals...")
+
+	if err := innerQueryProposals(rpc); err != nil {
+		PrintError("Failed to query proposals", err)
+		return
+	}
+}
+
+func innerQueryProposals(rpc string) error {
+	client, err := ethclient.Dial(rpc)
+	if err != nil {
+		return fmt.Errorf("failed to connect to RPC: %w", err)
+	}
+	defer client.Close()
+
+	proposalContract, err := generated.NewProposal(common.HexToAddress(proposalAddr), client)
+	if err != nil {
+		return fmt.Errorf("failed to instantiate proposal contract: %w", err)
+	}
+
+	// 获取当前区块号
+	currentBlock, err := client.BlockNumber(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get current block number: %w", err)
+	}
+
+	// 设置查询范围（从创世块到当前块）
+	opts := &bind.FilterOpts{
+		Start: 0,
+		End:   &currentBlock,
+	}
+
+	// 收集所有提案 ID
+	proposalIDs := make(map[string]bool)
+
+	// 查询验证者管理提案事件
+	validatorProposalIter, err := proposalContract.FilterLogCreateProposal(opts, nil, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to filter validator proposals: %w", err)
+	}
+	defer validatorProposalIter.Close()
+
+	for validatorProposalIter.Next() {
+		event := validatorProposalIter.Event
+		proposalID := common.BytesToHash(event.Id[:]).Hex()
+		proposalIDs[proposalID] = true
+	}
+
+	// 查询配置更新提案事件
+	configProposalIter, err := proposalContract.FilterLogCreateConfigProposal(opts, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to filter config proposals: %w", err)
+	}
+	defer configProposalIter.Close()
+
+	for configProposalIter.Next() {
+		event := configProposalIter.Event
+		proposalID := common.BytesToHash(event.Id[:]).Hex()
+		proposalIDs[proposalID] = true
+	}
+
+	if len(proposalIDs) == 0 {
+		fmt.Println("📋 No proposals found.")
+		return nil
+	}
+
+	fmt.Printf("ℹ️  Found %d proposal(s):\n\n", len(proposalIDs))
+
+	// 查询每个提案的详细信息
+	count := 1
+	for proposalID := range proposalIDs {
+		fmt.Printf("--- Proposal %d ---\n", count)
+
+		var proposalIdBytes [32]byte
+		copy(proposalIdBytes[:], common.HexToHash(proposalID).Bytes())
+
+		proposal, err := proposalContract.Proposals(nil, proposalIdBytes)
+		if err != nil {
+			fmt.Printf("❌ Failed to query proposal %s: %v\n", proposalID, err)
+			continue
+		}
+
+		// 显示提案信息
+		fmt.Printf("ID: %s\n", proposalID)
+		fmt.Printf("Proposer: %s (验证者地址)\n", proposal.Proposer.Hex())
+
+		// 根据提案类型显示不同信息
+		if proposal.ProposalType.Int64() == 1 { // 验证者管理提案
+			if proposal.Flag {
+				fmt.Printf("Target: %s (待添加验证者)\n", proposal.Dst.Hex())
+				fmt.Printf("Action: Add New Validator (添加验证者)\n")
+			} else {
+				fmt.Printf("Target: %s (待移除验证者)\n", proposal.Dst.Hex())
+				fmt.Printf("Action: Remove Validator (移除验证者)\n")
+			}
+		} else if proposal.ProposalType.Int64() == 2 { // 配置更新提案
+			fmt.Printf("Config ID: %s (%s)\n", proposal.Cid.String(), getConfigIDName(proposal.Cid.Int64()))
+			fmt.Printf("New Value: %s\n", proposal.NewValue.String())
+			fmt.Printf("Action: Update Configuration (更新配置)\n")
+		}
+
+		fmt.Printf("Type: %s (%s)\n", proposal.ProposalType.String(), getProposalTypeName(proposal.ProposalType.Int64()))
+		fmt.Printf("Create Time: %s\n", timeToString(proposal.CreateTime.Int64()))
+
+		if proposal.Details != "" {
+			fmt.Printf("Details: %s\n", proposal.Details)
+		}
+
+		fmt.Println()
+		count++
+	}
+
+	return nil
+}
+
+// 时间转换辅助函数
+func timeToString(timestamp int64) string {
+	if timestamp == 0 {
+		return "N/A"
+	}
+	return time.Unix(timestamp, 0).UTC().String()
 }

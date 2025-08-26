@@ -4,8 +4,9 @@
   "description": "Ju blockchain system contracts",
   "main": "generate-contracts.js",
   "dependencies": {
+    "js-sha3": "^0.8.0",
     "nunjucks": "^3.2.2",
-    "js-sha3": "^0.8.0"
+    "web3": "^4.16.0"
   },
   "scripts": {
     "generate": "node generate-contracts.js",
