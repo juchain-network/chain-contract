@@ -104,10 +104,25 @@ func SignRawTx(
 		return fmt.Errorf("invalid JSON: %v", err)
 	}
 
+	// Handle value conversion safely for large numbers
+	var value *big.Int
+	switch v := rawTx["value"].(type) {
+	case float64:
+		// For large numbers, we need to handle them carefully
+		valueStr := fmt.Sprintf("%.0f", v)
+		value = new(big.Int)
+		value.SetString(valueStr, 10)
+	case string:
+		value = new(big.Int)
+		value.SetString(v, 10)
+	default:
+		return fmt.Errorf("invalid value type: %T", v)
+	}
+
 	tx := types.NewTransaction(
 		uint64(rawTx["nonce"].(float64)),
 		common.HexToAddress(rawTx["to"].(string)),
-		big.NewInt(int64(rawTx["value"].(float64))),
+		value,
 		uint64(rawTx["gasLimit"].(float64)),
 		big.NewInt(int64(rawTx["gasPrice"].(float64))),
 		common.Hex2Bytes(rawTx["data"].(string)),
