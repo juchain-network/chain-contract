@@ -513,37 +513,91 @@ End Time: 202599-01-23 20:20:21 +0000 UTC
 
 # 示例：修改提案持续时间为86400秒
 ./build/congress-cli create_config_proposal -p 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 -i 0 -v 86400
+
+# 示例：修改提现冷却期为10个区块（约10秒）
+./build/congress-cli create_config_proposal -p 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 -i 4 -v 10
 ```
 
 **配置项ID对应表：**
 
-- 0: proposalLastingPeriod（提案持续时间）
+- 0: proposalLastingPeriod（提案持续时间，单位：秒）
 - 1: punishThreshold（惩罚阈值）
 - 2: removeThreshold（移除阈值）
 - 3: decreaseRate（减少率）
-- 4: withdrawProfitPeriod（提取收益周期）
+- 4: withdrawProfitPeriod（提取收益周期，单位：区块数）
 
 **参数说明：**
 
 - `-p, --proposer`: 提案者地址（必须是有效验证者）
-- `-i, --configId`: 配置项ID（0-4）
+- `-i, --cid`: 配置项ID（0-4）
 - `-v, --value`: 配置项的新值
 
-> 执行成功后会生成 `createConfigProposal.json` 文件
+> 执行成功后会生成 `createUpdateConfigProposal.json` 文件
 
 ### 4.2 签名和发送交易
 
 配置修改提案的签名和发送流程与普通提案相同：
 
 ```shell
-# 签名交易
-./build/congress-cli sign -f createConfigProposal.json -k miner1.key -p password.file
+# 签名交易（注意文件名是 createUpdateConfigProposal.json）
+./build/congress-cli sign -f createUpdateConfigProposal.json -k /path/to/validator.key -p password.file
 
 # 发送交易
-./build/congress-cli send -f createConfigProposal_signed.json
+./build/congress-cli send -f createUpdateConfigProposal_signed.json
 ```
 
-> **注意：** 配置修改提案同样需要足够多的验证者投票才能通过并执行
+### 4.3 完整的配置修改流程示例
+
+以下是修改提现冷却期的完整流程：
+
+```shell
+# 步骤1：创建配置提案
+./build/congress-cli create_config_proposal -p 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 -i 4 -v 10
+
+# 步骤2：签名提案
+./build/congress-cli sign \
+  -f createUpdateConfigProposal.json \
+  -k $(find $HOME/ju-chain-work/chain/private-chain/data-validator1/keystore/ -name "*--f39fd6e51aad88f6f4ce6ab8827279cfffb92266" | head -1) \
+  -p $HOME/ju-chain-work/chain/private-chain/data-validator1/password.txt
+
+# 步骤3：发送提案
+./build/congress-cli send -f createUpdateConfigProposal_signed.json
+
+# 步骤4：记录提案ID（从输出中获取）
+# 示例输出中的提案ID：0xd87a55165c909c9b4ef949a3d697e3b26a6a66eee38b2ed519f52f8acd342539
+
+# 步骤5：验证者投票（需要足够多的验证者投票）
+./build/congress-cli vote_proposal -s 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 -i 0xd87a55165c909c9b4ef949a3d697e3b26a6a66eee38b2ed519f52f8acd342539 -a
+./build/congress-cli sign -f voteProposal.json -k $(find $HOME/ju-chain-work/chain/private-chain/data-validator1/keystore/ -name "*--f39fd6e51aad88f6f4ce6ab8827279cfffb92266" | head -1) -p password.file
+./build/congress-cli send -f voteProposal_signed.json
+
+# 重复投票流程给其他验证者...
+
+# 步骤6：查看提案状态
+./build/congress-cli proposal -i 0xd87a55165c909c9b4ef949a3d697e3b26a6a66eee38b2ed519f52f8acd342539
+```
+
+### 4.4 常见配置修改场景
+
+#### 场景1：缩短提现冷却期（用于测试）
+
+```shell
+# 将提现冷却期从默认的86400个区块（24小时）改为10个区块（约10秒）
+./build/congress-cli create_config_proposal -p 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 -i 4 -v 10
+```
+
+#### 场景2：调整提案持续时间
+
+```shell
+# 将提案持续时间改为7天（604800秒）
+./build/congress-cli create_config_proposal -p 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 -i 0 -v 604800
+```
+
+> **注意：**
+>
+> - 配置修改提案同样需要足够多的验证者投票才能通过并执行
+> - 配置修改立即生效，请谨慎设置参数值
+> - withdrawProfitPeriod 的单位是区块数，假设1秒1个区块计算时间
 
 ## 5. 矿工收益提取
 
@@ -1008,25 +1062,64 @@ echo "=== 步骤3: 验证结果 ==="
 
 ## 10. 主网修改配置
 
-### 10.1 创建提案
+### 10.1 创建配置提案
 
 ```shell
 # 配置项ID对应的配置项信息
 # 0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod
 ./build/congress-cli create_config_proposal -p 提案矿工地址 -i 配置项ID -v 配置项取值
 
-# 示例：修改 proposalLastingPeriod 为 86400 秒（注意：使用 -i 参数，不是 -c）
+# 示例：修改 proposalLastingPeriod 为 86400 秒
 ./build/congress-cli create_config_proposal -p 0xccafa71c31bc11ba24d526fd27ba57d743152807 -i 0 -v 86400
 
+# 示例：修改 withdrawProfitPeriod 为 10 个区块
+./build/congress-cli create_config_proposal -p 0xccafa71c31bc11ba24d526fd27ba57d743152807 -i 4 -v 10
+
+# 签名交易（注意文件名是 createUpdateConfigProposal.json）
 ./build/congress-cli sign -f createUpdateConfigProposal.json -k miner1.key -p password.file
 
+# 发送交易
 ./build/congress-cli send -f createUpdateConfigProposal_signed.json
 # 这条命令执行后可以获取到提案ID，记录提案ID用于后续投票
 ```
 
 ### 10.2 验证者投票
 
-> 投票步骤与主网恢复矿工操作相同，请参考上面第9章的相关步骤
+配置提案的投票流程与添加验证者提案相同：
+
+```shell
+# 示例：对配置提案投票（将 PROPOSAL_ID 替换为实际的提案ID）
+# miner1 投票
+./build/congress-cli vote_proposal -s 0xccafa71c31bc11ba24d526fd27ba57d743152807 -i PROPOSAL_ID -a
+./build/congress-cli sign -f voteProposal.json -k miner1.key -p password.file
+./build/congress-cli send -f voteProposal_signed.json
+
+# miner2 投票
+./build/congress-cli vote_proposal -s 0x81f7a79a51edba249efa812eb2d5478f696f7558 -i PROPOSAL_ID -a
+./build/congress-cli sign -f voteProposal.json -k miner2.key -p password.file
+./build/congress-cli send -f voteProposal_signed.json
+
+# miner3 投票
+./build/congress-cli vote_proposal -s 0x578c39eaf09a4e1abf428c423970b59bb8baf42e -i PROPOSAL_ID -a
+./build/congress-cli sign -f voteProposal.json -k miner3.key -p password.file
+./build/congress-cli send -f voteProposal_signed.json
+```
+
+### 10.3 查看配置提案状态
+
+```shell
+# 查看提案详情
+./build/congress-cli proposal -i PROPOSAL_ID
+
+# 查看所有提案
+./build/congress-cli proposals
+```
+
+> **重要提醒：**
+>
+> - 配置修改提案一旦通过，立即生效
+> - withdrawProfitPeriod 单位是区块数，不是秒数
+> - 请谨慎设置配置参数，避免影响网络正常运行
 
 ## 11. 主网矿工收益提取
 
