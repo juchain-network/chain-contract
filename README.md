@@ -167,7 +167,7 @@ forge test --match-contract Punish
 2. Generate contracts: `npm run generate`
 3. Initialize genesis: `npm run init-genesis`
 4. Build CLI tools: `cd congress-cli && make build`
-5. Start chain: `cd ../chain && ./start_private_chain.sh`
+5. Start chain: `cd ../chain && ./pm2-init.sh` or `pm2 start ecosystem.config.js`
 
 ## 📚 Documentation
 

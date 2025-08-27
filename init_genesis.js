@@ -289,7 +289,8 @@ function main() {
         
         console.log('\n🎉 Congress 共识配置完成!');
         console.log('💡 接下来可以启动私有链:');
-        console.log('   cd ../chain && ./start_private_chain.sh');
+        console.log('   cd ../chain && ./pm2-init.sh');
+        console.log('   或者直接使用: cd ../chain && pm2 start ecosystem.config.js');
         console.log('\n📋 重要提示:');
         console.log('   ✅ 创世区块已包含 5 个预设验证者的质押信息');
         console.log('   ✅ 每个验证者已质押 10,000 JU 代币');
