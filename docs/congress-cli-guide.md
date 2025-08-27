@@ -124,11 +124,11 @@ make build
 
 ## 版本信息
 
-本文档已更新至 **Congress CLI v1.2.0**，构建日期：2025-08-25。
+本文档已更新至 **Congress CLI v1.2.1**，构建日期：2025-08-27。
 
 ```shell
 ./build/congress-cli version
-# 输出: Congress CLI Version: 1.2.0, Build Date: 202599-08-25
+# 输出: Congress CLI Version: 1.2.1, Build Date: 2025-08-27
 ```
 
 > **💡 语法说明**：

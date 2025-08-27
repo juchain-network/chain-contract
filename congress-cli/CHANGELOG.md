@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.1] - 202599-08-26
+## [1.2.1] - 2025-08-27
 
 ### Fixed
 
@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Genesis Configuration**: Need mechanism to pre-register genesis validators in Staking contract
 - **Backward Compatibility**: JPoSA activation requires manual validator registration process
 
-## [1.2.0] - 202599-08-25
+## [1.2.0] - 2025-08-25
 
 ### Added
 
@@ -98,7 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Helpful error messages for common validation failures
   - Consistent output formatting across all staking commands
 
-## [1.1.0] - 202599-08-12
+## [1.1.0] - 2025-08-12
 
 ### Added
 
@@ -261,8 +261,8 @@ None. All existing commands remain fully compatible.
 #### New Features to Try
 
 ```bash
-# View examples
-./congress-cli examples
+# View guide
+./congress-cli guide
 
 # Enhanced version info
 ./congress-cli version
