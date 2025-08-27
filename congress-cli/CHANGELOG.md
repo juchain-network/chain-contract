@@ -65,7 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Documentation and Testing**
   - Comprehensive `STAKING_USAGE.md` guide with detailed examples
-  - Integration test script `test_staking.sh` for command validation
   - Updated architecture documentation in `contracts/README.md`
   - Complete CLI command examples and best practices
 
