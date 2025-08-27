@@ -171,36 +171,24 @@ contract Validators is Params {
 
     // distributeBlockReward distributes block reward to all active validators
     function distributeBlockReward() external payable onlyMiner onlyInitialized {
-        address val = msg.sender;
-        uint256 hb = msg.value;
-        
-        // Only the block's coinbase (actual producer) should distribute rewards
-        // Others should skip gracefully to avoid state conflicts
-        if (tx.origin != block.coinbase) {
-            // Silently return without reverting to avoid consensus issues
-            return;
-        }
-
         // Check if block reward has already been distributed for this block
         if (operationsDone[block.number][uint8(Operations.Distribute)] == true) {
-            return;
+            return; // Silently return to avoid consensus issues
         }
         
+        // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
+        
+        address val = msg.sender;
+        uint256 hb = msg.value;
 
         // never reach this
         if (validatorInfo[val].status == Status.NotExist) {
             return;
         }
 
-        // For JPoSA: For now, distribute all rewards directly to validators
-        // TODO: Implement proper staking reward distribution after fixing revert issues
-        uint256 validatorReward = hb;
-        
-        // Jailed validator can't get direct profits.
-        if (validatorReward > 0) {
-            addProfitsToActiveValidators(validatorReward, address(0));
-        }
+        // Jailed validator can't get profits.
+        addProfitsToActiveValidators(hb, address(0));
 
         emit LogDistributeBlockReward(val, hb, block.timestamp);
     }
@@ -208,11 +196,17 @@ contract Validators is Params {
     function updateActiveValidatorSet(address[] memory newSet, uint256 epoch)
         public
         onlyMiner
-        onlyNotUpdated
         onlyInitialized
         onlyBlockEpoch(epoch)
     {
+        // Check if validators have already been updated for this block
+        if (operationsDone[block.number][uint8(Operations.UpdateValidators)] == true) {
+            return; // Silently return to avoid consensus issues
+        }
+        
+        // Set updated flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.UpdateValidators)] = true;
+        
         require(newSet.length > 0, 'Validator set empty!');
 
         currentValidatorSet = newSet;
@@ -227,10 +221,15 @@ contract Validators is Params {
     function updateValidatorSetByStake(uint256 epoch)
         public
         onlyMiner
-        onlyNotUpdated
         onlyInitialized
         onlyBlockEpoch(epoch)
     {
+        // Check if validators have already been updated for this block
+        if (operationsDone[block.number][uint8(Operations.UpdateValidators)] == true) {
+            return; // Silently return to avoid consensus issues
+        }
+        
+        // Set updated flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.UpdateValidators)] = true;
         
         // Get top validators from staking contract
