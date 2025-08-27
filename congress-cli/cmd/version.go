@@ -9,8 +9,8 @@ import (
 
 // 版本信息常量
 const (
-	Version   = "1.2.0"
-	BuildDate = "202599-08-25"
+	Version   = "1.2.1"
+	BuildDate = "2025-08-27"
 )
 
 var versionCmd = &cobra.Command{
