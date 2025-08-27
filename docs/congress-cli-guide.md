@@ -1149,16 +1149,6 @@ echo "=== 步骤3: 验证结果 ==="
 ./build/congress-cli [command] --help  # 查看特定命令的帮助
 ```
 
-### 12.3 测试脚本
-
-项目包含测试脚本，可以快速验证系统状态：
-
-```shell
-cd sys-contract/congress-cli
-chmod +x test_congress.sh
-./test_congress.sh
-```
-
 ## 13. 注意事项
 
 ### 13.1 重要提醒
