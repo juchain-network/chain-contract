@@ -25,8 +25,14 @@ contract DeployToChainScript is Script {
      * @dev 主部署函数 - 部署所有合约并初始化
      */
     function run() external {
-        uint256 deployerPrivateKey = vm.envOr("PRIVATE_KEY", uint256(0));
-        require(deployerPrivateKey != 0, "PRIVATE_KEY environment variable not set");
+        // 支持多种私钥环境变量
+        uint256 deployerPrivateKey = vm.envOr("CHAIN_PRIVATE_KEY", vm.envOr("PRIVATE_KEY", uint256(0)));
+        
+        // 如果没有提供私钥，使用默认的 anvil 私钥
+        if (deployerPrivateKey == 0) {
+            deployerPrivateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+            console.log("Warning: Using default anvil private key");
+        }
         
         vm.startBroadcast(deployerPrivateKey);
         
@@ -56,7 +62,7 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 使用 CREATE2 部署所有合约
+     * @dev 部署所有合约 (使用普通部署而不是 CREATE2)
      */
     function deployAllContracts() internal returns (
         address validators,
@@ -64,26 +70,33 @@ contract DeployToChainScript is Script {
         address punish,
         address staking
     ) {
-        console.log("Deploying contracts with CREATE2...");
+        console.log("Deploying contracts...");
+        console.log("Current chain ID:", block.chainid);
+        console.log("Deployer address:", msg.sender);
+        console.log("Deployer balance:", msg.sender.balance);
         
         // 部署 Validators
         console.log("Deploying Validators...");
-        validators = deployWithCreate2(type(Validators).creationCode, SALT);
+        Validators validatorsContract = new Validators();
+        validators = address(validatorsContract);
         console.log("Validators deployed at:", validators);
 
         // 部署 Proposal
         console.log("Deploying Proposal...");
-        proposal = deployWithCreate2(type(Proposal).creationCode, SALT);
+        Proposal proposalContract = new Proposal();
+        proposal = address(proposalContract);
         console.log("Proposal deployed at:", proposal);
 
         // 部署 Punish
         console.log("Deploying Punish...");
-        punish = deployWithCreate2(type(Punish).creationCode, SALT);
+        Punish punishContract = new Punish();
+        punish = address(punishContract);
         console.log("Punish deployed at:", punish);
 
         // 部署 Staking
         console.log("Deploying Staking...");
-        staking = deployWithCreate2(type(Staking).creationCode, SALT);
+        Staking stakingContract = new Staking();
+        staking = address(stakingContract);
         console.log("Staking deployed at:", staking);
 
         console.log("=== All Contracts Deployed ===");
@@ -93,11 +106,25 @@ contract DeployToChainScript is Script {
      * @dev 使用 CREATE2 部署合约
      */
     function deployWithCreate2(bytes memory bytecode, bytes32 salt) internal returns (address) {
+        console.log("Deploying with CREATE2, bytecode length:", bytecode.length);
+        console.log("Salt:", vm.toString(salt));
+        
         address deployed;
         assembly {
             deployed := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
         }
+        
+        console.log("CREATE2 result:", deployed);
         require(deployed != address(0), "Failed to deploy contract with CREATE2");
+        
+        // 验证部署
+        uint256 size;
+        assembly {
+            size := extcodesize(deployed)
+        }
+        console.log("Deployed contract code size:", size);
+        require(size > 0, "Contract deployment failed - no code");
+        
         return deployed;
     }
 
