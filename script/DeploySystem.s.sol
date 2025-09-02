@@ -28,13 +28,9 @@ contract DeploySystemScript is Script {
     /**
      * @dev 主部署函数 - 部署所有合约并初始化
      */
-    function run() public {
-        uint256 deployerPrivateKey = vm.envOr("PRIVATE_KEY", uint256(0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80));
-        
-        vm.startBroadcast(deployerPrivateKey);
-
+    function run() external {
         console.log("=== Starting Unified Contract Deployment ===");
-
+        
         // 部署所有合约
         (address validators, address proposal, address punish, address staking) = deployAllContracts();
         
@@ -42,66 +38,53 @@ contract DeploySystemScript is Script {
         address[] memory initialValidators = createInitialValidators();
         
         // 初始化合约
-        initializeContracts(initialValidators);
+        initializeContracts(validators, proposal, punish, staking, initialValidators);
         
         // 检查系统状态
-        checkAndLogSystemStatus();
+        checkAndLogSystemStatus(validators, proposal, punish, staking);
         
         // 发出部署完成事件
         emit SystemDeployed(validators, proposal, punish, staking);
         
         console.log("=== Deployment Complete ===");
         logDeploymentSummary();
-
-        vm.stopBroadcast();
-    }
-
-    /**
+    }    /**
      * @dev 部署所有合约
      */
     function deployAllContracts() internal returns (
         address validators,
-        address proposal,
+        address proposal, 
         address punish,
         address staking
     ) {
         console.log("Deploying contracts...");
         
-        // 部署Validators
+        // 在固定地址部署合约 (使用 vm.etch 进行测试)
         console.log("Deploying Validators...");
-        Validators validatorsContract = new Validators();
-        validators = address(validatorsContract);
+        vm.etch(VALIDATOR_CONTRACT_ADDR, type(Validators).runtimeCode);
+        validators = VALIDATOR_CONTRACT_ADDR;
         console.log("Validators deployed at:", validators);
 
-        // 部署Proposal
         console.log("Deploying Proposal...");
-        Proposal proposalContract = new Proposal();
-        proposal = address(proposalContract);
+        vm.etch(PROPOSAL_CONTRACT_ADDR, type(Proposal).runtimeCode);
+        proposal = PROPOSAL_CONTRACT_ADDR;
         console.log("Proposal deployed at:", proposal);
 
-        // 部署Punish
         console.log("Deploying Punish...");
-        Punish punishContract = new Punish();
-        punish = address(punishContract);
+        vm.etch(PUNISH_CONTRACT_ADDR, type(Punish).runtimeCode);
+        punish = PUNISH_CONTRACT_ADDR;
         console.log("Punish deployed at:", punish);
 
-        // 部署Staking
         console.log("Deploying Staking...");
-        Staking stakingContract = new Staking();
-        staking = address(stakingContract);
+        vm.etch(STAKING_CONTRACT_ADDR, type(Staking).runtimeCode);
+        staking = STAKING_CONTRACT_ADDR;
         console.log("Staking deployed at:", staking);
 
-        // 使用etch将合约部署到预定义的系统地址
-        vm.etch(VALIDATOR_CONTRACT_ADDR, validators.code);
-        vm.etch(PUNISH_CONTRACT_ADDR, punish.code);
-        vm.etch(PROPOSAL_CONTRACT_ADDR, proposal.code);
-        vm.etch(STAKING_CONTRACT_ADDR, staking.code);
-
-        console.log("=== System Contracts Etched ===");
-        console.log("Validators at:", VALIDATOR_CONTRACT_ADDR);
-        console.log("Punish at:", PUNISH_CONTRACT_ADDR);
-        console.log("Proposal at:", PROPOSAL_CONTRACT_ADDR);
-        console.log("Staking at:", STAKING_CONTRACT_ADDR);
+        console.log("=== System Contracts Deployed ===");
+        console.log("Validators at:", validators);
+        console.log("Punish at:", punish);
+        console.log("Proposal at:", proposal);
+        console.log("Staking at:", staking);
     }
 
     /**
@@ -118,11 +101,17 @@ contract DeploySystemScript is Script {
     /**
      * @dev 初始化所有合约
      */
-    function initializeContracts(address[] memory initialValidators) internal {
+    function initializeContracts(
+        address validators,
+        address proposal, 
+        address punish,
+        address staking,
+        address[] memory initialValidators
+    ) internal {
         console.log("Initializing contracts...");
         
         // 尝试初始化Validators (如果未初始化)
-        try Validators(VALIDATOR_CONTRACT_ADDR).initialize(initialValidators) {
+        try Validators(validators).initialize(initialValidators) {
             console.log("Validators initialized successfully");
         } catch Error(string memory reason) {
             console.log("Validators initialization failed:", reason);
@@ -131,7 +120,7 @@ contract DeploySystemScript is Script {
         }
 
         // 尝试初始化Proposal (如果未初始化) 
-        try Proposal(PROPOSAL_CONTRACT_ADDR).initialize(initialValidators) {
+        try Proposal(proposal).initialize(initialValidators) {
             console.log("Proposal initialized successfully");
         } catch Error(string memory reason) {
             console.log("Proposal initialization failed:", reason);
@@ -140,7 +129,7 @@ contract DeploySystemScript is Script {
         }
 
         // 尝试初始化Punish
-        try Punish(PUNISH_CONTRACT_ADDR).initialize() {
+        try Punish(punish).initialize() {
             console.log("Punish initialized successfully");
         } catch Error(string memory reason) {
             console.log("Punish initialization failed:", reason);
@@ -149,7 +138,7 @@ contract DeploySystemScript is Script {
         }
 
         // 尝试初始化Staking
-        try Staking(STAKING_CONTRACT_ADDR).initialize() {
+        try Staking(staking).initialize() {
             console.log("Staking initialized successfully");
         } catch Error(string memory reason) {
             console.log("Staking initialization failed:", reason);
@@ -163,11 +152,16 @@ contract DeploySystemScript is Script {
     /**
      * @dev 检查并记录系统状态
      */
-    function checkAndLogSystemStatus() internal view {
+    function checkAndLogSystemStatus(
+        address validators,
+        address proposal,
+        address punish,
+        address staking
+    ) internal view {
         console.log("=== System Status Check ===");
         
         // 检查验证器状态
-        try Validators(VALIDATOR_CONTRACT_ADDR).getActiveValidators() returns (address[] memory active) {
+        try Validators(validators).getActiveValidators() returns (address[] memory active) {
             console.log("Active validators count:", active.length);
             for (uint i = 0; i < active.length && i < 5; i++) {
                 console.log("Validator", i, ":", active[i]);
@@ -177,14 +171,14 @@ contract DeploySystemScript is Script {
         }
         
         // 检查提案配置
-        try Proposal(PROPOSAL_CONTRACT_ADDR).proposalLastingPeriod() returns (uint256 period) {
+        try Proposal(proposal).proposalLastingPeriod() returns (uint256 period) {
             console.log("Proposal lasting period:", period);
         } catch {
             console.log("Failed to get proposal period");
         }
         
         // 检查接收地址
-        try Proposal(PROPOSAL_CONTRACT_ADDR).receiverAddr() returns (address receiver) {
+        try Proposal(proposal).receiverAddr() returns (address receiver) {
             console.log("Receiver address:", receiver);
         } catch {
             console.log("Failed to get receiver address");
@@ -199,6 +193,7 @@ contract DeploySystemScript is Script {
         console.log("  Validators:", VALIDATOR_CONTRACT_ADDR);
         console.log("  Proposal:", PROPOSAL_CONTRACT_ADDR);
         console.log("  Punish:", PUNISH_CONTRACT_ADDR);
+        console.log("  Staking:", STAKING_CONTRACT_ADDR);
     }
 
     /**

@@ -6,7 +6,7 @@ import {Validators} from "../contracts/Validators.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 import {Punish} from "../contracts/Punish.sol";
 
-// 完整的奖励分发测试，对应 test/reward.js 
+// 完整的奖励分发测试
 contract RewardFoundryTest is BaseSetup {
 
     address v1; address v2; address v3;
@@ -21,6 +21,8 @@ contract RewardFoundryTest is BaseSetup {
         deploySystem(initVals);
         miner = v1; // 模拟 coinbase
         vm.coinbase(miner);
+        // Give miner enough ETH for testing
+        vm.deal(miner, 100 ether);
     }
 
     function testRewardEquallyDistributedNoStake() public {
