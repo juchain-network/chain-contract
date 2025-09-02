@@ -2,8 +2,8 @@
 
 pragma solidity ^0.8.20;
 
-import './Params.sol';
-import './library/SafeMath.sol';
+import {Params} from './Params.sol';
+import {SafeMath} from './library/SafeMath.sol';
 
 // Interface for Validators contract to avoid circular dependency
 interface IValidators {
@@ -104,7 +104,7 @@ contract Staking is Params {
     }
 
     function initialize() external onlyNotInitialized {
-        validatorsContract = IValidators(ValidatorContractAddr);
+        validatorsContract = IValidators(VALIDATOR_CONTRACT_ADDR);
         initialized = true;
     }
 

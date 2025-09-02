@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {BaseSetup} from "../test/BaseSetup.t.sol";
+import {Script} from "lib/forge-std/src/Script.sol";
+import {Test} from "lib/forge-std/src/Test.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
 
 // 端到端脚本：创建提案 + 多个验证者投票 + 检查结果
-contract EndToEndProposalScript is BaseSetup {
+contract EndToEndProposalScript is Script, Test {
+    
+    // Fixed system addresses (consistent with deployment)
+    address constant VALIDATORS = 0x000000000000000000000000000000000000f000;
+    address constant PUNISH = 0x000000000000000000000000000000000000F001;
+    address constant PROPOSAL = 0x000000000000000000000000000000000000F002;
+    address constant STAKING = 0x000000000000000000000000000000000000F003;
     
     event ProposalCreated(bytes32 indexed id, address proposer, address target, bool flag);
     event VoteCast(bytes32 indexed id, address voter, bool vote);

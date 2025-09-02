@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {BaseSetup} from "../test/BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
-import {Validators} from "../contracts/Validators.sol";
 
 // Minimal script without forge-std dependency; uses BaseSetup helpers for addresses only.
 contract AddNewNodeScript is BaseSetup {

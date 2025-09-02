@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import '../Proposal.sol';
+import {Proposal} from '../Proposal.sol';
 
 contract MockValidators {
     address[] vals;

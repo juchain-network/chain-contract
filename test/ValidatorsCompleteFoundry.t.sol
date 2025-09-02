@@ -10,8 +10,8 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
 
     address v1; address v2; address v3;
     address miner;
-    uint256 constant Active = 1;
-    uint256 constant Jailed = 2;
+    uint256 constant ACTIVE = 1;
+    uint256 constant JAILED = 2;
 
     function setUp() public {
         v1 = makeAddr("v1");
@@ -90,7 +90,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // 检查状态
         (, Validators.Status status,,,) = Validators(VALIDATORS).getValidatorInfo(validator);
-        require(uint256(status) == Active, "validator should be active");
+        require(uint256(status) == ACTIVE, "validator should be active");
     }
 
     function testEditValidatorInfo() public {

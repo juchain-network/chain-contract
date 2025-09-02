@@ -2,10 +2,10 @@
 pragma solidity 0.8.20;
 
 import {Script, console} from "lib/forge-std/src/Script.sol";
-import "../contracts/Validators.sol";
-import "../contracts/Proposal.sol";
-import "../contracts/Punish.sol";
-import "../contracts/Staking.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Punish} from "../contracts/Punish.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 /**
  * @title DeploySystemScript
@@ -275,11 +275,11 @@ contract DeploySystemScript is Script {
         address payable feeAddr,
         uint256 status,
         uint256 aacIncoming,
-        uint256 totalJailedHB,
+        uint256 totalJailedHb,
         uint256 lastWithdrawProfitsBlock
     ) {
         Validators.Status statusEnum;
-        (feeAddr, statusEnum, aacIncoming, totalJailedHB, lastWithdrawProfitsBlock) = 
+        (feeAddr, statusEnum, aacIncoming, totalJailedHb, lastWithdrawProfitsBlock) = 
             Validators(VALIDATOR_CONTRACT_ADDR).getValidatorInfo(validator);
         status = uint256(statusEnum);
     }

@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
-import {Validators} from "../contracts/Validators.sol";
 
 // 补充缺失的 Proposal 测试用例
 contract ProposalMissingFoundryTest is BaseSetup {
