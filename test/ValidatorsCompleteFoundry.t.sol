@@ -22,6 +22,8 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         deploySystem(initVals);
         miner = v1;
         vm.coinbase(miner);
+        // Give miner enough ETH for testing
+        vm.deal(miner, 100 ether);
     }
 
     function testCanOnlyInitOnce() public {

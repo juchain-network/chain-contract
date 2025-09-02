@@ -19,6 +19,8 @@ contract ValidatorsFoundryTest is BaseSetup {
         deploySystem(initVals);
         miner = v1; // simulate coinbase
         vm.coinbase(miner);
+        // Give miner enough ETH for testing
+        vm.deal(miner, 100 ether);
     }
 
     function testDistributeBlockRewardEqually() public {
