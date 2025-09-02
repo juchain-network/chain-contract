@@ -25,7 +25,7 @@ YELLOW = \033[1;33m
 RED = \033[0;31m
 NC = \033[0m # No Color
 
-.PHONY: help clean build test anvil deploy scripts test-scripts all check-anvil check-contracts stop-anvil reset-anvil deploy-chain deploy-mainnet deploy-sepolia deploy-bsc deploy-bsc-testnet deploy-polygon deploy-mumbai verify-contract
+.PHONY: help clean build test anvil deploy scripts test-scripts all check-anvil check-contracts stop-anvil reset-anvil deploy-chain deploy-chain-local deploy-mainnet deploy-sepolia deploy-bsc deploy-bsc-testnet deploy-polygon deploy-mumbai verify-contract
 
 # Default target
 help:
@@ -40,6 +40,8 @@ help:
 	@echo "  $(GREEN)all$(NC)           - Clean + build + test"
 	@echo ""
 	@echo "$(YELLOW)Chain deployment targets:$(NC)"
+	@echo "  $(GREEN)deploy-chain-202599$(NC) - Deploy using DeployToChain script to JuChain (202599)"
+	@echo "  $(GREEN)deploy-chain-local$(NC) - Deploy using DeployToChain script to local anvil"
 	@echo "  $(GREEN)deploy-chain$(NC)     - Deploy to custom RPC (use CHAIN_RPC_URL and CHAIN_PRIVATE_KEY)"
 	@echo "  $(GREEN)deploy-juchain$(NC)   - Deploy to JuChain mainnet"
 	@echo "  $(GREEN)deploy-juchain-testnet$(NC) - Deploy to JuChain testnet"
@@ -322,6 +324,18 @@ version:
 # ======================================
 # Chain Deployment Targets
 # ======================================
+
+# Deploy to current chain (JuChain 202599) using DeployToChain script
+deploy-chain-local:
+	@echo "$(YELLOW)Deploying contracts to JuChain (202599) using DeployToChain script...$(NC)"
+	@echo "$(GREEN)RPC URL: http://localhost:8545$(NC)"
+	@echo "$(GREEN)Chain ID: 202599$(NC)"
+	@PRIVATE_KEY=$(PRIVATE_KEY) forge script script/DeployToChain.s.sol:DeployToChainScript \
+		--rpc-url http://localhost:8545 \
+		--broadcast \
+		--gas-price 1000000000 \
+		--legacy \
+		-vv
 
 # Deploy to custom chain (specify CHAIN_RPC_URL and CHAIN_PRIVATE_KEY)
 deploy-chain:
