@@ -8,13 +8,13 @@ contract Params {
     
     // System contracts
     address
-        public constant ValidatorContractAddr = 0x000000000000000000000000000000000000f000;
+        public constant VALIDATOR_CONTRACT_ADDR = 0x000000000000000000000000000000000000f000;
     address
-        public constant PunishContractAddr = 0x000000000000000000000000000000000000F001;
+        public constant PUNISH_CONTRACT_ADDR = 0x000000000000000000000000000000000000F001;
     address
-        public constant ProposalAddr = 0x000000000000000000000000000000000000F002;
+        public constant PROPOSAL_ADDR = 0x000000000000000000000000000000000000F002;
     address
-        public constant StakingContractAddr = 0x000000000000000000000000000000000000F003;
+        public constant STAKING_CONTRACT_ADDR = 0x000000000000000000000000000000000000F003;
 
     
 
@@ -39,7 +39,7 @@ contract Params {
     }
 
     modifier onlyPunishContract() {
-        require(msg.sender == PunishContractAddr, "Punish contract only");
+        require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
         _;
     }
 
@@ -50,7 +50,7 @@ contract Params {
 
     modifier onlyValidatorsContract() {
         require(
-            msg.sender == ValidatorContractAddr,
+            msg.sender == VALIDATOR_CONTRACT_ADDR,
             "Validators contract only"
         );
         _;
@@ -58,7 +58,7 @@ contract Params {
 
     modifier onlyProposalContract() {
         require(
-            msg.sender == ProposalAddr,
+            msg.sender == PROPOSAL_ADDR,
             "Proposal contract only"
         );
         _;
@@ -66,7 +66,7 @@ contract Params {
 
     modifier onlyStakingContract() {
         require(
-            msg.sender == StakingContractAddr,
+            msg.sender == STAKING_CONTRACT_ADDR,
             "Staking contract only"
         );
         _;

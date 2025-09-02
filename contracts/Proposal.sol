@@ -2,8 +2,8 @@
 
 pragma solidity ^0.8.20;
 
-import './Params.sol';
-import './Validators.sol';
+import {Params} from './Params.sol';
+import {Validators} from './Validators.sol';
 
 contract Proposal is Params {
     // How long a proposal will exist
@@ -82,7 +82,7 @@ contract Proposal is Params {
     }
 
     function initialize(address[] calldata vals) external onlyNotInitialized {
-        validators = Validators(ValidatorContractAddr);
+        validators = Validators(VALIDATOR_CONTRACT_ADDR);
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
             pass[vals[i]] = true;

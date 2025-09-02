@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.20;
 
-import './Params.sol';
-import './Validators.sol';
-import './Proposal.sol';
+import {Params} from './Params.sol';
+import {Validators} from './Validators.sol';
+import {Proposal} from './Proposal.sol';
 
 contract Punish is Params {
     struct PunishRecord {
@@ -36,8 +36,8 @@ contract Punish is Params {
     }
 
     function initialize() external onlyNotInitialized {
-        validators = Validators(ValidatorContractAddr);
-        proposal = Proposal(ProposalAddr);
+        validators = Validators(VALIDATOR_CONTRACT_ADDR);
+        proposal = Proposal(PROPOSAL_ADDR);
 
         initialized = true;
     }

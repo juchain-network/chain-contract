@@ -29,7 +29,7 @@ contract RewardFoundryTest is BaseSetup {
         vm.prank(miner);
         Validators(VALIDATORS).distributeBlockReward{value: reward}();
 
-        uint256 remain = reward - (reward / 3) * 3;
+        uint256 remain = reward % 3;
 
         for (uint i = 0; i < 3; i++) {
             address val = i == 0 ? v1 : (i == 1 ? v2 : v3);

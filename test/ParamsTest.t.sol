@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
-import "../contracts/Params.sol";
+import {Test} from "forge-std/Test.sol";
+import {Params} from "../contracts/Params.sol";
 
 contract TestableParams is Params {
     // Helper functions for testing modifiers - not auto-run tests
@@ -51,10 +51,10 @@ contract ParamsTest is Test {
     }
     
     function testConstants() public view {
-        assertEq(params.ValidatorContractAddr(), 0x000000000000000000000000000000000000f000);
-        assertEq(params.PunishContractAddr(), 0x000000000000000000000000000000000000F001);
-        assertEq(params.ProposalAddr(), 0x000000000000000000000000000000000000F002);
-        assertEq(params.StakingContractAddr(), 0x000000000000000000000000000000000000F003);
+        assertEq(params.VALIDATOR_CONTRACT_ADDR(), 0x000000000000000000000000000000000000f000);
+        assertEq(params.PUNISH_CONTRACT_ADDR(), 0x000000000000000000000000000000000000F001);
+        assertEq(params.PROPOSAL_ADDR(), 0x000000000000000000000000000000000000F002);
+        assertEq(params.STAKING_CONTRACT_ADDR(), 0x000000000000000000000000000000000000F003);
     }
     
     function testInitialState() public view {
@@ -96,7 +96,7 @@ contract ParamsTest is Test {
     }
     
     function testOnlyPunishContractModifier() public {
-        vm.prank(params.PunishContractAddr());
+        vm.prank(params.PUNISH_CONTRACT_ADDR());
         assertTrue(params.callOnlyPunishContract());
         
         vm.prank(address(0x123));
@@ -105,7 +105,7 @@ contract ParamsTest is Test {
     }
     
     function testOnlyValidatorsContractModifier() public {
-        vm.prank(params.ValidatorContractAddr());
+        vm.prank(params.VALIDATOR_CONTRACT_ADDR());
         assertTrue(params.callOnlyValidatorsContract());
         
         vm.prank(address(0x123));
@@ -114,7 +114,7 @@ contract ParamsTest is Test {
     }
     
     function testOnlyProposalContractModifier() public {
-        vm.prank(params.ProposalAddr());
+        vm.prank(params.PROPOSAL_ADDR());
         assertTrue(params.callOnlyProposalContract());
         
         vm.prank(address(0x123));
@@ -123,7 +123,7 @@ contract ParamsTest is Test {
     }
     
     function testOnlyStakingContractModifier() public {
-        vm.prank(params.StakingContractAddr());
+        vm.prank(params.STAKING_CONTRACT_ADDR());
         assertTrue(params.callOnlyStakingContract());
         
         vm.prank(address(0x123));

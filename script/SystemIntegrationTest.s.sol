@@ -2,10 +2,9 @@
 pragma solidity 0.8.20;
 
 import {Script, console} from "lib/forge-std/src/Script.sol";
-import "../contracts/Validators.sol";
-import "../contracts/Proposal.sol";
-import "../contracts/Punish.sol";
-import "../contracts/Staking.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 /**
  * @title SystemIntegrationTest

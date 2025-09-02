@@ -2,11 +2,11 @@
 
 pragma solidity ^0.8.20;
 
-import './Params.sol';
-import './Proposal.sol';
-import './Punish.sol';
-import './Staking.sol';
-import './library/SafeMath.sol';
+import {Params} from './Params.sol';
+import {Proposal} from './Proposal.sol';
+import {Punish} from './Punish.sol';
+import {Staking} from './Staking.sol';
+import {SafeMath} from './library/SafeMath.sol';
 
 contract Validators is Params {
     using SafeMath for uint256;
@@ -33,7 +33,7 @@ contract Validators is Params {
         Status status;
         Description description;
         uint256 aacIncoming;
-        uint256 totalJailedHB;
+        uint256 totalJailedHb;
         uint256 lastWithdrawProfitsBlock;
     }
 
@@ -44,7 +44,7 @@ contract Validators is Params {
     // highest validator set(dynamic changed)
     address[] public highestValidatorsSet;
     // total jailed hb
-    uint256 public totalJailedHB;
+    uint256 public totalJailedHb;
 
     // System contracts
     Proposal proposal;
@@ -79,9 +79,9 @@ contract Validators is Params {
     }
 
     function initialize(address[] calldata vals) external onlyNotInitialized {
-        proposal = Proposal(ProposalAddr);
-        punish = Punish(PunishContractAddr);
-        staking = Staking(StakingContractAddr);
+        proposal = Proposal(PROPOSAL_ADDR);
+        punish = Punish(PUNISH_CONTRACT_ADDR);
+        staking = Staking(STAKING_CONTRACT_ADDR);
 
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
@@ -308,7 +308,7 @@ contract Validators is Params {
     {
         Validator memory v = validatorInfo[val];
 
-        return (v.feeAddr, v.status, v.aacIncoming, v.totalJailedHB, v.lastWithdrawProfitsBlock);
+        return (v.feeAddr, v.status, v.aacIncoming, v.totalJailedHb, v.lastWithdrawProfitsBlock);
     }
 
     function getActiveValidators() public view returns (address[] memory) {
@@ -377,8 +377,8 @@ contract Validators is Params {
         if (hb > 0) {
             addProfitsToActiveValidators(hb, val);
             // for display purpose
-            totalJailedHB = totalJailedHB.add(hb);
-            validatorInfo[val].totalJailedHB = validatorInfo[val].totalJailedHB.add(hb);
+            totalJailedHb = totalJailedHb.add(hb);
+            validatorInfo[val].totalJailedHb = validatorInfo[val].totalJailedHb.add(hb);
 
             validatorInfo[val].aacIncoming = 0;
         }
