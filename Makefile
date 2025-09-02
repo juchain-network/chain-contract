@@ -7,6 +7,15 @@ ANVIL_CHAIN_ID = 31337
 PRIVATE_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 RPC_URL = http://localhost:$(ANVIL_PORT)
 
+# Chain deployment variables (can be overridden)
+CHAIN_RPC_URL ?= $(RPC_URL)
+CHAIN_PRIVATE_KEY ?= $(PRIVATE_KEY)
+CHAIN_ID ?= $(ANVIL_CHAIN_ID)
+
+# Common network configurations
+JUCHAIN_MAINNET_RPC_URL = https://rpc.juchain.org
+JUCHAIN_TESTNET_RPC_URL = https://testnet-rpc.juchain.org
+
 # Default validators for initialization
 VALIDATORS = [0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266,0x70997970C51812dc3A010C7d01b50e0d17dc79C8,0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC]
 
@@ -16,7 +25,7 @@ YELLOW = \033[1;33m
 RED = \033[0;31m
 NC = \033[0m # No Color
 
-.PHONY: help clean build test anvil deploy scripts test-scripts all check-anvil check-contracts stop-anvil reset-anvil
+.PHONY: help clean build test anvil deploy scripts test-scripts all check-anvil check-contracts stop-anvil reset-anvil deploy-chain deploy-mainnet deploy-sepolia deploy-bsc deploy-bsc-testnet deploy-polygon deploy-mumbai verify-contract
 
 # Default target
 help:
@@ -29,6 +38,12 @@ help:
 	@echo "  $(GREEN)scripts$(NC)       - Test all scripts on local anvil"
 	@echo "  $(GREEN)test-scripts$(NC)  - Full workflow: anvil + deploy + test scripts"
 	@echo "  $(GREEN)all$(NC)           - Clean + build + test"
+	@echo ""
+	@echo "$(YELLOW)Chain deployment targets:$(NC)"
+	@echo "  $(GREEN)deploy-chain$(NC)     - Deploy to custom RPC (use CHAIN_RPC_URL and CHAIN_PRIVATE_KEY)"
+	@echo "  $(GREEN)deploy-juchain$(NC)   - Deploy to JuChain mainnet"
+	@echo "  $(GREEN)deploy-juchain-testnet$(NC) - Deploy to JuChain testnet"
+	@echo "  $(GREEN)verify-contract$(NC)  - Verify deployed contracts"
 	@echo ""
 	@echo "$(YELLOW)Utility targets:$(NC)"
 	@echo "  $(GREEN)check-anvil$(NC)      - Check if anvil is running"
@@ -303,3 +318,85 @@ version:
 	@echo ""
 	@echo "$(YELLOW)Dependencies:$(NC)"
 	@forge tree --no-dedupe
+
+# ======================================
+# Chain Deployment Targets
+# ======================================
+
+# Deploy to custom chain (specify CHAIN_RPC_URL and CHAIN_PRIVATE_KEY)
+deploy-chain:
+	@echo "$(YELLOW)Deploying contracts to custom chain...$(NC)"
+	@echo "$(GREEN)RPC URL: $(CHAIN_RPC_URL)$(NC)"
+	@if [ "$(CHAIN_PRIVATE_KEY)" = "$(PRIVATE_KEY)" ]; then \
+		echo "$(RED)Warning: Using default private key. Set CHAIN_PRIVATE_KEY environment variable.$(NC)"; \
+	fi
+	@if [ -n "$(ETHERSCAN_API_KEY)" ]; then \
+		forge script script/DeployToChain.s.sol:DeployToChainScript \
+			--rpc-url $(CHAIN_RPC_URL) \
+			--broadcast \
+			--private-key $(CHAIN_PRIVATE_KEY) \
+			--verify \
+			--etherscan-api-key $(ETHERSCAN_API_KEY) \
+			-vvv || echo "$(YELLOW)Note: Deployment may have failed - check logs$(NC)"; \
+	else \
+		echo "$(YELLOW)No ETHERSCAN_API_KEY provided, deploying without verification$(NC)"; \
+		forge script script/DeployToChain.s.sol:DeployToChainScript \
+			--rpc-url $(CHAIN_RPC_URL) \
+			--broadcast \
+			--private-key $(CHAIN_PRIVATE_KEY) \
+			-vvv || echo "$(YELLOW)Note: Deployment may have failed - check logs$(NC)"; \
+	fi
+
+# Deploy to JuChain mainnet
+deploy-juchain:
+	@echo "$(YELLOW)Deploying to JuChain Mainnet...$(NC)"
+	@echo "$(RED)WARNING: This will deploy to JUCHAIN MAINNET. Are you sure? [y/N]$(NC)" && read ans && [ $${ans:-N} = y ]
+	@make deploy-chain CHAIN_RPC_URL=$(JUCHAIN_MAINNET_RPC_URL) CHAIN_ID=210000
+
+# Deploy to JuChain testnet
+deploy-juchain-testnet:
+	@echo "$(YELLOW)Deploying to JuChain Testnet...$(NC)"
+	@make deploy-chain CHAIN_RPC_URL=$(JUCHAIN_TESTNET_RPC_URL) CHAIN_ID=202599
+
+# Verify contracts on Etherscan
+verify-contract:
+	@echo "$(YELLOW)Verifying contracts...$(NC)"
+	@if [ -z "$(CONTRACT_ADDRESS)" ]; then \
+		echo "$(RED)Error: CONTRACT_ADDRESS not specified$(NC)"; \
+		echo "Usage: make verify-contract CONTRACT_ADDRESS=0x... CONTRACT_NAME=ContractName"; \
+		exit 1; \
+	fi
+	@if [ -z "$(CONTRACT_NAME)" ]; then \
+		echo "$(RED)Error: CONTRACT_NAME not specified$(NC)"; \
+		echo "Usage: make verify-contract CONTRACT_ADDRESS=0x... CONTRACT_NAME=ContractName"; \
+		exit 1; \
+	fi
+	@forge verify-contract $(CONTRACT_ADDRESS) \
+		contracts/$(CONTRACT_NAME).sol:$(CONTRACT_NAME) \
+		--rpc-url $(CHAIN_RPC_URL) \
+		--etherscan-api-key $(ETHERSCAN_API_KEY) \
+		--compiler-version 0.8.20
+
+# Show deployment help
+deploy-help:
+	@echo "$(YELLOW)Chain Deployment Help:$(NC)"
+	@echo ""
+	@echo "$(GREEN)Environment Variables:$(NC)"
+	@echo "  CHAIN_RPC_URL     - RPC URL for target chain"
+	@echo "  CHAIN_PRIVATE_KEY - Private key for deployment"
+	@echo "  ETHERSCAN_API_KEY - API key for contract verification"
+	@echo ""
+	@echo "$(GREEN)Examples:$(NC)"
+	@echo "  # Deploy to custom chain:"
+	@echo "  CHAIN_RPC_URL=https://your-rpc.com CHAIN_PRIVATE_KEY=0x... make deploy-chain"
+	@echo ""
+	@echo "  # Deploy to JuChain testnet:"
+	@echo "  CHAIN_PRIVATE_KEY=0x... make deploy-juchain-testnet"
+	@echo ""
+	@echo "  # Deploy to JuChain mainnet:"
+	@echo "  CHAIN_PRIVATE_KEY=0x... make deploy-juchain"
+	@echo ""
+	@echo "  # Verify contract:"
+	@echo "  CONTRACT_ADDRESS=0x... CONTRACT_NAME=Validators make verify-contract"
+	@echo ""
+	@echo "$(YELLOW)Note: Make sure to set CHAIN_PRIVATE_KEY environment variable for real deployments$(NC)"
