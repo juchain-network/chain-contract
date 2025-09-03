@@ -55,9 +55,8 @@ contract DeployToChainScript is Script {
         
         vm.stopBroadcast();
         
-        // 自动注册验证者到 Staking 合约并质押 10000 JU
-        console.log("=== Registering validators to Staking contract ===");
-        registerValidatorsToStaking(staking, initialValidators);
+        // Validators are now pre-registered during Staking initialization
+        console.log("=== Validators pre-registered during Staking initialization ===");
         
         // 发出部署完成事件
         emit SystemDeployed(validators, proposal, punish, staking);
@@ -204,10 +203,12 @@ contract DeployToChainScript is Script {
         
         // 按依赖关系正确初始化合约
         
-        // 1. 初始化 Staking (传入 validators 地址)
-        console.log("Initializing Staking...");
-        Staking(staking).initialize(validators);
-        console.log("Staking initialized successfully");
+        // 1. 初始化 Staking (传入 validators 地址和初始验证者，直接预注册)
+        console.log("Initializing Staking with pre-registered validators...");
+        uint256 defaultCommissionRate = 500; // 5% 佣金率
+        Staking(staking).initializeWithValidators(validators, initialValidators, defaultCommissionRate);
+        console.log("Staking initialized with", initialValidators.length, "pre-registered validators");
+        console.log("Default commission rate: 5%");
 
         // 2. 初始化 Proposal (传入 validators 地址)
         console.log("Initializing Proposal...");

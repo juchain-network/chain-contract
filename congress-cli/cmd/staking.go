@@ -48,9 +48,9 @@ func registerValidatorCmd() *cobra.Command {
 	cmd.Flags().String("stake-amount", "", "Amount of JU to stake (required, minimum 10000)")
 	cmd.Flags().String("commission-rate", "", "Commission rate in basis points (0-10000, e.g., 500 = 5%)")
 
-	cmd.MarkFlagRequired("proposer")
-	cmd.MarkFlagRequired("stake-amount")
-	cmd.MarkFlagRequired("commission-rate")
+	_ = cmd.MarkFlagRequired("proposer")
+	_ = cmd.MarkFlagRequired("stake-amount")
+	_ = cmd.MarkFlagRequired("commission-rate")
 
 	return cmd
 }
@@ -72,8 +72,8 @@ func editValidatorCmd() *cobra.Command {
 	cmd.Flags().String("email", "", "Validator contact email")
 	cmd.Flags().String("details", "", "Validator description details")
 
-	cmd.MarkFlagRequired("validator")
-	cmd.MarkFlagRequired("fee-addr")
+	_ = cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("fee-addr")
 
 	return cmd
 }
@@ -91,9 +91,9 @@ func delegateCmd() *cobra.Command {
 	cmd.Flags().String("validator", "", "Validator address to delegate to (required)")
 	cmd.Flags().String("amount", "", "Amount of JU to delegate (required, minimum 1)")
 
-	cmd.MarkFlagRequired("delegator")
-	cmd.MarkFlagRequired("validator")
-	cmd.MarkFlagRequired("amount")
+	_ = cmd.MarkFlagRequired("delegator")
+	_ = cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("amount")
 
 	return cmd
 }
@@ -111,9 +111,9 @@ func undelegateCmd() *cobra.Command {
 	cmd.Flags().String("validator", "", "Validator address to undelegate from (required)")
 	cmd.Flags().String("amount", "", "Amount of JU to undelegate (required)")
 
-	cmd.MarkFlagRequired("delegator")
-	cmd.MarkFlagRequired("validator")
-	cmd.MarkFlagRequired("amount")
+	_ = cmd.MarkFlagRequired("delegator")
+	_ = cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("amount")
 
 	return cmd
 }
@@ -130,8 +130,8 @@ func claimRewardsCmd() *cobra.Command {
 	cmd.Flags().String("claimer", "", "Claimer address (required)")
 	cmd.Flags().String("validator", "", "Validator address to claim rewards from (required)")
 
-	cmd.MarkFlagRequired("claimer")
-	cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("claimer")
+	_ = cmd.MarkFlagRequired("validator")
 
 	return cmd
 }
@@ -146,7 +146,7 @@ func queryValidatorCmd() *cobra.Command {
 	}
 
 	cmd.Flags().String("address", "", "Validator address to query (required)")
-	cmd.MarkFlagRequired("address")
+	_ = cmd.MarkFlagRequired("address")
 
 	return cmd
 }
@@ -163,8 +163,8 @@ func queryDelegationCmd() *cobra.Command {
 	cmd.Flags().String("delegator", "", "Delegator address (required)")
 	cmd.Flags().String("validator", "", "Validator address (required)")
 
-	cmd.MarkFlagRequired("delegator")
-	cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("delegator")
+	_ = cmd.MarkFlagRequired("validator")
 
 	return cmd
 }
@@ -329,7 +329,7 @@ func innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, websi
 		return fmt.Errorf("failed to pack createOrEditValidator data: %w", err)
 	}
 
-	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(ValidatorsContractAddr), big.NewInt(0), abiData, rpc, EditValidatorFile)
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(ValidatorContractAddr), big.NewInt(0), abiData, rpc, EditValidatorFile)
 	if err != nil {
 		return fmt.Errorf("failed to create raw transaction: %w", err)
 	}

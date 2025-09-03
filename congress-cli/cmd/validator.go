@@ -38,7 +38,7 @@ func listValidators(cmd *cobra.Command, _ []string) {
 	defer client.Close()
 
 	// 获取validator信息
-	contractAddress := common.HexToAddress(validatorAddr)
+	contractAddress := common.HexToAddress(ValidatorContractAddr)
 	instance, err := generated.NewValidators(contractAddress, client)
 	if err != nil {
 		PrintError("Failed to instantiate validator contract", err)
@@ -101,7 +101,7 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 	}
 	defer client.Close()
 
-	contractAddress := common.HexToAddress(validatorAddr)
+	contractAddress := common.HexToAddress(ValidatorContractAddr)
 	instance, err := generated.NewValidators(contractAddress, client)
 	if err != nil {
 		PrintError("Failed to instantiate validator contract", err)
@@ -190,7 +190,7 @@ func innerValidatorClaim(addr string, rpc string) error {
 		return fmt.Errorf("failed to pack withdrawProfits data: %w", err)
 	}
 
-	err = CreateRawTx(common.HexToAddress(addr), common.HexToAddress(validatorAddr), nil, abiData, rpc, WithdrawProfitsFile)
+	err = CreateRawTx(common.HexToAddress(addr), common.HexToAddress(ValidatorContractAddr), nil, abiData, rpc, WithdrawProfitsFile)
 	if err != nil {
 		return fmt.Errorf("failed to create withdraw transaction: %w", err)
 	}
