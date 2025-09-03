@@ -29,7 +29,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     function testCanOnlyInitOnce() public {
         // 对应 "can only init once"
         bytes memory err;
-        try Validators(VALIDATORS).initialize(new address[](0)) { 
+        try Validators(VALIDATORS).initialize(new address[](0), address(0xCAFE), address(0xBEEF), address(0xDEAD)) { 
             revert("should revert"); 
         } catch (bytes memory e) { 
             err = e; 

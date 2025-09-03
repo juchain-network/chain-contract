@@ -22,10 +22,10 @@ abstract contract BaseSetup is Test {
         vm.etch(PROPOSAL, type(Proposal).runtimeCode);
         vm.etch(STAKING, type(Staking).runtimeCode);
 
-        // initialize with provided validators
-        Proposal(PROPOSAL).initialize(initVals);
-        Validators(VALIDATORS).initialize(initVals);
-        Punish(PUNISH).initialize();
-        Staking(STAKING).initialize();
+        // initialize with provided validators - use actual addresses
+        Staking(STAKING).initialize(VALIDATORS);
+        Proposal(PROPOSAL).initialize(initVals, VALIDATORS);
+        Punish(PUNISH).initialize(VALIDATORS, PROPOSAL);
+        Validators(VALIDATORS).initialize(initVals, PROPOSAL, PUNISH, STAKING);
     }
 }

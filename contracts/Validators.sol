@@ -78,10 +78,19 @@ contract Validators is Params {
         _;
     }
 
-    function initialize(address[] calldata vals) external onlyNotInitialized {
-        proposal = Proposal(PROPOSAL_ADDR);
-        punish = Punish(PUNISH_CONTRACT_ADDR);
-        staking = Staking(STAKING_CONTRACT_ADDR);
+    function initialize(
+        address[] calldata vals,
+        address _proposal,
+        address _punish,
+        address _staking
+    ) external onlyNotInitialized {
+        require(_proposal != address(0), "Invalid proposal address");
+        require(_punish != address(0), "Invalid punish address");
+        require(_staking != address(0), "Invalid staking address");
+        
+        proposal = Proposal(_proposal);
+        punish = Punish(_punish);
+        staking = Staking(_staking);
 
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');

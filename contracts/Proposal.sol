@@ -81,8 +81,13 @@ contract Proposal is Params {
         _;
     }
 
-    function initialize(address[] calldata vals) external onlyNotInitialized {
-        validators = Validators(VALIDATOR_CONTRACT_ADDR);
+    function initialize(
+        address[] calldata vals,
+        address _validators
+    ) external onlyNotInitialized {
+        require(_validators != address(0), "Invalid validators address");
+        
+        validators = Validators(_validators);
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
             pass[vals[i]] = true;

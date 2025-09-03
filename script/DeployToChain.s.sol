@@ -34,11 +34,15 @@ contract DeployToChainScript is Script {
             console.log("Warning: Using default anvil private key");
         }
         
+        // 设置交易参数 - 处理gas问题
+        vm.txGasPrice(1000000000); // 1 gwei
+        
         vm.startBroadcast(deployerPrivateKey);
         
         console.log("=== Starting Chain Deployment ===");
         console.log("Deployer:", vm.addr(deployerPrivateKey));
         console.log("Chain ID:", block.chainid);
+        console.log("Gas Price:", tx.gasprice);
         
         // 部署所有合约到确定性地址
         (address validators, address proposal, address punish, address staking) = deployAllContracts();
@@ -177,7 +181,7 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 初始化所有合约
+     * @dev 初始化所有合约 - 使用实际部署的合约地址
      */
     function initializeContracts(
         address validators, 
@@ -186,27 +190,38 @@ contract DeployToChainScript is Script {
         address staking,
         address[] memory initialValidators
     ) internal {
-        console.log("Initializing contracts...");
+        console.log("Initializing contracts with actual deployed addresses...");
         
-        // 初始化Validators
-        console.log("Initializing Validators...");
-        Validators(validators).initialize(initialValidators);
-        console.log("Validators initialized successfully");
+        console.log("Deployed contract addresses:");
+        console.log("  Validators:", validators);
+        console.log("  Proposal:", proposal);
+        console.log("  Punish:", punish);
+        console.log("  Staking:", staking);
+        
+        // 按依赖关系正确初始化合约
+        
+        // 1. 初始化 Staking (传入 validators 地址)
+        console.log("Initializing Staking...");
+        Staking(staking).initialize(validators);
+        console.log("Staking initialized successfully");
 
-        // 初始化Proposal
+        // 2. 初始化 Proposal (传入 validators 地址)
         console.log("Initializing Proposal...");
-        Proposal(proposal).initialize(initialValidators);
+        Proposal(proposal).initialize(initialValidators, validators);
         console.log("Proposal initialized successfully");
 
-        // 初始化Punish
+        // 3. 初始化 Punish (传入 validators 和 proposal 地址)
         console.log("Initializing Punish...");
-        Punish(punish).initialize();
+        Punish(punish).initialize(validators, proposal);
         console.log("Punish initialized successfully");
 
-        // 初始化Staking
-        console.log("Initializing Staking...");
-        Staking(staking).initialize();
-        console.log("Staking initialized successfully");
+        // 4. 最后初始化 Validators (传入所有其他合约地址)
+        console.log("Initializing Validators...");
+        Validators(validators).initialize(initialValidators, proposal, punish, staking);
+        console.log("Validators initialized successfully");
+
+        console.log("=== All contracts initialized with correct addresses! ===");
+        console.log("Contracts now reference actual deployed addresses instead of hardcoded ones.");
 
         emit SystemInitialized(initialValidators);
     }

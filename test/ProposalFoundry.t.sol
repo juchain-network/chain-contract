@@ -22,7 +22,7 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testInitOnlyOnce() public {
         bytes memory err;
-        try Proposal(PROPOSAL).initialize(new address[](0)) { revert("should revert"); } catch (bytes memory e) { err = e; }
+        try Proposal(PROPOSAL).initialize(new address[](0), address(0xCAFE)) { revert("should revert"); } catch (bytes memory e) { err = e; }
         require(err.length > 0, "expected revert");
     }
 
