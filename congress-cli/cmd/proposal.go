@@ -484,6 +484,18 @@ func innerQueryProposals(rpc string) error {
 		fmt.Printf("Type: %s (%s)\n", proposal.ProposalType.String(), getProposalTypeName(proposal.ProposalType.Int64()))
 		fmt.Printf("Create Time: %s\n", timeToString(proposal.CreateTime.Int64()))
 
+		// 查询提案投票结果和状态
+		result, err := proposalContract.Results(nil, proposalIdBytes)
+		if err != nil {
+			fmt.Printf("⚠️  Status: Cannot query result (%v)\n", err)
+		} else {
+			statusIcon, statusText := getProposalStatus(result.Agree, result.Reject, result.ResultExist)
+			fmt.Printf("Status: %s %s\n", statusIcon, statusText)
+			if result.Agree > 0 || result.Reject > 0 {
+				fmt.Printf("Votes: 👍 %d agree, 👎 %d reject\n", result.Agree, result.Reject)
+			}
+		}
+
 		if proposal.Details != "" {
 			fmt.Printf("Details: %s\n", proposal.Details)
 		}
@@ -501,4 +513,23 @@ func timeToString(timestamp int64) string {
 		return "N/A"
 	}
 	return time.Unix(timestamp, 0).UTC().String()
+}
+
+// 获取提案状态的辅助函数
+func getProposalStatus(agree uint16, reject uint16, resultExist bool) (string, string) {
+	if !resultExist {
+		if agree == 0 && reject == 0 {
+			return "⏳", "Pending (No votes yet / 等待投票)"
+		} else {
+			return "⏳", "Pending (Voting in progress / 投票进行中)"
+		}
+	}
+	
+	// resultExist = true 意味着提案已经有了最终结果
+	// 根据 Proposal.sol 逻辑：超过半数同意则通过，超过半数反对则失败
+	if agree > reject {
+		return "✅", "Passed (提案通过)"
+	} else {
+		return "❌", "Rejected (提案被拒绝)"
+	}
 }
