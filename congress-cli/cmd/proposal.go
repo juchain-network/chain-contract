@@ -524,7 +524,7 @@ func getProposalStatus(agree uint16, reject uint16, resultExist bool) (string, s
 			return "⏳", "Pending (Voting in progress / 投票进行中)"
 		}
 	}
-	
+
 	// resultExist = true 意味着提案已经有了最终结果
 	// 根据 Proposal.sol 逻辑：超过半数同意则通过，超过半数反对则失败
 	if agree > reject {
