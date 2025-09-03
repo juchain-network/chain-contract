@@ -129,13 +129,50 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 创建初始验证器数组
+     * @dev 创建初始验证器数组 - 根据链ID自动选择验证者地址
+     * 测试网验证者地址 (Chain ID: 202599):
+     * 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
+     * 0x578c39eAf09a4e1aBF428c423970B59BB8baF42E
+     * 0xC9eBc132a89AAb349D9232d8Ce70A2c2FEA0A096
+     * 0x9e6A23508aa763C709d45F671D7a3A068025ABC0
+     * 0x81f7A79A51eDBA249EfA812Eb2D5478F696f7558
+     *
+     * 主网验证者地址 (Chain ID: 210000):
+     * 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
+     * 0xDe0e48c5337db3Ca7b3710c27E9728E68Bf220b3
+     * 0xccAFA71c31bC11Ba24d526FD27BA57D743152807
+     * 0xD5DA2b33C1f620a94bf2039B9Cb540853e7928D7
+     * 0x4D432df142823Ca25b21Bc3F9744ED21A275bDEA
      */
-    function createInitialValidators() internal pure returns (address[] memory) {
-        address[] memory initialValidators = new address[](3);
-        initialValidators[0] = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-        initialValidators[1] = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
-        initialValidators[2] = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
+    function createInitialValidators() internal view returns (address[] memory) {
+        address[] memory initialValidators = new address[](5);
+
+        if (block.chainid == 202599) {
+            // 测试网验证者地址
+            console.log("Using testnet validators (Chain ID: 202599)");
+            initialValidators[0] = 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b;
+            initialValidators[1] = 0x578c39eAf09a4e1aBF428c423970B59BB8baF42E;
+            initialValidators[2] = 0xC9eBc132a89AAb349D9232d8Ce70A2c2FEA0A096;
+            initialValidators[3] = 0x9e6A23508aa763C709d45F671D7a3A068025ABC0;
+            initialValidators[4] = 0x81f7A79A51eDBA249EfA812Eb2D5478F696f7558;
+        } else if (block.chainid == 210000) {
+            // 主网验证者地址
+            console.log("Using mainnet validators (Chain ID: 210000)");
+            initialValidators[0] = 0x311B37f01c04B84d1f94645BfBd58D82fc03F709;
+            initialValidators[1] = 0xDe0e48c5337db3Ca7b3710c27E9728E68Bf220b3;
+            initialValidators[2] = 0xccAFA71c31bC11Ba24d526FD27BA57D743152807;
+            initialValidators[3] = 0xD5DA2b33C1f620a94bf2039B9Cb540853e7928D7;
+            initialValidators[4] = 0x4D432df142823Ca25b21Bc3F9744ED21A275bDEA;
+        } else {
+            // 默认使用本地开发环境验证者（anvil/hardhat 默认账户）
+            console.log("Using default local validators (Chain ID:", block.chainid, ")");
+            initialValidators[0] = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; // VALIDATOR1
+            initialValidators[1] = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8; // VALIDATOR2
+            initialValidators[2] = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC; // VALIDATOR3
+            initialValidators[3] = 0x90F79bf6EB2c4f870365E785982E1f101E93b906; // VALIDATOR4
+            initialValidators[4] = 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65; // VALIDATOR5
+        }
+
         return initialValidators;
     }
 
@@ -152,40 +189,24 @@ contract DeployToChainScript is Script {
         console.log("Initializing contracts...");
         
         // 初始化Validators
-        try Validators(validators).initialize(initialValidators) {
-            console.log("Validators initialized successfully");
-        } catch Error(string memory reason) {
-            console.log("Validators initialization failed:", reason);
-        } catch {
-            console.log("Validators already initialized (OK)");
-        }
+        console.log("Initializing Validators...");
+        Validators(validators).initialize(initialValidators);
+        console.log("Validators initialized successfully");
 
         // 初始化Proposal
-        try Proposal(proposal).initialize(initialValidators) {
-            console.log("Proposal initialized successfully");
-        } catch Error(string memory reason) {
-            console.log("Proposal initialization failed:", reason);
-        } catch {
-            console.log("Proposal already initialized (OK)");
-        }
+        console.log("Initializing Proposal...");
+        Proposal(proposal).initialize(initialValidators);
+        console.log("Proposal initialized successfully");
 
         // 初始化Punish
-        try Punish(punish).initialize() {
-            console.log("Punish initialized successfully");
-        } catch Error(string memory reason) {
-            console.log("Punish initialization failed:", reason);
-        } catch {
-            console.log("Punish already initialized (OK)");
-        }
+        console.log("Initializing Punish...");
+        Punish(punish).initialize();
+        console.log("Punish initialized successfully");
 
         // 初始化Staking
-        try Staking(staking).initialize() {
-            console.log("Staking initialized successfully");
-        } catch Error(string memory reason) {
-            console.log("Staking initialization failed:", reason);
-        } catch {
-            console.log("Staking already initialized (OK)");
-        }
+        console.log("Initializing Staking...");
+        Staking(staking).initialize();
+        console.log("Staking initialized successfully");
 
         emit SystemInitialized(initialValidators);
     }
