@@ -103,8 +103,10 @@ contract Staking is Params {
         _;
     }
 
-    function initialize() external onlyNotInitialized {
-        validatorsContract = IValidators(VALIDATOR_CONTRACT_ADDR);
+    function initialize(address _validators) external onlyNotInitialized {
+        require(_validators != address(0), "Invalid validators address");
+        
+        validatorsContract = IValidators(_validators);
         initialized = true;
     }
 

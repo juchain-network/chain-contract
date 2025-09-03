@@ -35,9 +35,15 @@ contract Punish is Params {
         _;
     }
 
-    function initialize() external onlyNotInitialized {
-        validators = Validators(VALIDATOR_CONTRACT_ADDR);
-        proposal = Proposal(PROPOSAL_ADDR);
+    function initialize(
+        address _validators,
+        address _proposal
+    ) external onlyNotInitialized {
+        require(_validators != address(0), "Invalid validators address");
+        require(_proposal != address(0), "Invalid proposal address");
+        
+        validators = Validators(_validators);
+        proposal = Proposal(_proposal);
 
         initialized = true;
     }

@@ -92,6 +92,9 @@ deploy:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-vvv || echo "$(YELLOW)Note: Contract may already be deployed$(NC)"
 
@@ -102,6 +105,9 @@ script-deploy:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-v || echo "$(YELLOW)Note: Contract may already be deployed$(NC)"
 
@@ -111,6 +117,9 @@ script-add-node:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-v || echo "$(YELLOW)Note: Script execution may have failed - check logs$(NC)"
 
@@ -120,6 +129,9 @@ script-create-proposal:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-v || echo "$(YELLOW)Note: Script execution may have failed - check logs$(NC)"
 
@@ -129,6 +141,9 @@ script-vote:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-v || echo "$(YELLOW)Note: Script execution may have failed - check logs$(NC)"
 
@@ -138,6 +153,9 @@ script-remove-node:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-v || echo "$(YELLOW)Note: Script execution may have failed - check logs$(NC)"
 
@@ -147,6 +165,9 @@ script-staking:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-v || echo "$(YELLOW)Note: Script execution may have failed - check logs$(NC)"
 
@@ -156,6 +177,9 @@ script-update-config:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-v || echo "$(YELLOW)Note: Script execution may have failed - check logs$(NC)"
 
@@ -277,12 +301,15 @@ debug-deploy:
 		--fork-url $(RPC_URL) \
 		--broadcast \
 		--private-key $(PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
 		--skip-simulation \
 		-vvvv
 
 debug-script:
 	@echo "$(YELLOW)Debug mode - specify script manually$(NC)"
-	@echo "Usage: forge script script/[ScriptName].s.sol --fork-url $(RPC_URL) --broadcast --private-key $(PRIVATE_KEY) --skip-simulation -vvvv"
+	@echo "Usage: forge script script/[ScriptName].s.sol --fork-url $(RPC_URL) --broadcast --private-key $(PRIVATE_KEY) --gas-price 2000000000 --gas-limit 15000000 --legacy --skip-simulation -vvvv"
 
 # Gas optimization tests
 gas-test:
@@ -333,7 +360,8 @@ deploy-chain-local:
 	@PRIVATE_KEY=$(PRIVATE_KEY) forge script script/DeployToChain.s.sol:DeployToChainScript \
 		--rpc-url http://localhost:8545 \
 		--broadcast \
-		--gas-price 1000000000 \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
 		--legacy \
 		-vv
 
@@ -349,6 +377,9 @@ deploy-chain:
 			--rpc-url $(CHAIN_RPC_URL) \
 			--broadcast \
 			--private-key $(CHAIN_PRIVATE_KEY) \
+			--gas-price 2000000000 \
+			--gas-limit 15000000 \
+			--legacy \
 			--verify \
 			--etherscan-api-key $(ETHERSCAN_API_KEY) \
 			-vvv || echo "$(YELLOW)Note: Deployment may have failed - check logs$(NC)"; \
@@ -358,6 +389,9 @@ deploy-chain:
 			--rpc-url $(CHAIN_RPC_URL) \
 			--broadcast \
 			--private-key $(CHAIN_PRIVATE_KEY) \
+			--gas-price 2000000000 \
+			--gas-limit 15000000 \
+			--legacy \
 			-vvv || echo "$(YELLOW)Note: Deployment may have failed - check logs$(NC)"; \
 	fi
 

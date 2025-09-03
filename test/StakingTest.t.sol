@@ -36,7 +36,7 @@ contract StakingTest is Test {
         vm.deal(DELEGATOR2, 100000 ether);
         
         // Initialize the contract
-        staking.initialize();
+        staking.initialize(address(0xCAFE)); // 添加 validators 地址参数
     }
 
     function testInitialization() public view {

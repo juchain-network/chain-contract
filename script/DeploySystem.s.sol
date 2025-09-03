@@ -110,41 +110,22 @@ contract DeploySystemScript is Script {
     ) internal {
         console.log("Initializing contracts...");
         
-        // 尝试初始化Validators (如果未初始化)
-        try Validators(validators).initialize(initialValidators) {
-            console.log("Validators initialized successfully");
-        } catch Error(string memory reason) {
-            console.log("Validators initialization failed:", reason);
-        } catch {
-            console.log("Validators already initialized (OK)");
-        }
+        // 按依赖关系顺序初始化合约
+        console.log("Initializing Staking...");
+        Staking(staking).initialize(validators);
+        console.log("Staking initialized successfully");
 
-        // 尝试初始化Proposal (如果未初始化) 
-        try Proposal(proposal).initialize(initialValidators) {
-            console.log("Proposal initialized successfully");
-        } catch Error(string memory reason) {
-            console.log("Proposal initialization failed:", reason);
-        } catch {
-            console.log("Proposal already initialized (OK)");
-        }
+        console.log("Initializing Proposal...");
+        Proposal(proposal).initialize(initialValidators, validators);
+        console.log("Proposal initialized successfully");
 
-        // 尝试初始化Punish
-        try Punish(punish).initialize() {
-            console.log("Punish initialized successfully");
-        } catch Error(string memory reason) {
-            console.log("Punish initialization failed:", reason);
-        } catch {
-            console.log("Punish already initialized (OK)");
-        }
+        console.log("Initializing Punish...");
+        Punish(punish).initialize(validators, proposal);
+        console.log("Punish initialized successfully");
 
-        // 尝试初始化Staking
-        try Staking(staking).initialize() {
-            console.log("Staking initialized successfully");
-        } catch Error(string memory reason) {
-            console.log("Staking initialization failed:", reason);
-        } catch {
-            console.log("Staking already initialized (OK)");
-        }
+        console.log("Initializing Validators...");
+        Validators(validators).initialize(initialValidators, proposal, punish, staking);
+        console.log("Validators initialized successfully");
 
         emit SystemInitialized(initialValidators);
     }
