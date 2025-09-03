@@ -111,6 +111,49 @@ contract Staking is Params {
     }
 
     /**
+     * @dev Initialize with pre-registered validators (for genesis deployment)
+     * @param _validators Validators contract address
+     * @param initialValidators Array of validator addresses to pre-register
+     * @param commissionRate Default commission rate for all validators
+     */
+    function initializeWithValidators(
+        address _validators,
+        address[] calldata initialValidators,
+        uint256 commissionRate
+    ) external onlyNotInitialized {
+        require(_validators != address(0), "Invalid validators address");
+        require(initialValidators.length > 0, "No validators provided");
+        require(commissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
+        
+        validatorsContract = IValidators(_validators);
+        
+        // Pre-register all initial validators with default stake
+        for (uint256 i = 0; i < initialValidators.length; i++) {
+            address validator = initialValidators[i];
+            require(validator != address(0), "Invalid validator address");
+            require(validatorStakes[validator].selfStake == 0, "Validator already exists");
+            
+            validatorStakes[validator] = ValidatorStake({
+                selfStake: MIN_VALIDATOR_STAKE,
+                totalDelegated: 0,
+                commissionRate: commissionRate,
+                accumulatedRewards: 0,
+                isJailed: false,
+                jailUntilBlock: 0
+            });
+            
+            // Add to validators list
+            validatorIndex[validator] = allValidators.length;
+            allValidators.push(validator);
+            totalStaked = totalStaked.add(MIN_VALIDATOR_STAKE);
+        }
+        
+        initialized = true;
+        
+        emit ValidatorRegistered(address(0), MIN_VALIDATOR_STAKE, commissionRate); // Genesis event
+    }
+
+    /**
      * @dev Register as a validator with self-stake
      * @param commissionRate Commission rate (0-10000, representing 0%-100%)
      */

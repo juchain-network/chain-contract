@@ -1,19 +1,12 @@
 package cmd
 
-// 智能合约地址常量
+// 智能合约地址常量 - JuChain 系统合约地址
 const (
-	ValidatorContractAddr  = "0x000000000000000000000000000000000000f000"
-	ValidatorsContractAddr = "0x000000000000000000000000000000000000f000" // 别名，用于编辑验证者
-	PunishContractAddr     = "0x000000000000000000000000000000000000f001"
-	ProposalContractAddr   = "0x000000000000000000000000000000000000f002"
-	StakingContractAddr    = "0x000000000000000000000000000000000000f003"
-)
-
-// 合约地址别名（用于向后兼容）
-const (
-	validatorAddr = ValidatorContractAddr
-	punishAddr    = PunishContractAddr
-	proposalAddr  = ProposalContractAddr
+	// 主要合约地址
+	ValidatorContractAddr = "0x000000000000000000000000000000000000f000"
+	PunishContractAddr    = "0x000000000000000000000000000000000000f001"
+	ProposalContractAddr  = "0x000000000000000000000000000000000000f002"
+	StakingContractAddr   = "0x000000000000000000000000000000000000f003"
 )
 
 // 默认配置常量

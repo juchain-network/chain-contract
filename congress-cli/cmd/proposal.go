@@ -80,7 +80,7 @@ func innerCreateProposal(proposer, target string, flag bool, rpc string) error {
 		return fmt.Errorf("failed to pack proposal data: %w", err)
 	}
 
-	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(proposalAddr), nil, abiData, rpc, CreateProposalFile)
+	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(ProposalContractAddr), nil, abiData, rpc, CreateProposalFile)
 	if err != nil {
 		return fmt.Errorf("failed to create raw transaction: %w", err)
 	}
@@ -156,7 +156,7 @@ func innerCreateConfigProposal(proposer string, cid, cvalue int64, rpc string) e
 		return fmt.Errorf("failed to pack config proposal data: %w", err)
 	}
 
-	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(proposalAddr), nil, abiData, rpc, CreateConfigProposalFile)
+	err = CreateRawTx(common.HexToAddress(proposer), common.HexToAddress(ProposalContractAddr), nil, abiData, rpc, CreateConfigProposalFile)
 	if err != nil {
 		return fmt.Errorf("failed to create raw transaction: %w", err)
 	}
@@ -232,7 +232,7 @@ func innerVoteProposal(signer, proposalId string, flag bool, rpc string) error {
 		return fmt.Errorf("failed to pack vote proposal data: %w", err)
 	}
 
-	err = CreateRawTx(common.HexToAddress(signer), common.HexToAddress(proposalAddr), nil, abiData, rpc, VoteProposalFile)
+	err = CreateRawTx(common.HexToAddress(signer), common.HexToAddress(ProposalContractAddr), nil, abiData, rpc, VoteProposalFile)
 	if err != nil {
 		return fmt.Errorf("failed to create vote transaction: %w", err)
 	}
@@ -288,7 +288,7 @@ func innerQueryProposal(proposalId string, rpc string) error {
 	}
 	defer client.Close()
 
-	proposalContract, err := generated.NewProposal(common.HexToAddress(proposalAddr), client)
+	proposalContract, err := generated.NewProposal(common.HexToAddress(ProposalContractAddr), client)
 	if err != nil {
 		return fmt.Errorf("failed to instantiate proposal contract: %w", err)
 	}
@@ -395,7 +395,7 @@ func innerQueryProposals(rpc string) error {
 	}
 	defer client.Close()
 
-	proposalContract, err := generated.NewProposal(common.HexToAddress(proposalAddr), client)
+	proposalContract, err := generated.NewProposal(common.HexToAddress(ProposalContractAddr), client)
 	if err != nil {
 		return fmt.Errorf("failed to instantiate proposal contract: %w", err)
 	}
