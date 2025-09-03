@@ -53,6 +53,10 @@ help:
 	@echo "  $(GREEN)stop-anvil$(NC)       - Stop anvil node"
 	@echo "  $(GREEN)reset-anvil$(NC)      - Restart anvil node"
 	@echo "  $(GREEN)addresses$(NC)        - Show contract addresses"
+	@echo "  $(GREEN)generate-contracts$(NC) - Generate production contracts from templates"
+	@echo "  $(GREEN)generate-contracts-mock$(NC) - Generate mock contracts for testing"
+	@echo "  $(GREEN)fmt$(NC)              - Format Solidity code"
+	@echo "  $(GREEN)security$(NC)         - Run security analysis (requires slither)"
 	@echo ""
 	@echo "$(YELLOW)Script targets:$(NC)"
 	@echo "  $(GREEN)script-deploy$(NC)     - Deploy system contracts"
@@ -335,6 +339,18 @@ fmt:
 	@echo "$(YELLOW)Formatting code...$(NC)"
 	forge fmt
 
+# Generate contracts from templates
+generate-contracts:
+	@echo "$(YELLOW)Generating production contracts from templates...$(NC)"
+	node generate-contracts.js
+	@echo "$(GREEN)✅ Production contracts generated$(NC)"
+
+# Generate mock contracts for testing
+generate-contracts-mock:
+	@echo "$(YELLOW)Generating mock contracts from templates...$(NC)"
+	node generate-contracts.js --mock
+	@echo "$(GREEN)✅ Mock contracts generated$(NC)"
+
 # Update dependencies
 update:
 	@echo "$(YELLOW)Updating dependencies...$(NC)"
@@ -352,9 +368,9 @@ version:
 # Chain Deployment Targets
 # ======================================
 
-# Deploy to current chain (JuChain 202599) using DeployToChain script
+# Deploy to local test chain (JuChain 202599) with auto-staking for testing
 deploy-chain-local:
-	@echo "$(YELLOW)Deploying contracts to JuChain (202599) using DeployToChain script...$(NC)"
+	@echo "$(YELLOW)Deploying contracts to JuChain (202599) with auto-staking...$(NC)"
 	@echo "$(GREEN)RPC URL: http://localhost:8545$(NC)"
 	@echo "$(GREEN)Chain ID: 202599$(NC)"
 	@PRIVATE_KEY=$(PRIVATE_KEY) forge script script/DeployToChain.s.sol:DeployToChainScript \
@@ -365,35 +381,52 @@ deploy-chain-local:
 		--legacy \
 		-vv
 
-# Deploy to custom chain (specify CHAIN_RPC_URL and CHAIN_PRIVATE_KEY)
+# Deploy to real network (auto-staking will fail gracefully, validators register manually)
 deploy-chain:
-	@echo "$(YELLOW)Deploying contracts to custom chain...$(NC)"
+	@echo "$(YELLOW)Deploying to REAL NETWORK...$(NC)"
 	@echo "$(GREEN)RPC URL: $(CHAIN_RPC_URL)$(NC)"
+	@echo "$(YELLOW)Note: Auto-staking will fail on real networks - validators must register manually$(NC)"
 	@if [ "$(CHAIN_PRIVATE_KEY)" = "$(PRIVATE_KEY)" ]; then \
 		echo "$(RED)Warning: Using default private key. Set CHAIN_PRIVATE_KEY environment variable.$(NC)"; \
 	fi
-	@if [ -n "$(ETHERSCAN_API_KEY)" ]; then \
-		forge script script/DeployToChain.s.sol:DeployToChainScript \
-			--rpc-url $(CHAIN_RPC_URL) \
-			--broadcast \
-			--private-key $(CHAIN_PRIVATE_KEY) \
-			--gas-price 2000000000 \
-			--gas-limit 15000000 \
-			--legacy \
-			--verify \
-			--etherscan-api-key $(ETHERSCAN_API_KEY) \
-			-vvv || echo "$(YELLOW)Note: Deployment may have failed - check logs$(NC)"; \
-	else \
-		echo "$(YELLOW)No ETHERSCAN_API_KEY provided, deploying without verification$(NC)"; \
-		forge script script/DeployToChain.s.sol:DeployToChainScript \
-			--rpc-url $(CHAIN_RPC_URL) \
-			--broadcast \
-			--private-key $(CHAIN_PRIVATE_KEY) \
-			--gas-price 2000000000 \
-			--gas-limit 15000000 \
-			--legacy \
-			-vvv || echo "$(YELLOW)Note: Deployment may have failed - check logs$(NC)"; \
-	fi
+	@forge script script/DeployToChain.s.sol:DeployToChainScript \
+		--rpc-url $(CHAIN_RPC_URL) \
+		--broadcast \
+		--private-key $(CHAIN_PRIVATE_KEY) \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
+		-vv
+
+# Single validator registration (for individual validators)
+validator-register:
+	@echo "$(YELLOW)Registering individual validator...$(NC)"
+	@echo "$(GREEN)Staking Contract: $(STAKING_CONTRACT)$(NC)"
+	@echo "$(GREEN)Validator: $(shell forge wallet address --private-key $(VALIDATOR_PRIVATE_KEY))$(NC)"
+	@VALIDATOR_PRIVATE_KEY=$(VALIDATOR_PRIVATE_KEY) \
+	 STAKING_CONTRACT=$(STAKING_CONTRACT) \
+	 COMMISSION_RATE=$(COMMISSION_RATE) \
+	 forge script script/ValidatorStake.s.sol:ValidatorStakeScript \
+		--rpc-url $(CHAIN_RPC_URL) \
+		--broadcast \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
+		-vv
+
+# Batch validator registration (if you control multiple validator keys)
+validators-register-batch:
+	@echo "$(YELLOW)Batch registering validators...$(NC)"
+	@echo "$(GREEN)Staking Contract: $(STAKING_CONTRACT)$(NC)"
+	@echo "$(RED)Warning: Only use if you control all validator private keys$(NC)"
+	@STAKING_CONTRACT=$(STAKING_CONTRACT) \
+	 forge script script/BatchValidatorStake.s.sol:BatchValidatorStakeScript \
+		--rpc-url $(CHAIN_RPC_URL) \
+		--broadcast \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
+		-vv
 
 # Deploy to JuChain mainnet
 deploy-juchain:

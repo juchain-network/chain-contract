@@ -55,6 +55,10 @@ contract DeployToChainScript is Script {
         
         vm.stopBroadcast();
         
+        // 自动注册验证者到 Staking 合约并质押 10000 JU
+        console.log("=== Registering validators to Staking contract ===");
+        registerValidatorsToStaking(staking, initialValidators);
+        
         // 发出部署完成事件
         emit SystemDeployed(validators, proposal, punish, staking);
         
@@ -227,6 +231,36 @@ contract DeployToChainScript is Script {
     }
 
     /**
+     * @dev 自动注册验证者到 Staking 合约并质押 10000 JU
+     * 注意：这是测试环境的演示功能
+     */
+    function registerValidatorsToStaking(address staking, address[] memory validators) internal {
+        uint256 stakeAmount = 10000 ether; // 10000 JU
+        uint256 commissionRate = 500; // 5% 佣金率 (500/10000 = 5%)
+        
+        console.log("Registering validators to Staking contract");
+        console.log("Validator count:", validators.length);
+        console.log("Stake amount:", stakeAmount / 1 ether);
+        console.log("Commission rate:", commissionRate);
+        
+        for (uint256 i = 0; i < validators.length; i++) {
+            address validator = validators[i];
+            console.log("Registering validator:", validator);
+            
+            // 为验证者地址设置足够的余额
+            vm.deal(validator, stakeAmount + 10 ether); // 额外 ETH 用于 gas
+            
+            // 模拟验证者自己注册（测试环境）
+            vm.prank(validator);
+            Staking(staking).registerValidator{value: stakeAmount}(commissionRate);
+            
+            console.log("Validator registered successfully");
+        }
+        
+        console.log("=== All validators registered to Staking contract ===");
+    }
+
+    /**
      * @dev 检查并记录系统状态
      */
     function checkAndLogSystemStatus(
@@ -238,28 +272,31 @@ contract DeployToChainScript is Script {
         console.log("=== System Status Check ===");
         
         // 检查验证器状态
-        try Validators(validators).getActiveValidators() returns (address[] memory active) {
-            console.log("Active validators count:", active.length);
-            for (uint i = 0; i < active.length && i < 5; i++) {
-                console.log("Validator", i, ":", active[i]);
-            }
-        } catch {
-            console.log("Failed to get active validators");
+        address[] memory active = Validators(validators).getActiveValidators();
+        console.log("Active validators count:", active.length);
+        for (uint i = 0; i < active.length && i < 5; i++) {
+            console.log("Validator", i, ":", active[i]);
         }
         
         // 检查提案配置
-        try Proposal(proposal).proposalLastingPeriod() returns (uint256 period) {
-            console.log("Proposal lasting period:", period);
-        } catch {
-            console.log("Failed to get proposal period");
-        }
+        uint256 period = Proposal(proposal).proposalLastingPeriod();
+        console.log("Proposal lasting period:", period);
         
         // 检查接收地址
-        try Proposal(proposal).receiverAddr() returns (address receiver) {
-            console.log("Receiver address:", receiver);
-        } catch {
-            console.log("Failed to get receiver address");
-        }
+        address receiver = Proposal(proposal).receiverAddr();
+        console.log("Receiver address:", receiver);
+        
+        // 检查惩罚合约状态
+        uint256 punishValidatorsLen = Punish(punish).getPunishValidatorsLen();
+        console.log("Punish validators count:", punishValidatorsLen);
+        
+        // 检查质押合约状态
+        uint256 totalStaked = Staking(staking).totalStaked();
+        console.log("Total staked:", totalStaked);
+        
+        // 检查质押合约中的验证器数量
+        uint256 validatorCount = Staking(staking).getValidatorCount();
+        console.log("Staking validator count:", validatorCount);
     }
 
     /**
