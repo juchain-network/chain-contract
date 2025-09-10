@@ -249,12 +249,17 @@ async function checkSystemStatus() {
         console.log(`   转账金额: 100 ETH`);
         console.log(`   Gas 价格: 20 Gwei`);
         
+        // 获取正确的 nonce
+        const nonce = await web3.eth.getTransactionCount(fromAddress, 'pending');
+        console.log(`   Nonce: ${nonce}`);
+        
         const txHash = await web3.eth.sendTransaction({
             from: fromAddress,
             to: toAddress,
             value: transferAmount,
             gas: 21000,
-            gasPrice: gasPrice
+            gasPrice: gasPrice,
+            nonce: nonce
         });
         
         console.log(`   ✅ 交易发送成功`);
