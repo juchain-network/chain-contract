@@ -46,7 +46,7 @@ find_validator_key() {
 # 配置
 TARGET_ADDRESS="0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"
 PROPOSER_ADDRESS="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-PRIVATE_CHAIN_PATH="$HOME/ju-chain-work/chain/private-chain"
+PRIVATE_CHAIN_PATH="$HOME/ju/chain/private-chain"
 
 # 验证者地址数组（小写，用于查找密钥文件）
 VALIDATOR_ADDRESSES=(
@@ -115,7 +115,24 @@ echo ""
 
 echo "=== 步骤1: 创建提案 ==="
 echo "创建添加验证者的提案..."
+
+# 获取当前nonce值
+echo "获取当前账户nonce..."
+CURRENT_NONCE=$(curl -s -X POST -H "Content-Type: application/json" \
+  -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionCount\",\"params\":[\"$PROPOSER_ADDRESS\",\"latest\"],\"id\":1}" \
+  http://localhost:8545 | grep -o '"result":"[^"]*"' | cut -d'"' -f4)
+
+if [ -z "$CURRENT_NONCE" ]; then
+    echo "❌ 无法获取当前nonce值"
+    exit 1
+fi
+
+# 转换16进制到10进制
+NONCE_DEC=$(printf "%d" "$CURRENT_NONCE")
+echo "当前nonce: $NONCE_DEC"
+
 ./build/congress-cli create_proposal -p $PROPOSER_ADDRESS -t $TARGET_ADDRESS -o add
+
 
 echo "签名提案..."
 ./build/congress-cli sign -f createProposal.json -k "${KEYS[0]}" -p "${PASSWORDS[0]}"
@@ -196,12 +213,17 @@ async function transferFunds() {
     console.log('🚀 转账10000 ETH给验证者6...');
     
     try {
+        // 获取正确的 nonce
+        const nonce = await web3.eth.getTransactionCount(fromAddress, 'pending');
+        console.log('当前nonce:', nonce);
+        
         const txHash = await web3.eth.sendTransaction({
             from: fromAddress,
             to: toAddress,
             value: amount,
             gas: 21000,
-            gasPrice: web3.utils.toWei('20', 'gwei')
+            gasPrice: web3.utils.toWei('20', 'gwei'),
+            nonce: nonce  // 显式指定nonce
         });
         
         console.log('✅ 转账成功!');

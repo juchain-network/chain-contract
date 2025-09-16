@@ -35,7 +35,7 @@ contract DeployToChainScript is Script {
         }
         
         // 设置交易参数 - 处理gas问题
-        vm.txGasPrice(1000000000); // 1 gwei
+        vm.txGasPrice(1000000007); // 使用链的当前gas price
         
         vm.startBroadcast(deployerPrivateKey);
         
@@ -154,8 +154,12 @@ contract DeployToChainScript is Script {
     function createInitialValidators() internal view returns (address[] memory) {
         address[] memory initialValidators = new address[](5);
 
-        if (block.chainid == 202599) {
-            // 测试网验证者地址
+        // 检查是否是本地开发环境 (部署者是 anvil 默认账户)
+        address deployer = msg.sender;
+        bool isLocalDev = (deployer == 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
+
+        if (block.chainid == 202599 && !isLocalDev) {
+            // 真实测试网验证者地址
             console.log("Using testnet validators (Chain ID: 202599)");
             initialValidators[0] = 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b;
             initialValidators[1] = 0x578c39eAf09a4e1aBF428c423970B59BB8baF42E;
@@ -171,8 +175,10 @@ contract DeployToChainScript is Script {
             initialValidators[3] = 0xD5DA2b33C1f620a94bf2039B9Cb540853e7928D7;
             initialValidators[4] = 0x4D432df142823Ca25b21Bc3F9744ED21A275bDEA;
         } else {
-            // 默认使用本地开发环境验证者（anvil/hardhat 默认账户）
-            console.log("Using default local validators (Chain ID:", block.chainid, ")");
+            // 本地开发环境验证者（anvil/hardhat 默认账户）
+            console.log("Using local development validators");
+            console.log("Chain ID:", block.chainid);
+            console.log("Deployer:", deployer);
             initialValidators[0] = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; // VALIDATOR1
             initialValidators[1] = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8; // VALIDATOR2
             initialValidators[2] = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC; // VALIDATOR3
