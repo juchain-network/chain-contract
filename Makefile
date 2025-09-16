@@ -368,19 +368,6 @@ version:
 # Chain Deployment Targets
 # ======================================
 
-# Deploy to local test chain (JuChain 202599) with auto-staking for testing
-deploy-chain-local:
-	@echo "$(YELLOW)Deploying contracts to JuChain (202599) with auto-staking...$(NC)"
-	@echo "$(GREEN)RPC URL: http://localhost:8545$(NC)"
-	@echo "$(GREEN)Chain ID: 202599$(NC)"
-	@PRIVATE_KEY=$(PRIVATE_KEY) forge script script/DeployToChain.s.sol:DeployToChainScript \
-		--rpc-url http://localhost:8545 \
-		--broadcast \
-		--gas-price 2000000000 \
-		--gas-limit 15000000 \
-		--legacy \
-		-vv
-
 # Deploy to real network (auto-staking will fail gracefully, validators register manually)
 deploy-chain:
 	@echo "$(YELLOW)Deploying to REAL NETWORK...$(NC)"
@@ -428,6 +415,7 @@ validators-register-batch:
 		--legacy \
 		-vv
 
+
 # Deploy to JuChain mainnet
 deploy-juchain:
 	@echo "$(YELLOW)Deploying to JuChain Mainnet...$(NC)"
@@ -438,6 +426,19 @@ deploy-juchain:
 deploy-juchain-testnet:
 	@echo "$(YELLOW)Deploying to JuChain Testnet...$(NC)"
 	@make deploy-chain CHAIN_RPC_URL=$(JUCHAIN_TESTNET_RPC_URL) CHAIN_ID=202599
+
+# Deploy to local test chain (JuChain 202599) with auto-staking for testing
+deploy-chain-local:
+	@echo "$(YELLOW)Deploying contracts to JuChain (202599) with auto-staking...$(NC)"
+	@echo "$(GREEN)RPC URL: http://localhost:8545$(NC)"
+	@echo "$(GREEN)Chain ID: 202599$(NC)"
+	@PRIVATE_KEY=$(PRIVATE_KEY) forge script script/DeployToChain.s.sol:DeployToChainScript \
+		--rpc-url http://localhost:8545 \
+		--broadcast \
+		--gas-price 2000000000 \
+		--gas-limit 15000000 \
+		--legacy \
+		-vv
 
 # Verify contracts on Etherscan
 verify-contract:
