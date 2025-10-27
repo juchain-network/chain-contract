@@ -1,0 +1,20 @@
+{
+  "name": "sys-contracts",
+  "version": "1.0.0",
+  "description": "Ju blockchain system contracts",
+  "main": "generate-contracts.js",
+  "dependencies": {
+    "js-sha3": "^0.8.0",
+    "nunjucks": "^3.2.2",
+    "web3": "^4.16.0"
+  },
+  "scripts": {
+    "generate": "node generate-contracts.js",
+    "generate:mock": "node generate-contracts.js --mock",
+    "init-genesis": "node init_genesis.js",
+    "forge:test": "forge test",
+    "forge:build": "forge build"
+  },
+  "author": "",
+  "license": "MIT"
+}

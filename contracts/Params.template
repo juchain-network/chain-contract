@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.20;
+
+contract Params {
+    bool public initialized ;
+
+    {% if mock %}
+    address public VALIDATOR_CONTRACT_ADDR;
+    address public PUNISH_CONTRACT_ADDR;
+    address public PROPOSAL_ADDR;
+    address public STAKING_CONTRACT_ADDR;
+
+    // only for test
+    address public miner;
+
+    {% else %}
+    // System contracts
+    address
+        public constant VALIDATOR_CONTRACT_ADDR = 0x000000000000000000000000000000000000f000;
+    address
+        public constant PUNISH_CONTRACT_ADDR = 0x000000000000000000000000000000000000F001;
+    address
+        public constant PROPOSAL_ADDR = 0x000000000000000000000000000000000000F002;
+    address
+        public constant STAKING_CONTRACT_ADDR = 0x000000000000000000000000000000000000F003;
+
+    {% endif %}
+
+    {% if mock %}
+    modifier onlyMiner() {
+        require(
+            // just for test
+            msg.sender == miner,
+            "Miner only"
+        );
+        _;
+    }
+
+    {% else %}
+    modifier onlyMiner() {
+        require(
+            msg.sender == block.coinbase,
+            "Miner only"
+        );
+        _;
+    }
+
+    {% endif %}
+    modifier onlyNotInitialized() {
+        require(!initialized, "Already initialized");
+        _;
+    }
+
+    modifier onlyInitialized() {
+        require(initialized, "Not init yet");
+        _;
+    }
+
+    modifier onlyPunishContract() {
+        require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
+        _;
+    }
+
+    modifier onlyBlockEpoch(uint256 epoch) {
+        require(block.number % epoch == 0, "Block epoch only");
+        _;
+    }
+
+    modifier onlyValidatorsContract() {
+        require(
+            msg.sender == VALIDATOR_CONTRACT_ADDR,
+            "Validators contract only"
+        );
+        _;
+    }
+
+    modifier onlyProposalContract() {
+        require(
+            msg.sender == PROPOSAL_ADDR,
+            "Proposal contract only"
+        );
+        _;
+    }
+
+    modifier onlyStakingContract() {
+        require(
+            msg.sender == STAKING_CONTRACT_ADDR,
+            "Staking contract only"
+        );
+        _;
+    }
+
+    {% if mock %}
+    function setContracts(address val, address punish, address proposal, address staking) public {
+        VALIDATOR_CONTRACT_ADDR = val;
+        PUNISH_CONTRACT_ADDR = punish;
+        PROPOSAL_ADDR = proposal;
+        STAKING_CONTRACT_ADDR = staking;
+    }
+
+    function setMiner(address miner_) public {
+        miner = miner_;
+    }
+    {% endif %}
+}

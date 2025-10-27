@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {Proposal} from '../Proposal.sol';
+
+contract MockValidators {
+    address[] vals;
+
+    Proposal proposal;
+
+    constructor(address[] memory vals_, address proposal_) {
+        for (uint256 i = 0; i < vals_.length; i++) {
+            vals.push(vals_[i]);
+        }
+
+        proposal = Proposal(proposal_);
+    }
+
+    function getActiveValidators() public view returns (address[] memory) {
+        address[] memory activeSet = new address[](vals.length);
+
+        for (uint256 i = 0; i < vals.length; i++) {
+            activeSet[i] = vals[i];
+        }
+        return activeSet;
+    }
+
+    function isActiveValidator(address who) public view returns (bool) {
+        for (uint256 i = 0; i < vals.length; i++) {
+            if (vals[i] == who) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function setUnpassed(address who) public {
+        proposal.setUnpassed(who);
+    }
+
+    function tryRemoveValidator(address /* who */) public pure returns (bool) {
+        return true;
+    }
+
+    function tryActive(address /* who */) public pure returns (bool) {
+        return true;
+    }
+}

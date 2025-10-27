@@ -1,0 +1,12 @@
+.idea/*
+.tool-versions
+./contracts/output.json
+./node_modules/*
+.DS_Store
+node_modules
+build
+cache
+artifacts
+out
+broadcast
+
