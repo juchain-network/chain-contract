@@ -60,7 +60,7 @@ const (
 	ValidatorStatusInactive = 0
 )
 
-// Staking ABI 常量
+// Staking ABI constants
 const stakingABI = `[
 	{
 		"inputs": [{"internalType": "uint256", "name": "commissionRate", "type": "uint256"}],

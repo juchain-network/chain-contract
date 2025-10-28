@@ -1,92 +1,92 @@
-## 📋 合约架构理解
+## 📋 Contract Architecture Overview
 
-### 1. 系统概述
+### 1. System Overview
 
-这是一个 **JPoSA (JuChain Proof of Stake Authority)** 混合共识机制的治理系统，结合了PoS质押和PoA权威的双重优势，包含五个核心合约：
+This is a governance system implementing **JPoSA (JuChain Proof of Stake Authority)** hybrid consensus mechanism, combining the advantages of PoS staking and PoA authority, containing five core contracts:
 
-- **Validators.sol** - 验证者管理合约 (`0xf000`)
-- **Punish.sol** - 惩罚机制合约 (`0xf001`)
-- **Proposal.sol** - 提案治理合约 (`0xf002`)
-- **Staking.sol** - 质押管理合约 (`0xf003`) 🆕
-- **Params.sol** - 系统参数基础合约
+- **Validators.sol** - Validator management contract (`0xf000`)
+- **Punish.sol** - Punishment mechanism contract (`0xf001`)
+- **Proposal.sol** - Proposal governance contract (`0xf002`)
+- **Staking.sol** - Staking management contract (`0xf003`) 🆕
+- **Params.sol** - System parameters base contract
 
-### 2. JPoSA混合共识架构
+### 2. JPoSA Hybrid Consensus Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Validators    │◄──►│    Proposal     │◄──►│     Punish      │
-│   验证者管理      │    │    提案治理       │    │    惩罚机制       │
+│ Validator Mgmt  │    │ Proposal Gov    │    │ Punish Mechanism│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
         │                       │                       │
         └───────────────────────┼───────────────────────┘
                                 │                       │
                     ┌─────────────────┐      ┌─────────────────┐
                     │     Params      │      │    Staking      │ 🆕
-                    │   系统参数基础     │      │    质押管理       │
+                    │ System Params   │      │ Staking Mgmt    │
                     └─────────────────┘      └─────────────────┘
 ```
 
-### 3. 混合共识机制特性
+### 3. Hybrid Consensus Features
 
-#### 🔗 PoS + PoA 双重机制
+#### 🔗 PoS + PoA Dual Mechanism
 
-- **PoS质押**: 用户质押JU代币参与验证者选举
-- **PoA权威**: 保持现有验证者权威机制的稳定性
-- **混合选择**: 基于质押权重选择Top验证者
+- **PoS Staking**: Users stake JU tokens to participate in validator election
+- **PoA Authority**: Maintain existing validator authority mechanism stability
+- **Hybrid Selection**: Select Top validators based on staking weight
 
-#### 💰 经济激励模型
+#### 💰 Economic Incentive Model
 
-- **质押奖励**: 70%的区块奖励分配给质押参与者
-- **验证者佣金**: 30%直接奖励给区块生产者
-- **委托机制**: 用户可委托代币给验证者获得奖励
+- **Staking Rewards**: 70% of block rewards allocated to staking participants
+- **Validator Commission**: 30% directly rewarded to block producers
+- **Delegation Mechanism**: Users can delegate tokens to validators to earn rewards
 
-#### 🎯 治理优化
+#### 🎯 Governance Optimization
 
-- **动态验证者集**: 基于质押权重自动更新验证者列表
-- **惩罚机制**: 整合质押惩罚和传统PoA惩罚
-- **提案系统**: 支持质押相关的治理提案
+- **Dynamic Validator Set**: Automatically update validator list based on staking weight
+- **Punishment Mechanism**: Integrate staking punishment and traditional PoA punishment
+- **Proposal System**: Support staking-related governance proposals
 
-### 4. Staking合约核心功能
+### 4. Staking Contract Core Features
 
-#### 📊 质押管理
+#### 📊 Staking Management
 
 ```solidity
-// 验证者注册质押
+// Validator registration and staking
 function registerValidator(uint256 commissionRate) external payable;
 
-// 用户委托质押
+// User delegation and staking
 function delegate(address validator) external payable;
 
-// 解除质押
+// Undelegate
 function undelegate(address validator, uint256 amount) external;
 
-// 提取收益
+// Withdraw rewards
 function claimRewards(address validator) external;
 ```
 
-#### 🏆 验证者选择
+#### 🏆 Validator Selection
 
 ```solidity
-// 获取Top验证者（基于质押权重）
+// Get Top validators (based on staking weight)
 function getTopValidators(uint256 limit) external view returns (address[] memory);
 
-// 验证者惩罚
+// Punish validator
 function jailValidator(address validator, uint256 jailBlocks) external;
 
-// 验证者解除惩罚
+// Unjail validator
 function unjailValidator(address validator) external;
 ```
 
-#### 💎 经济参数
+#### 💎 Economic Parameters
 
-- **最小验证者质押**: 10,000 JU
-- **最小委托金额**: 1 JU  
-- **最大验证者数量**: 21
-- **解锁期**: 7天 (604,800 blocks)
+- **Minimum validator stake**: 10,000 JU
+- **Minimum delegation amount**: 1 JU  
+- **Maximum validators**: 21
+- **Unbonding period**: 7 days (604,800 blocks)
 
-### 5. Congress-CLI 工具支持
+### 5. Congress-CLI Tool Support
 
-#### 🛠️ 质押管理命令
+#### 🛠️ Staking Management Commands
 
 ```bash
 ## CLI Commands
@@ -164,53 +164,53 @@ congress-cli send --file registerValidator_signed.json --rpc_laddr http://localh
 ```bash
 ```
 
-#### 📊 治理操作命令
+#### 📊 Governance Operation Commands
 
 ```bash
-# 查询当前验证者集
+# Query current validator set
 congress-cli governance list-validators
 
-# 查询质押统计
+# Query staking statistics
 congress-cli governance staking-stats
 
-# 创建质押相关提案
+# Create staking-related proposal
 congress-cli governance create-proposal \
   --type staking-param-update \
   --param min_validator_stake \
   --value 15000
 
-# 投票提案
+# Vote on proposal
 congress-cli governance vote --proposal-id 0x5678... --choice yes
 ```
 
-#### 🔍 监控命令
+#### 🔍 Monitoring Commands
 
 ```bash
-# 实时监控验证者状态
+# Real-time monitor validator status
 congress-cli monitor validators --watch
 
-# 查询奖励分发历史
+# Query reward distribution history
 congress-cli monitor rewards --validator 0x1234... --blocks 1000
 
-# 查询惩罚记录
+# Query punishment records
 congress-cli monitor punishments --from-block 100000
 ```
 
-## 🔍 JPoSA架构代码分析
+## 🔍 JPoSA Architecture Code Analysis
 
-### ✅ 新架构优势
+### ✅ New Architecture Advantages
 
 1. **混合共识稳定性**
 
    ```solidity
-   // 基于质押权重选择验证者，同时保持PoA的快速确认
+   // Select validators based on staking weight while maintaining PoA fast confirmation
    function updateValidatorSetByStake(uint256 epoch) external;
    ```
 
 2. **经济激励机制**
 
    ```solidity
-   // 70:30 奖励分配模型
+   // 70:30 reward distribution model
    uint256 stakingReward = hb.mul(70).div(100);
    uint256 validatorReward = hb.sub(stakingReward);
    ```
@@ -218,73 +218,73 @@ congress-cli monitor punishments --from-block 100000
 3. **去中心化治理**
 
    ```solidity
-   // 基于质押权重的验证者动态选择
+   // Dynamic validator selection based on staking weight
    function getTopValidators(uint256 limit) external view returns (address[] memory);
    ```
 
-### 🚨 需要关注的问题
+### 🚨 Issues to Address
 
-1. **SafeMath 兼容性**
+1. **SafeMath Compatibility**
 
    ```solidity
-   // Solidity ^0.8.20 已内置溢出检查，SafeMath 不再必要
-   using SafeMath for uint256; // ❌ 不必要的依赖
+   // Solidity ^0.8.20 has built-in overflow checks, SafeMath no longer necessary
+   using SafeMath for uint256; // ❌ Unnecessary dependency
    ```
 
-2. **硬编码地址风险**
+2. **Hardcoded Address Risk**
 
    ```solidity
-   // 在 Proposal.sol 第87行
-   receiverAddr = 0x9014B4DB9D30CeD67DB9d6B096f5DCDbA28cE639; // ❌ 硬编码
+   // At line 87 of Proposal.sol
+   receiverAddr = 0x9014B4DB9D30CeD67DB9d6B096f5DCDbA28cE639; // ❌ Hardcoded
    ```
 
-3. **提案ID碰撞风险**
+3. **Proposal ID Collision Risk**
 
    ```solidity
-   // 在 Proposal.sol 第116行
+   // At line 116 of Proposal.sol
    bytes32 id = keccak256(abi.encodePacked(msg.sender, dst, flag, details, block.timestamp));
-   // ❌ 潜在的哈希碰撞风险
+   // ❌ Potential hash collision risk
    ```
 
-### ⚠️ 中风险问题
+### ⚠️ Medium Risk Issues
 
-4. **Gas限制风险**
+4. **Gas Limit Risk**
 
    ```solidity
-   // Validators.sol 中的循环操作没有Gas限制
-   for (uint256 i = 0; i < currentValidatorSet.length; i++) // ❌ 无界循环
+   // Loop operations in Validators.sol have no Gas limit
+   for (uint256 i = 0; i < currentValidatorSet.length; i++) // ❌ Unbounded loop
    ```
 
-5. **重入攻击风险**
+5. **Reentrancy Attack Risk**
 
    ```solidity
-   // Validators.sol 第153行
-   feeAddr.transfer(aacIncoming); // ❌ 没有重入保护
+   // Line 153 of Validators.sol
+   feeAddr.transfer(aacIncoming); // ❌ No reentrancy protection
    ```
 
-6. **单点故障**
+6. **Single Point of Failure**
 
    ```solidity
-   // 只有一个验证者时的边界情况处理不完善
-   if (highestValidatorsSet.length > 1) // ❌ 可能导致网络停止
+   // Incomplete handling of edge cases when only one validator
+   if (highestValidatorsSet.length > 1) // ❌ May cause network to stop
    ```
 
-### 📝 低风险问题
+### 📝 Low Risk Issues
 
-7. **事件缺失关键信息**
-8. **错误消息不规范**
-9. **缺少详细的访问控制日志**
+7. **Events missing key information**
+8. **Non-standard error messages**
+9. **Missing detailed access control logs**
 
-## 🛠️ 建议的技术改进
+## 🛠️ Suggested Technical Improvements
 
-### 1. 立即修复 (Critical)
+### 1. Immediate Fixes (Critical)
 
 ```solidity
-// ✅ 移除SafeMath，使用内置检查
-// 删除: using SafeMath for uint256;
-// 替换: validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming + per;
+// ✅ Remove SafeMath, use built-in checks
+// Delete: using SafeMath for uint256;
+// Replace: validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming + per;
 
-// ✅ 添加重入保护
+// ✅ Add reentrancy protection
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 contract Validators is Params, ReentrancyGuard {
     function withdrawProfits(address validator) external nonReentrant returns (bool) {
@@ -292,26 +292,26 @@ contract Validators is Params, ReentrancyGuard {
     }
 }
 
-// ✅ 使用nonce防止提案ID碰撞
+// ✅ Use nonce to prevent proposal ID collisions
 mapping(address => uint256) public nonces;
 bytes32 id = keccak256(abi.encodePacked(msg.sender, dst, flag, details, block.timestamp, nonces[msg.sender]++));
 ```
 
-### 2. 安全增强 (High Priority)
+### 2. Security Enhancement (High Priority)
 
 ```solidity
-// ✅ 添加Gas限制
+// ✅ Add Gas limit
 uint256 constant MAX_VALIDATORS = 100;
 require(currentValidatorSet.length <= MAX_VALIDATORS, "Too many validators");
 
-// ✅ 多签机制改进
+// ✅ Multi-signature mechanism improvements
 struct MultiSigConfig {
-    uint256 threshold;          // 最小通过票数
-    uint256 minValidators;      // 最小验证者数量
-    uint256 proposalDelay;      // 提案延迟执行时间
+    uint256 threshold;          // Minimum votes to pass
+    uint256 minValidators;      // Minimum validators
+    uint256 proposalDelay;      // Proposal execution delay
 }
 
-// ✅ 紧急停止机制
+// ✅ Emergency pause mechanism
 bool public emergencyPaused;
 modifier whenNotPaused() {
     require(!emergencyPaused, "Contract is paused");
@@ -319,24 +319,24 @@ modifier whenNotPaused() {
 }
 ```
 
-### 3. 架构优化 (Medium Priority)
+### 3. Architecture Optimization (Medium Priority)
 
 ```solidity
-// ✅ 事件增强
+// ✅ Enhanced events
 event LogWithdrawProfits(
     address indexed validator,
     address indexed feeAddr,
     uint256 amount,
     uint256 timestamp,
-    uint256 blockNumber    // 添加区块号
+    uint256 blockNumber    // Add block number
 );
 
-// ✅ 错误处理标准化
+// ✅ Standardized error handling
 error ValidatorNotExist(address validator);
 error InsufficientBalance(uint256 requested, uint256 available);
 error ProposalExpired(bytes32 proposalId, uint256 expireTime);
 
-// ✅ 配置参数验证
+// ✅ Configuration parameter validation
 function updateConfig(uint256 cid, uint256 value) private {
     if (cid == 0) {
         require(value >= 1 hours && value <= 30 days, "Invalid proposal period");
@@ -346,77 +346,77 @@ function updateConfig(uint256 cid, uint256 value) private {
 }
 ```
 
-### 4. 长期架构升级
+### 4. Long-term Architecture Upgrade
 
 ```solidity
-// ✅ 可升级合约架构
+// ✅ Upgradeable contract architecture
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 contract ValidatorsUpgradeable is Initializable, Params {
-    // 实现可升级模式
+    // Implement upgradeable pattern
 }
 
-// ✅ 分层治理
+// ✅ Layered governance
 contract GovernanceV2 {
     enum ProposalType {
-        ValidatorManagement,    // 验证者管理
-        ParameterUpdate,        // 参数更新  
-        EmergencyAction,        // 紧急操作
-        SystemUpgrade          // 系统升级
+        ValidatorManagement,    // Validator management
+        ParameterUpdate,        // Parameter update  
+        EmergencyAction,        // Emergency action
+        SystemUpgrade          // System upgrade
     }
     
     mapping(ProposalType => uint256) public thresholds;
 }
 
-// ✅ 经济模型优化
+// ✅ Economic model optimization
 struct EconomicParams {
-    uint256 stakingReward;      // 质押奖励
-    uint256 slashingRate;       // 惩罚比例
-    uint256 commissionRate;     // 佣金比例
+    uint256 stakingReward;      // Staking reward
+    uint256 slashingRate;       // Slashing rate
+    uint256 commissionRate;     // Commission rate
 }
 ```
 
-## 🎯 优先级建议
+## 🎯 Priority Recommendations
 
-### 阶段1 (紧急修复 - 1-2周)
+### Phase 1 (Critical Fixes - 1-2 weeks)
 
-1. 移除SafeMath依赖
-2. 添加重入保护
-3. 修复硬编码地址
-4. 添加提案ID碰撞保护
+1. Remove SafeMath dependency
+2. Add reentrancy protection
+3. Fix hardcoded addresses
+4. Add proposal ID collision protection
 
-### 阶段2 (安全加固 - 2-4周)  
+### Phase 2 (Security Hardening - 2-4 weeks)  
 
-1. 实现Gas限制和循环保护
-2. 增强事件和错误处理
-3. 添加紧急暂停机制
-4. 优化多签阈值逻辑
+1. Implement Gas limit and loop protection
+2. Enhance events and error handling
+3. Add emergency pause mechanism
+4. Optimize multi-signature threshold logic
 
-### 阶段3 (架构升级 - 1-3个月)
+### Phase 3 (Architecture Upgrade - 1-3 months)
 
-1. 实现可升级合约架构
-2. 分层治理机制
-3. 经济模型优化
-4. 全面的测试覆盖
+1. Implement upgradeable contract architecture
+2. Layered governance mechanism
+3. Economic model optimization
+4. Comprehensive test coverage
 
-这个系统的核心设计是合理的，但需要现代化的安全实践和更健壮的错误处理。建议优先处理安全相关的问题，然后逐步进行架构优化。
+The core design of this system is sound, but requires modern security practices and more robust error handling. It is recommended to prioritize security-related issues, then proceed with architectural optimization.
 
-## 🚀 PoSA硬分叉升级
+## 🚀 PoSA Hard Fork Upgrade
 
-### 硬分叉特性
+### Hard Fork Features
 
-- **分叉名称**: "posa"
-- **激活时间**: 202599-08-25 14:21:06 CST (timestamp: 1756102866)
-- **主要变更**:
-  - 日产出从 172,800 JU 降至 72,000 JU
-  - 区块奖励从 2 JU 降至 0.833 JU
-  - 启用质押机制和混合共识
+- **Fork Name**: "posa"
+- **Activation Time**: 202599-08-25 14:21:06 CST (timestamp: 1756102866)
+- **Major Changes**:
+  - Daily issuance reduced from 172,800 JU to 72,000 JU
+  - Block reward reduced from 2 JU to 0.833 JU
+  - Enable staking mechanism and hybrid consensus
 
-### 链上配置
+### On-chain Configuration
 
 ```go
 // params/config.go
 type ChainConfig struct {
-    PosaTime *uint64 `json:"posaTime,omitempty"`  // PoSA硬分叉激活时间
+    PosaTime *uint64 `json:"posaTime,omitempty"`  // PoSA hard fork activation time
 }
 
 func (c *ChainConfig) IsPosa(num *big.Int, time uint64) bool {
@@ -424,80 +424,80 @@ func (c *ChainConfig) IsPosa(num *big.Int, time uint64) bool {
 }
 ```
 
-### 合约部署地址
+### Contract Deployment Addresses
 
-| 合约名称 | 地址 | 功能描述 |
+| Contract Name | Address | Function Description |
 |---------|------|----------|
-| Validators | `0x000000000000000000000000000000000000f000` | 验证者管理 |
-| Punish | `0x000000000000000000000000000000000000f001` | 惩罚机制 |
-| Proposal | `0x000000000000000000000000000000000000f002` | 提案治理 |
-| Staking | `0x000000000000000000000000000000000000f003` | 质押管理 🆕 |
+| Validators | `0x000000000000000000000000000000000000f000` | Validator management |
+| Punish | `0x000000000000000000000000000000000000f001` | Punishment mechanism |
+| Proposal | `0x000000000000000000000000000000000000f002` | Proposal governance |
+| Staking | `0x000000000000000000000000000000000000f003` | Staking management 🆕 |
 
-## 📦 部署和使用
+## 📦 Deployment and Usage
 
-### 1. 合约编译
+### 1. Contract Compilation
 
 ```bash
-# 进入sys-contract目录
+# Navigate to sys-contract directory
 cd sys-contract
 
-# 安装依赖
+# Install dependencies
 npm install
 
-# 编译合约
+# Compile contracts
 npm run compile
 
-# 生成Go绑定
+# Generate Go bindings
 npm run generate-contracts
 ```
 
-### 2. 网络配置
+### 2. Network Configuration
 
 ```bash
-# 主网配置
+# Mainnet configuration
 geth --config config-validator-mainnet.toml
 
-# 测试网配置  
+# Testnet configuration  
 geth --config config-validator.toml
 
-# 同步节点配置
+# Sync node configuration
 geth --config config-syncnode.toml
 ```
 
-### 3. Congress-CLI安装
+### 3. Congress-CLI Installation
 
 ```bash
-# 从源码构建
+# Build from source
 cd congress-cli
 go build -o congress-cli ./cmd/congress-cli
 
-# 配置网络连接
+# Configure network connection
 congress-cli config set-rpc http://localhost:8545
 congress-cli config set-chain-id 202599
 ```
 
-### 4. 验证者操作示例
+### 4. Validator Operation Examples
 
 ```bash
-# 1. 注册为验证者
+# 1. Register as validator
 congress-cli staking register-validator \
   --stake-amount 10000 \
   --commission-rate 500 \
   --private-key /path/to/validator.key
 
-# 2. 查询验证者状态
+# 2. Query validator status
 congress-cli staking query-validator --address 0x1234...
 
-# 3. 委托质押
+# 3. Delegate stake
 congress-cli staking delegate \
   --validator 0x1234... \
   --amount 1000 \
   --private-key /path/to/delegator.key
 
-# 4. 提取奖励
+# 4. Withdraw rewards
 congress-cli staking claim-rewards \
   --validator 0x1234... \
   --private-key /path/to/user.key
 ```
 
-这个升级将JuChain从纯PoA机制平滑过渡到PoSA混合共识，提供了更强的去中心化保障和经济激励机制。🎉
+This upgrade smoothly transitions JuChain from pure PoA mechanism to JPoSA hybrid consensus, providing stronger decentralization guarantees and economic incentive mechanisms. 🎉

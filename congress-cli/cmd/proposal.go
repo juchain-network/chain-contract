@@ -40,7 +40,7 @@ func createProposalTx(cmd *cobra.Command, _ []string) {
 	target, _ := cmd.Flags().GetString("target")
 	operation, _ := cmd.Flags().GetString("operation")
 
-	// 验证输入参数
+	// Validate input parameters
 	if err := ValidateRPCURL(rpc); err != nil {
 		PrintValidationError(err)
 		return
@@ -115,7 +115,7 @@ func createConfigProposalTx(cmd *cobra.Command, _ []string) {
 	cid, _ := cmd.Flags().GetInt64("cid")
 	cvalue, _ := cmd.Flags().GetInt64("value")
 
-	// 验证输入参数
+	// Validate input parameters
 	if err := ValidateRPCURL(rpc); err != nil {
 		PrintValidationError(err)
 		return
@@ -190,7 +190,7 @@ func voteProposalTx(cmd *cobra.Command, _ []string) {
 	proposalId, _ := cmd.Flags().GetString("proposalId")
 	approve, _ := cmd.Flags().GetBool("approve")
 
-	// 验证输入参数
+	// Validate input parameters
 	if err := ValidateRPCURL(rpc); err != nil {
 		PrintValidationError(err)
 		return
@@ -262,7 +262,7 @@ func queryProposalTx(cmd *cobra.Command, _ []string) {
 	rpc := GetRPCEndpoint(cmd)
 	proposalId, _ := cmd.Flags().GetString("id")
 
-	// 验证输入参数
+	// Validate input parameters
 	if err := ValidateRPCURL(rpc); err != nil {
 		PrintValidationError(err)
 		return
@@ -301,21 +301,21 @@ func innerQueryProposal(proposalId string, rpc string) error {
 		return fmt.Errorf("failed to query proposal: %w", err)
 	}
 
-	// 显示提案信息
+	// Display proposal information
 	fmt.Println("📋 Proposal Details:")
 	fmt.Printf("Proposal ID: %s\n", proposalId)
-	fmt.Printf("Proposer: %s (验证者地址)\n", proposal.Proposer.Hex())
+	fmt.Printf("Proposer: %s (validator address)\n", proposal.Proposer.Hex())
 
-	// 根据提案类型显示不同信息
-	if proposal.ProposalType.Int64() == 1 { // 验证者管理提案
+	// Display different information based on proposal type
+	if proposal.ProposalType.Int64() == 1 { // Validator management proposal
 		if proposal.Flag {
-			fmt.Printf("Target Address: %s (待添加验证者)\n", proposal.Dst.Hex())
+			fmt.Printf("Target Address: %s (validator to add)\n", proposal.Dst.Hex())
 			fmt.Printf("Action: Add New Validator (Flag: true)\n")
 		} else {
-			fmt.Printf("Target Address: %s (待移除验证者)\n", proposal.Dst.Hex())
+			fmt.Printf("Target Address: %s (validator to remove)\n", proposal.Dst.Hex())
 			fmt.Printf("Action: Remove Validator (Flag: false)\n")
 		}
-	} else if proposal.ProposalType.Int64() == 2 { // 配置更新提案
+	} else if proposal.ProposalType.Int64() == 2 { // Configuration update proposal
 		fmt.Printf("Config ID: %s (%s)\n", proposal.Cid.String(), getConfigIDName(proposal.Cid.Int64()))
 		fmt.Printf("New Value: %s\n", proposal.NewValue.String())
 		fmt.Printf("Action: Update Configuration\n")
@@ -331,33 +331,33 @@ func innerQueryProposal(proposalId string, rpc string) error {
 	return nil
 }
 
-// 获取提案类型名称
+// Get proposal type name
 func getProposalTypeName(proposalType int64) string {
 	switch proposalType {
 	case 1:
-		return "Validator Management 验证者管理"
+		return "Validator Management"
 	case 2:
-		return "Configuration Update 配置更新"
+		return "Configuration Update"
 	default:
-		return "Unknown Type 未知类型"
+		return "Unknown Type"
 	}
 }
 
-// 获取配置项名称
+// Get configuration item name
 func getConfigIDName(cid int64) string {
 	switch cid {
 	case 0:
-		return "Proposal Lasting Period 提案持续时间"
+		return "Proposal Lasting Period"
 	case 1:
-		return "Punish Threshold 惩罚阈值"
+		return "Punish Threshold"
 	case 2:
-		return "Remove Threshold 移除阈值"
+		return "Remove Threshold"
 	case 3:
-		return "Decrease Rate 减少率"
+		return "Decrease Rate"
 	case 4:
-		return "Withdraw Profit Period 提取收益周期"
+		return "Withdraw Profit Period"
 	default:
-		return "Unknown Config 未知配置"
+		return "Unknown Config"
 	}
 }
 
@@ -374,7 +374,7 @@ func QueryProposalsCmd() *cobra.Command {
 func queryProposalsTx(cmd *cobra.Command, _ []string) {
 	rpc := GetRPCEndpoint(cmd)
 
-	// 验证输入参数
+	// Validate input parameters
 	if err := ValidateRPCURL(rpc); err != nil {
 		PrintValidationError(err)
 		return
@@ -400,22 +400,22 @@ func innerQueryProposals(rpc string) error {
 		return fmt.Errorf("failed to instantiate proposal contract: %w", err)
 	}
 
-	// 获取当前区块号
+	// Get current block number
 	currentBlock, err := client.BlockNumber(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get current block number: %w", err)
 	}
 
-	// 设置查询范围（从创世块到当前块）
+	// Set query range (from genesis block to current block)
 	opts := &bind.FilterOpts{
 		Start: 0,
 		End:   &currentBlock,
 	}
 
-	// 收集所有提案 ID
+	// Collect all proposal IDs
 	proposalIDs := make(map[string]bool)
 
-	// 查询验证者管理提案事件
+	// Query validator management proposal events
 	validatorProposalIter, err := proposalContract.FilterLogCreateProposal(opts, nil, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to filter validator proposals: %w", err)
@@ -428,7 +428,7 @@ func innerQueryProposals(rpc string) error {
 		proposalIDs[proposalID] = true
 	}
 
-	// 查询配置更新提案事件
+	// Query configuration update proposal events
 	configProposalIter, err := proposalContract.FilterLogCreateConfigProposal(opts, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to filter config proposals: %w", err)
@@ -448,7 +448,7 @@ func innerQueryProposals(rpc string) error {
 
 	fmt.Printf("ℹ️  Found %d proposal(s):\n\n", len(proposalIDs))
 
-	// 查询每个提案的详细信息
+	// Query detailed information for each proposal
 	count := 1
 	for proposalID := range proposalIDs {
 		fmt.Printf("--- Proposal %d ---\n", count)
@@ -462,12 +462,12 @@ func innerQueryProposals(rpc string) error {
 			continue
 		}
 
-		// 显示提案信息
+		// Display proposal information
 		fmt.Printf("ID: %s\n", proposalID)
-		fmt.Printf("Proposer: %s (验证者地址)\n", proposal.Proposer.Hex())
+		fmt.Printf("Proposer: %s (validator address)\n", proposal.Proposer.Hex())
 
-		// 根据提案类型显示不同信息
-		if proposal.ProposalType.Int64() == 1 { // 验证者管理提案
+		// Display different information based on proposal type
+		if proposal.ProposalType.Int64() == 1 { // Validator management proposal
 			if proposal.Flag {
 				fmt.Printf("Target: %s (待添加验证者)\n", proposal.Dst.Hex())
 				fmt.Printf("Action: Add New Validator (添加验证者)\n")
@@ -475,7 +475,7 @@ func innerQueryProposals(rpc string) error {
 				fmt.Printf("Target: %s (待移除验证者)\n", proposal.Dst.Hex())
 				fmt.Printf("Action: Remove Validator (移除验证者)\n")
 			}
-		} else if proposal.ProposalType.Int64() == 2 { // 配置更新提案
+		} else if proposal.ProposalType.Int64() == 2 { // Configuration update proposal
 			fmt.Printf("Config ID: %s (%s)\n", proposal.Cid.String(), getConfigIDName(proposal.Cid.Int64()))
 			fmt.Printf("New Value: %s\n", proposal.NewValue.String())
 			fmt.Printf("Action: Update Configuration (更新配置)\n")

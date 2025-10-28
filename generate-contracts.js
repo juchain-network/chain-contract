@@ -1,7 +1,7 @@
 const fs = require("fs");
 const nunjucks = require("nunjucks");
 
-// 从命令行参数或环境变量获取配置
+// Get configuration from command line arguments or environment variables
 const isMock = process.argv.includes('--mock') || process.env.MOCK === 'true';
 
 const config = {
@@ -12,7 +12,7 @@ var list = [
     { src: "contracts/Params.template", dst: "contracts/Params.sol" },
 ];
 
-// 显示当前模式
+// Display current mode
 console.log(`Generating contracts in ${isMock ? 'MOCK' : 'PRODUCTION'} mode...`);
 
 for (let i = 0; i < list.length; i++) {
@@ -24,7 +24,7 @@ for (let i = 0; i < list.length; i++) {
 
 console.log(`Generate ${isMock ? 'mock' : 'system'} contracts success`);
 
-// 使用说明
+// Usage instructions
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log(`
 Usage:

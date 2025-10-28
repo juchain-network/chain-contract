@@ -36,7 +36,7 @@ func signRawTx(cmd *cobra.Command, _ []string) {
 	key, _ := cmd.Flags().GetString("key")
 	passwordFile, _ := cmd.Flags().GetString("password")
 
-	// 验证输入参数
+	// Validate input parameters
 	if err := ValidateChainID(chainId); err != nil {
 		PrintValidationError(err)
 		return

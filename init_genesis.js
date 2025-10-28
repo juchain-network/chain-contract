@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-// 提取系统合约字节码并更新 Genesis 文件
+// Extract system contract bytecode and update Genesis file
 const fs = require('fs');
 const path = require('path');
 const { keccak256 } = require('js-sha3');
 
-console.log('🔧 提取系统合约字节码并更新 Genesis 文件...');
+console.log('🔧 Extracting system contract bytecode and updating Genesis file...');
 
-// 合约地址映射
+// Contract address mapping
 const CONTRACT_ADDRESSES = {
     'Validators': '0x000000000000000000000000000000000000f000',
     'Punish': '0x000000000000000000000000000000000000f001',
@@ -15,7 +15,7 @@ const CONTRACT_ADDRESSES = {
     'Staking': '0x000000000000000000000000000000000000f003'
 };
 
-// 初始验证者信息
+// Initial validator information
 const INITIAL_VALIDATORS = [
     '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
     '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
@@ -24,7 +24,7 @@ const INITIAL_VALIDATORS = [
     '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65'
 ];
 
-// 读取合约字节码
+// Read contract bytecode
 function getContractBytecode(contractName) {
     // Try Foundry first (out directory)
     const foundryPath = path.join(__dirname, 'out', `${contractName}.sol`, `${contractName}.json`);
@@ -38,13 +38,13 @@ function getContractBytecode(contractName) {
             const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
             return artifact.deployedBytecode;
         } catch (error) {
-            console.error(`❌ 无法读取 ${contractName} 合约字节码:`, error.message);
+            console.error(`❌ Unable to read ${contractName} contract bytecode:`, error.message);
             return null;
         }
     }
 }
 
-// keccak256 计算助手函数
+// keccak256 calculation helper function
 function keccak256Hash(data) {
     if (typeof data === 'string' && data.startsWith('0x')) {
         return '0x' + keccak256(Buffer.from(data.slice(2), 'hex'));
@@ -52,43 +52,43 @@ function keccak256Hash(data) {
     return '0x' + keccak256(data);
 }
 
-// 生成初始验证者的 extraData
-// 使用预分配账户作为初始验证者
+// Generate extraData for initial validators
+// Use pre-allocated accounts as initial validators
 function generateExtraData() {
-    // 构建 extraData 结构:
-    // 32字节 vanity + N*20字节 validator addresses + 65字节 signature
-    const vanity = '0'.repeat(64); // 32字节的vanity (可以是任意数据)
+    // Build extraData structure:
+    // 32-byte vanity + N*20-byte validator addresses + 65-byte signature
+    const vanity = '0'.repeat(64); // 32-byte vanity (can be any data)
     
-    // 验证者地址列表 (去掉0x前缀，保持20字节)
+    // Validator address list (remove 0x prefix, keep 20 bytes)
     const validatorAddresses = INITIAL_VALIDATORS.map(addr => addr.slice(2).toLowerCase()).join('');
     
-    // 为了生成正确的签名，我们需要：
-    // 1. 构建要签名的数据（不包含签名部分）
+    // To generate correct signature, we need:
+    // 1. Build data to sign (excluding signature part)
     const dataToSign = vanity + validatorAddresses;
     
-    // 2. 对数据进行哈希
+    // 2. Hash the data
     const hash = keccak256Hash(Buffer.from(dataToSign, 'hex'));
     
-    // 3. 生成一个简单的签名（在实际场景中，这应该是由验证者私钥签名）
-    // 这里我们使用一个确定性的方法来生成签名
+    // 3. Generate a simple signature (in real scenario, this should be signed by validator private key)
+    // Here we use a deterministic method to generate signature
     const messageHash = Buffer.from(hash.slice(2), 'hex');
     
-    // 生成一个固定的签名（65字节：32字节r + 32字节s + 1字节v）
-    // 注意：这不是真正的ECDSA签名，只是为了格式正确
+    // Generate a fixed signature (65 bytes: 32-byte r + 32-byte s + 1-byte v)
+    // Note: This is not a real ECDSA signature, just for correct format
     const r = keccak256(messageHash).slice(0, 64);
     const s = keccak256(r + 'salt').slice(0, 64);
-    const v = '1c'; // recovery id (通常是1b或1c)
+    const v = '1c'; // recovery id (usually 1b or 1c)
     
     const signature = r + s + v;
     
     return '0x' + vanity + validatorAddresses + signature;
 }
 
-// 生成 Staking 合约的存储状态
+// Generate Staking contract storage state
 function generateStakingStorage() {
     const crypto = require('crypto');
     
-    // 计算存储槽位的辅助函数（使用正确的 keccak256）
+    // Helper function to calculate storage slots (using correct keccak256)
     function getStorageSlot(slot, key) {
         const keyPadded = key.slice(2).padStart(64, '0');
         const slotPadded = slot.toString(16).padStart(64, '0');
@@ -102,7 +102,7 @@ function generateStakingStorage() {
         return '0x' + (baseBN + indexBN).toString(16).padStart(64, '0');
     }
     
-    // Staking 合约存储槽位布局（考虑从 Params 继承）：
+    // Staking contract storage slot layout (considering inheritance from Params):
     // slot 0: initialized bool (from Params)
     // slot 1: validatorStakes mapping(address => ValidatorStake)
     // slot 2: delegations mapping(address => mapping(address => Delegation))  
@@ -115,14 +115,14 @@ function generateStakingStorage() {
     
     const storage = {};
     
-    // 注意：不设置 initialized，让 Congress 共识引擎调用 initialize() 方法
+    // Note: Do not set initialized, let Congress consensus engine call initialize() method
     
-    // 设置 validatorsContract 地址 (slot 8)
+    // Set validatorsContract address (slot 8)
     const validatorsAddress = CONTRACT_ADDRESSES.Validators.toLowerCase();
     storage['0x0000000000000000000000000000000000000000000000000000000000000008'] = 
         '0x' + validatorsAddress.slice(2).padStart(64, '0');
     
-    // 为每个验证者设置质押信息
+    // Set staking information for each validator
     const minValidatorStake = BigInt('10000000000000000000000'); // 10,000 ether in wei
     let totalStaked = BigInt(0);
     
@@ -132,7 +132,7 @@ function generateStakingStorage() {
         // validatorStakes[validator] mapping (slot 1)
         const stakingSlot = getStorageSlot(1, validatorAddr);
         
-        // ValidatorStake 结构体布局：
+        // ValidatorStake struct layout:
         // offset 0: selfStake (uint256)
         // offset 1: totalDelegated (uint256) 
         // offset 2: commissionRate (uint256)
@@ -163,7 +163,7 @@ function generateStakingStorage() {
         const jailUntilSlot = '0x' + (BigInt(stakingSlot) + BigInt(5)).toString(16).padStart(64, '0');
         storage[jailUntilSlot] = '0x' + '0'.padStart(64, '0');
         
-        // allValidators array (slot 4) - 设置数组长度
+        // allValidators array (slot 4) - set array length
         if (index === 0) {
             storage['0x0000000000000000000000000000000000000000000000000000000000000004'] = 
                 '0x' + INITIAL_VALIDATORS.length.toString(16).padStart(64, '0');
@@ -187,21 +187,21 @@ function generateStakingStorage() {
     return storage;
 }
 
-// 更新 Genesis 文件
+// Update Genesis file
 function updateGenesisFile() {
     const genesisPath = path.join(__dirname, '..', 'chain', 'genesis.json');
     
     try {
-        // 读取现有的 Genesis 文件
+        // Read existing Genesis file
         const genesis = JSON.parse(fs.readFileSync(genesisPath, 'utf8'));
         
-        // 确保 alloc 字段存在
+        // Ensure alloc field exists
         if (!genesis.alloc) {
             genesis.alloc = {};
         }
         
-        // 添加系统合约
-        console.log('📋 添加系统合约到 Genesis 文件...');
+        // Add system contracts
+        console.log('📋 Adding system contracts to Genesis file...');
         
         for (const [contractName, address] of Object.entries(CONTRACT_ADDRESSES)) {
             const bytecode = getContractBytecode(contractName);
@@ -211,36 +211,36 @@ function updateGenesisFile() {
                     code: bytecode
                 };
                 
-                // 为 Staking 合约添加预设存储状态
+                // Add preset storage state for Staking contract
                 if (contractName === 'Staking') {
                     contractAlloc.storage = generateStakingStorage();
-                    console.log(`✅ ${contractName}: ${address} (包含 ${INITIAL_VALIDATORS.length} 个预设验证者)`);
+                    console.log(`✅ ${contractName}: ${address} (includes ${INITIAL_VALIDATORS.length} preset validators)`);
                 } else {
                     console.log(`✅ ${contractName}: ${address}`);
                 }
                 
                 genesis.alloc[address] = contractAlloc;
             } else {
-                console.log(`❌ ${contractName}: 字节码获取失败`);
+                console.log(`❌ ${contractName}: Failed to get bytecode`);
             }
         }
         
-        // 更新 extraData 以包含初始验证者
+        // Update extraData to include initial validators
         genesis.extraData = generateExtraData();
-        console.log('✅ 更新 extraData 包含初始验证者');
+        console.log('✅ Updated extraData to include initial validators');
         
-        // 写回 Genesis 文件
+        // Write back Genesis file
         fs.writeFileSync(genesisPath, JSON.stringify(genesis, null, 2));
-        console.log('✅ Genesis 文件更新成功!');
+        console.log('✅ Genesis file updated successfully!');
         console.log(`📄 文件位置: ${path.relative(process.cwd(), genesisPath)}`);
         
-        // 显示摘要
-        console.log('\n📋 更新摘要:');
-        console.log(`🏗️  共识算法: Congress (POA)`);
-        console.log(`⏱️  出块间隔: ${genesis.config.congress.period} 秒`);
-        console.log(`🔄 验证者更新周期: ${genesis.config.congress.epoch} 块`);
-        console.log(`🏪 系统合约: ${Object.keys(CONTRACT_ADDRESSES).length} 个`);
-        console.log(`👥 预设验证者: ${INITIAL_VALIDATORS.length} 个`);
+        // Display summary
+        console.log('\n📋 Update Summary:');
+        console.log(`🏗️  Consensus Algorithm: Congress (POA)`);
+        console.log(`⏱️  Block Interval: ${genesis.config.congress.period} seconds`);
+        console.log(`🔄 Validator Update Cycle: ${genesis.config.congress.epoch} blocks`);
+        console.log(`🏪 System Contracts: ${Object.keys(CONTRACT_ADDRESSES).length} contracts`);
+        console.log(`👥 Preset Validators: ${INITIAL_VALIDATORS.length} validators`);
         console.log(`💰 每个验证者质押: 10,000 JU`);
         console.log(`🆔 链 ID: ${genesis.config.chainId}`);
         
@@ -255,49 +255,49 @@ function updateGenesisFile() {
     }
 }
 
-// 验证合约编译状态
+// Verify contract compilation status
 function verifyContracts() {
-    console.log('🔍 验证合约编译状态...');
+    console.log('🔍 Verifying contract compilation status...');
     
     let allContractsReady = true;
     for (const contractName of Object.keys(CONTRACT_ADDRESSES)) {
         const bytecode = getContractBytecode(contractName);
         if (!bytecode || bytecode === '0x') {
-            console.log(`❌ ${contractName}: 未编译或字节码为空`);
+            console.log(`❌ ${contractName}: Not compiled or bytecode is empty`);
             allContractsReady = false;
         } else {
-            console.log(`✅ ${contractName}: 编译成功 (${bytecode.length} 字符)`);
+            console.log(`✅ ${contractName}: Compiled successfully (${bytecode.length} characters)`);
         }
     }
     
     if (!allContractsReady) {
-        console.log('\n❌ 请先编译合约: forge build 或 npx hardhat compile');
+        console.log('\n❌ Please compile contracts first: forge build or npx hardhat compile');
         process.exit(1);
     }
     
     return true;
 }
 
-// 主函数
+// Main function
 function main() {
-    console.log('🚀 Congress 共识配置工具\n');
+    console.log('🚀 Congress Consensus Configuration Tool\n');
     
-    // 验证合约编译状态
+    // Verify contract compilation status
     if (verifyContracts()) {
-        // 更新 Genesis 文件
+        // Update Genesis file
         updateGenesisFile();
         
-        console.log('\n🎉 Congress 共识配置完成!');
-        console.log('💡 接下来可以启动私有链:');
+        console.log('\n🎉 Congress consensus configuration completed!');
+        console.log('💡 Next steps to start private chain:');
         console.log('   cd ../chain && ./pm2-init.sh');
-        console.log('   或者直接使用: cd ../chain && pm2 start ecosystem.config.js');
-        console.log('\n📋 重要提示:');
-        console.log('   ✅ 创世区块已包含 5 个预设验证者的质押信息');
-        console.log('   ✅ 每个验证者已质押 10,000 JU 代币');
-        console.log('   ✅ JPoSA 共识将正常工作，无需手动注册验证者');
-        console.log('   ✅ 可以直接进行验证者投票和质押操作');
+        console.log('   or directly use: cd ../chain && pm2 start ecosystem.config.js');
+        console.log('\n📋 Important Notes:');
+        console.log('   ✅ Genesis block includes staking info for 5 preset validators');
+        console.log('   ✅ Each validator has staked 10,000 JU tokens');
+        console.log('   ✅ JPoSA consensus will work normally without manual validator registration');
+        console.log('   ✅ Can directly perform validator voting and staking operations');
     }
 }
 
-// 运行主函数
+// Run main function
 main();

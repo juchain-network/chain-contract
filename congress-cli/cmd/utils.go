@@ -60,7 +60,7 @@ func ValidateFile(filepath string) error {
 	return nil
 }
 
-// ValidateOperation 验证操作类型
+// ValidateOperation validates operation type
 func ValidateOperation(operation string) error {
 	if operation != "add" && operation != "remove" {
 		return fmt.Errorf("invalid operation: %s, must be 'add' or 'remove'", operation)
@@ -68,7 +68,7 @@ func ValidateOperation(operation string) error {
 	return nil
 }
 
-// ValidateConfigID 验证配置ID
+// ValidateConfigID validates configuration ID
 func ValidateConfigID(cid int64) error {
 	if cid < 0 || cid > 4 {
 		return fmt.Errorf("invalid config ID: %d, must be 0-4", cid)
@@ -76,16 +76,16 @@ func ValidateConfigID(cid int64) error {
 	return nil
 }
 
-// ValidateProposalID 验证提案ID格式
+// ValidateProposalID validates proposal ID format
 func ValidateProposalID(proposalID string) error {
 	if proposalID == "" {
 		return fmt.Errorf("proposal ID cannot be empty")
 	}
 
-	// 允许 0x 前缀
+	// Allow 0x prefix
 	cleanID := strings.TrimPrefix(proposalID, "0x")
 
-	// 验证是否为有效的十六进制字符串
+	// Validate if it is a valid hexadecimal string
 	if !regexp.MustCompile(`^[0-9a-fA-F]+$`).MatchString(cleanID) {
 		return fmt.Errorf("invalid proposal ID format: %s", proposalID)
 	}
@@ -95,7 +95,7 @@ func ValidateProposalID(proposalID string) error {
 	return nil
 }
 
-// GetConfigIDName 获取配置ID的名称
+// GetConfigIDName gets the name of configuration ID
 func GetConfigIDName(cid int64) string {
 	switch cid {
 	case 0:
@@ -113,22 +113,22 @@ func GetConfigIDName(cid int64) string {
 	}
 }
 
-// PrintValidationError 打印验证错误信息
+// PrintValidationError prints validation error message
 func PrintValidationError(err error) {
 	fmt.Printf("❌ Validation Error: %v\n", err)
 }
 
-// PrintSuccess 打印成功信息
+// PrintSuccess prints success message
 func PrintSuccess(message string) {
 	fmt.Printf("✅ %s\n", message)
 }
 
-// PrintInfo 打印信息
+// PrintInfo prints information
 func PrintInfo(message string) {
 	fmt.Printf("ℹ️  %s\n", message)
 }
 
-// PrintWarning 打印警告信息
+// PrintWarning prints warning message
 func PrintWarning(message string) {
 	fmt.Printf("⚠️  %s\n", message)
 }

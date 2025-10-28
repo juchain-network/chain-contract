@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
-// JPoSA 系统状态综合检查器
-// 检查系统合约初始化状态和验证者详细信息
+// JPoSA System Status Comprehensive Checker
+// Check system contract initialization status and validator details
 const { Web3 } = require('web3');
 
 async function checkSystemStatus() {
     const web3 = new Web3('http://localhost:8545');
     
-    console.log('🔍 JPoSA 系统状态综合检查器\n');
+    console.log('🔍 JPoSA System Status Comprehensive Checker\n');
     console.log('='.repeat(80));
     
-    // 1. 检查节点连接
+    // 1. Check node connection
     let blockNumber, networkId;
     try {
         blockNumber = await web3.eth.getBlockNumber();

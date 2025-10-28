@@ -207,11 +207,11 @@ func waitEthTxFinished(client *ethclient.Client, txhash common.Hash) (error, *bi
 	}
 }
 
-// 创建提案id
-// flag true新增候选人，false踢出候选人
+// Create proposal ID
+// flag true add candidate, false remove candidate
 func BuildProposalId(from, dest string, flag bool, details string, blockNum uint64, client *ethclient.Client) (string, error) {
-	sender := common.HexToAddress(from) // 提案人
-	dst := common.HexToAddress(dest)    // 候选人
+	sender := common.HexToAddress(from) // Proposer
+	dst := common.HexToAddress(dest)    // Candidate
 	flagValue := big.NewInt(0)
 	if flag {
 		flagValue.SetInt64(1)
@@ -225,7 +225,7 @@ func BuildProposalId(from, dest string, flag bool, details string, blockNum uint
 	// id := crypto.Keccak256(
 	// 	sender.Bytes(),
 	// 	dst.Bytes(),
-	// 	common.LeftPadBytes(flagValue.Bytes(), 32), // 将flag填充为32字节
+	// 	common.LeftPadBytes(flagValue.Bytes(), 32), // Pad flag to 32 bytes
 	// 	[]byte(nil),
 	// 	common.LeftPadBytes(big.NewInt(int64(block.Header().Time)).Bytes(), 32), // timestamp (uint256)
 	// )
@@ -267,7 +267,7 @@ func buildId(
 	// return hex.EncodeToString(hash) // Returns bytes32 as hex string
 }
 
-// 查询生成的提案ID
+// Query generated proposal ID
 func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Client) (error, string) {
 	instance, err := generated.NewProposal(common.HexToAddress(ProposalContractAddr), client)
 	if err != nil {
@@ -275,19 +275,19 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 		return err, ""
 	}
 
-	// 定义查询过滤器
+	// Define query filter
 	filterOpts := &bind.FilterOpts{
-		Start:   blockHeight,  // 起始区块号
-		End:     &blockHeight, // 结束区块号（nil 表示最新区块）
+		Start:   blockHeight,  // Start block number
+		End:     &blockHeight, // End block number (nil means latest block)
 		Context: context.Background(),
 	}
-	// 查询事件日志
+	// Query event logs
 	logs, err := instance.FilterLogCreateProposal(filterOpts, nil, []common.Address{common.HexToAddress(proposer)}, nil)
 	if err != nil {
 		fmt.Printf("Failed to filter LogCreateProposal events: %v", err)
 		return err, ""
 	}
-	// 遍历日志
+	// Iterate logs
 	var proposalId string
 	for logs.Next() {
 		event := logs.Event
@@ -306,13 +306,13 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 		return logs.Error(), ""
 	}
 
-	// 查询事件日志
+	// Query event logs
 	logs1, err := instance.FilterLogCreateConfigProposal(filterOpts, nil, []common.Address{common.HexToAddress(proposer)})
 	if err != nil {
 		fmt.Printf("Failed to filter LogCreateConfigProposal events: %v", err)
 		return err, ""
 	}
-	// 遍历日志
+	// Iterate logs
 	proposalId = "0x"
 	for logs1.Next() {
 		event := logs1.Event

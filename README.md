@@ -1,6 +1,6 @@
 # Ju System Contracts
 
-> JPoSA (JuChain Proof of Staked Authority) 共识系统合约
+> JPoSA (JuChain Proof of Staked Authority) Consensus Contracts
 
 This repository contains the system contracts for the Ju blockchain's JPoSA (Proof of Staked Authority) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and a comprehensive CLI tool for network administration.
 

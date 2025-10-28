@@ -1,20 +1,20 @@
-# JuChain PoSA 区块链部署与运维指南
+# JuChain JPoSA Blockchain Deployment and Operations Guide
 
-## 📋 概述
+## 📋 Overview
 
-JuChain 是基于以太坊技术栈构建的高性能区块链网络，采用 Congress PoSA (Proof of Stake Authority) 混合共识机制。本文档提供了从零开始的完整部署、配置和运维指南。
+JuChain is a high-performance blockchain network built on the Ethereum technology stack, adopting the Congress JPoSA (JuChain Proof of Stake Authority) hybrid consensus mechanism. This document provides a complete deployment, configuration, and operations guide from scratch.
 
-### � 核心特性
+### � Core Features
 
-- **🏛️ Congress PoSA**: 结合 PoA 和 PoS 的混合共识机制
-- **⚡ 高性能**: 1秒出块间隔，高TPS处理能力
-- **🔒 安全性**: 多层验证者管理和惩罚机制
-- **🏗️ 模块化**: 系统合约与业务逻辑分离
-- **🛠️ 工具链**: 完整的CLI工具和自动化脚本
+- **🏛️ Congress JPoSA**: Hybrid consensus mechanism combining PoA and PoS
+- **⚡ High Performance**: 1 second block interval, high TPS processing capability
+- **🔒 Security**: Multi-layer validator management and punishment mechanisms
+- **🏗️ Modular**: Separation of system contracts and business logic
+- **🛠️ Toolchain**: Complete CLI tools and automation scripts
 
-## 🏗️ 系统架构
+## 🏗️ System Architecture
 
-### 核心组件架构图
+### Core Component Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -29,86 +29,86 @@ JuChain 是基于以太坊技术栈构建的高性能区块链网络，采用 Co
 └─────────────────┴─────────────────┴─────────────────────────┘
 ```
 
-### 系统合约地址
+### System Contract Addresses
 
-| 合约名称 | 地址 | 功能说明 |
+| Contract Name | Address | Function Description |
 |---------|------|----------|
-| **Validators** | `0x000000000000000000000000000000000000f000` | 验证者状态管理、奖励分发 |
-| **Punish** | `0x000000000000000000000000000000000000f001` | 验证者惩罚机制、监禁处理 |
-| **Proposal** | `0x000000000000000000000000000000000000f002` | 治理提案、投票管理 |
-| **Staking** | `0x000000000000000000000000000000000000f003` | 质押管理、委托机制 |
+| **Validators** | `0x000000000000000000000000000000000000f000` | Validator status management, reward distribution |
+| **Punish** | `0x000000000000000000000000000000000000f001` | Validator punishment mechanism, jailing handling |
+| **Proposal** | `0x000000000000000000000000000000000000f002` | Governance proposals, voting management |
+| **Staking** | `0x000000000000000000000000000000000000f003` | Staking management, delegation mechanism |
 
-### 网络参数
+### Network Parameters
 
-| 参数 | 主网 | 测试网 | 说明 |
+| Parameter | Mainnet | Testnet | Description |
 |------|------|--------|------|
-| **Chain ID** | 202599 | 202583 | 网络标识符 |
-| **Block Time** | 1秒 | 1秒 | 平均出块间隔 |
-| **Epoch Length** | 86400块 | 86400块 | 验证者轮换周期 |
-| **Max Validators** | 21 | 21 | 最大活跃验证者数量 |
-| **Min Stake** | 10000 JU | 1000 JU | 最低质押要求 |
+| **Chain ID** | 202599 | 202583 | Network identifier |
+| **Block Time** | 1seconds | 1seconds | Average block interval |
+| **Epoch Length** | 86400blocks | 86400blocks | Validator rotation period |
+| **Max Validators** | 21 | 21 | Maximum active validators |
+| **Min Stake** | 10000 JU | 1000 JU | Minimum staking requirement |
 
-## ⚙️ 系统配置参数
+## ⚙️ System Configuration Parameters
 
-### Congress 共识参数
+### Congress Consensus Parameters
 
-在创世块文件中配置核心共识参数：
+Configure core consensus parameters in genesis block file:
 
 ```json
 {
   "config": {
     "congress": {
-      "period": 1,        // 出块时间间隔 (秒)
-      "epoch": 86400,       // 验证者轮换周期 (块数)
-      "rewards": "0x56BC75E2D63100000"  // 区块奖励 (wei)
+      "period": 1,        // Block time interval (seconds)
+      "epoch": 86400,       // Validator rotation period (block count)
+      "rewards": "0x56BC75E2D63100000"  // Block reward (wei)
     }
   }
 }
 ```
 
-### 系统合约参数详解
+### System Contract Parameters Explained
 
-这些参数在合约编译时设置，修改后需重新编译并更新创世块：
+These parameters are set during contract compilation, changes require recompiling and updating genesis block:
 
-| 参数名称 | 默认值 | 单位 | 说明 |
+| Parameter Name | Default Value | Unit | Description |
 |----------|--------|------|------|
-| `punishThreshold` | 24 | 块 | 连续错过块数触发收益没收 |
-| `removeThreshold` | 48 | 块 | 连续错过块数触发验证者移除 |
-| `decreaseRate` | 24 | % | 惩罚时的削减比例 |
-| `withdrawProfitPeriod` | 28800 | 块 | 收益提取间隔 (~24小时) |
-| `proposalLastingPeriod` | 86400 | 秒 | 提案有效期 (24小时) |
-| `increasePeriod` | 1y | 块 | 增发周期 |
-| `minStakeAmount` | 10000 | JU | Staking合约最低质押金额 |
-| `commissionRateBase` | 10000 | 基点 | 佣金率基数 (100% = 10000) |
+| `punishThreshold` | 24 | blocks | Consecutive missed blocks triggering reward forfeiture |
+| `removeThreshold` | 48 | blocks | Consecutive missed blocks triggering validator removal |
+| `decreaseRate` | 24 | % | Slashing rate during punishment |
+| `withdrawProfitPeriod` | 28800 | blocks | Reward extraction interval (~24 hours) |
+| `proposalLastingPeriod` | 86400 | seconds | Proposal validity period (24 hours) |
+| `increasePeriod` | 1y | blocks | Inflation issuance period |
+| `minStakeAmount` | 10000 | JU | Minimum staking amount for Staking contract |
+| `commissionRateBase` | 10000 | basis points | Commission rate base (100% = 10000) |
 
-> ⚠️ **重要提醒**: 修改合约参数需要：
+> ⚠️ **Important Reminder**: Modifying contract parameters requires:
 >
-> 1. 重新编译系统合约 (`forge build`)
-> 2. 生成新的合约字节码 (`npm run generate`)
-> 3. 更新创世块文件 (`npm run init-genesis`)
-> 4. 重新初始化所有节点数据目录
+> 1. Recompile system contracts (`forge build`)
+> 2. Generate new contract bytecode (`npm run generate`)
+> 3. Update genesis block file (`npm run init-genesis`)
+> 4. Reinitialize all node data directories
 
-### Staking 机制参数
+### Staking Mechanism Parameters
 
-JuChain 引入了双合约验证者管理机制：
+JuChain introduces a dual-contract validator management mechanism:
 
 ```json
 {
   "staking": {
     "minStakeAmount": "10000000000000000000000",  // 10000 JU (wei)
-    "maxCommissionRate": 5000,                    // 最大佣金率 50%
-    "unbondingPeriod": 201600,                    // 解绑期 7天 (块数)
-    "maxValidators": 21,                          // 最大活跃验证者数量
-    "slashingRate": 500                           // 作恶惩罚率 5%
+    "maxCommissionRate": 5000,                    // Maximum commission rate 50%
+    "unbondingPeriod": 201600,                    // Unbonding period 7 days (block count)
+    "maxValidators": 21,                          // Maximum active validators
+    "slashingRate": 500                           // Slashing rate 5%
   }
 }
 ```
 
-## 📄 创世块配置
+## 📄 Genesis Block Configuration
 
-### 完整创世块结构
+### Complete Genesis Block Structure
 
-JuChain 的创世块配置包含网络参数、系统合约部署和初始状态设置：
+JuChain genesis block configuration includes network parameters, system contract deployment and initial state settings:
 
 ```json
 {
@@ -164,253 +164,253 @@ JuChain 的创世块配置包含网络参数、系统合约部署和初始状态
 }
 ```
 
-### 关键配置说明
+### Key Configuration Explained
 
-#### 1. 网络标识设置
+#### 1. Network Identity Settings
 
 ```json
 {
   "config": {
-    "chainId": 202599,    // JuChain 测试网 ID
+    "chainId": 202599,    // JuChain testnet ID
     "congress": {
-      "period": 1,        // 1秒出块间隔
-      "epoch": 86400        // 每86400块轮换验证者
+      "period": 1,        // 1 second block interval
+      "epoch": 86400        // Rotate validators every 86400 blocks
     }
   }
 }
 ```
 
-#### 2. 系统合约预部署
+#### 2. System Contract Pre-deployment
 
-所有系统合约在创世块中预部署到固定地址：
+All system contracts are pre-deployed to fixed addresses in genesis block:
 
-- **合约字节码**: 通过 `forge build` 编译生成
-- **存储布局**: 初始状态存储在 `storage` 字段
-- **余额设置**: 系统合约初始余额为 0
+- **Contract Bytecode**: Generated by compiling with `forge build`
+- **Storage Layout**: Initial state stored in `storage` field
+- **Balance Settings**: System contracts initial balance is 0
 
-#### 3. 初始验证者设置
+#### 3. Initial Validator Settings
 
-`extraData` 字段编码格式：
+`extraData` field encoding format:
 
 ```
-extraData = vanity(32字节) + validators(20字节*N) + signature(65字节)
+extraData = vanity(32 bytes) + validators(20 bytes*N) + signature(65 bytes)
 ```
 
-其中：
+Where:
 
-- **vanity**: 32字节的填充数据 (通常为0)
-- **validators**: 初始验证者地址列表 (每个20字节)
-- **signature**: 65字节的签名数据 (创世块签名)
+- **vanity**: 32 bytes of padding data (usually 0)
+- **validators**: Initial validator address list (20 bytes each)
+- **signature**: 65 bytes of signature data (genesis block signature)
 
-#### 4. 预分配账户
+#### 4. Preallocated Accounts
 
 ```json
 {
   "alloc": {
     "f39fd6e51aad88f6f4ce6ab8827279cfffb92266": {
-      "balance": "0x21e19e0c9bab2400000"  // 10000 ETH (开发用)
+      "balance": "0x21e19e0c9bab2400000"  // 10000 ETH (For development)
     },
     "970e8128ab834e3eac664312d6e30df9e93cb357": {
-      "balance": "0x21e19e0c9bab2400000"  // 10000 ETH (验证者1)
+      "balance": "0x21e19e0c9bab2400000"  // 10000 ETH (Validator 1)
     }
   }
 }
 ```
 
-### 合约字节码生成流程
+### Contract Bytecode Generation Process
 
-系统合约字节码需要通过以下步骤生成：
+System contract bytecode must be generated through the following steps:
 
 ```bash
-# 1. 编译所有合约
+# 1. Compile all contracts
 cd sys-contract
 forge build
 
-# 2. 生成合约部署代码
+# 2. Generate contract deployment code
 npm run generate
 
-# 3. 自动更新创世块文件
+# 3. Automatically update genesis block file
 npm run init-genesis
 
-# 4. 验证创世块文件
+# 4. Verify genesis block file
 node scripts/verify-genesis.js
 ```
 
-> 📝 **注意**: 每次修改系统合约代码后，都需要重新生成创世块文件并重新初始化所有节点。
+> 📝 **Note**: After modifying system contract code, genesis block file must be regenerated and all nodes reinitialized.
 
-## 🚀 环境搭建与编译
+## 🚀 Environment Setup and Compilation
 
-### 开发环境要求
+### Development Environment Requirements
 
-#### 必需软件清单
+#### Required Software List
 
-| 软件 | 最低版本 | 推荐版本 | 用途 |
+| Software | Minimum Version | Recommended Version | Purpose |
 |------|----------|----------|------|
-| **Go** | 1.23+ | 1.24+ | 编译Geth客户端 |
-| **Node.js** | 18+ | 20+ | 运行合约脚本和工具 |
-| **Foundry** | 1.2.3+ | 最新版 | 智能合约开发框架 |
-| **GCC/G++** | 7+ | 11+ | C++编译器依赖 |
-| **Git** | 2.30+ | 最新版 | 版本控制 |
-| **Make** | 4.0+ | 最新版 | 构建工具 |
+| **Go** | 1.23+ | 1.24+ | Compile Geth client |
+| **Node.js** | 18+ | 20+ | Run contract scripts and tools |
+| **Foundry** | 1.2.3+ | Latest | Smart contract development framework |
+| **GCC/G++** | 7+ | 11+ | C++ compiler dependency |
+| **Git** | 2.30+ | Latest | Version control |
+| **Make** | 4.0+ | Latest | Build tool |
 
-#### 环境安装
+#### Environment Installation
 
 ```bash
-# 🔧 安装 Foundry (智能合约工具链)
+# 🔧 Install Foundry (Smart contract toolchain)
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 
-# 🔧 安装 Node.js (推荐使用 nvm)
+# 🔧 Install Node.js (Recommended: use nvm)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 nvm install 20
 nvm use 20
 
-# 🔧 安装 Go (macOS 示例)
+# 🔧 Install Go (macOS example)
 brew install go
-# 或从官方下载: https://golang.org/dl/
+# Or download from official: https://golang.org/dl/
 
-# 🔧 验证安装
-go version          # 应显示 go1.24.x
-node --version      # 应显示 v20.x.x
-forge --version     # 应显示 foundry 版本
+# 🔧 Verify installation
+go version          # Should display go1.24.x
+node --version      # Should display v20.x.x
+forge --version     # Should display foundry version
 ```
 
-### 源码获取
+### Source Code Acquisition
 
-#### 完整项目结构
+#### Complete Project Structure
 
 ```bash
-# 📥 克隆完整项目
+# 📥 Clone complete project
 git clone <repository-url> ju-chain
 cd ju-chain
 
-# 📁 项目结构概览
+# 📁 Project Structure Overview
 ju-chain/
-├── chain/                 # Geth客户端源码
-│   ├── build/            # 编译输出目录
-│   ├── cmd/              # 命令行工具
-│   ├── consensus/        # 共识算法实现
-│   │   └── congress/     # Congress PoSA 实现
-│   ├── core/             # 核心区块链逻辑
-│   ├── eth/              # 以太坊协议实现
-│   └── Makefile          # 构建脚本
-├── sys-contract/          # 系统合约源码
-│   ├── contracts/        # Solidity合约源码
-│   ├── congress-cli/     # CLI工具源码
-│   ├── scripts/          # 自动化脚本
-│   ├── foundry.toml      # Foundry配置
-│   └── package.json      # Node.js依赖
-└── README.md             # 项目说明
+├── chain/                 # Geth client source code
+│   ├── build/            # Build output directory
+│   ├── cmd/              # Command-line tools
+│   ├── consensus/        # Consensus algorithm implementation
+│   │   └── congress/     # Congress JPoSA implementation
+│   ├── core/             # Core blockchain logic
+│   ├── eth/              # Ethereum protocol implementation
+│   └── Makefile          # Build scripts
+├── sys-contract/          # System contract source code
+│   ├── contracts/        # Solidity contract source code
+│   ├── congress-cli/     # CLI tool source code
+│   ├── scripts/          # Automation scripts
+│   ├── foundry.toml      # Foundry configuration
+│   └── package.json      # Node.js dependencies
+└── README.md             # Project description
 ```
 
-### 编译流程
+### Compilation Process
 
-#### 1. 编译区块链客户端
+#### 1. Compile Blockchain Client
 
 ```bash
-# 🏗️ 编译完整工具链
+# 🏗️ Compile complete toolchain
 cd chain
 make all
 
-# 或者单独编译组件
-make geth          # 仅编译主客户端
-make bootnode      # 仅编译引导节点
-make evm          # 仅编译EVM工具
+# Or compile components separately
+make geth          # Compile main client only
+make bootnode      # Compile bootstrap node only
+make evm          # Compile EVM tool only
 
-# ✅ 验证编译结果
+# ✅ Verify compilation results
 ls -la build/bin/
-# 应包含: geth, bootnode, clef, ethkey 等
+# Should include: geth, bootnode, clef, ethkey, etc.
 ```
 
-#### 2. 编译系统合约
+#### 2. Compile System Contracts
 
 ```bash
-# 🏗️ 编译智能合约
+# 🏗️ Compile smart contracts
 cd sys-contract
 
-# 安装 Node.js 依赖
+# Install Node.js dependencies
 npm install
 
-# 安装 Foundry 依赖
+# Install Foundry dependencies
 forge install
 
-# 编译所有合约
+# Compile all contracts
 forge build
 
-# ✅ 验证合约编译
+# ✅ Verify contract compilation
 ls -la out/
-# 应包含所有合约的编译产物
+# Should include all contract compilation artifacts
 ```
 
-#### 3. 生成创世块配置
+#### 3. Generate Genesis Block Configuration
 
 ```bash
-# 🔄 生成合约部署代码
+# 🔄 Generate contract deployment code
 npm run generate
 
-# 🔄 更新创世块文件
+# 🔄 Update genesis block file
 npm run init-genesis
 
-# ✅ 验证创世块
+# ✅ Verify genesis block
 node scripts/verify-genesis.js
-echo "✅ 创世块文件生成完成: genesis.json"
+echo "✅ Genesis block file generated: genesis.json"
 ```
 
-#### 4. 编译管理工具
+#### 4. Compile Management Tools
 
 ```bash
-# 🛠️ 编译 Congress CLI 工具
+# 🛠️ Compile Congress CLI tool
 cd sys-contract/congress-cli
 make build
 
-# ✅ 测试工具功能
+# ✅ Test tool functionality
 ./build/congress-cli --version
 ./build/congress-cli help
 
-# 🛠️ 编译自动化脚本
+# 🛠️ Compile automation scripts
 chmod +x *.sh
-echo "✅ 所有工具编译完成"
+echo "✅ All tools compiled successfully"
 ```
 
-### 构建验证
+### Build Verification
 
-#### 完整性检查
+#### Integrity Check
 
 ```bash
-# 🔍 验证所有组件
-echo "=== 验证 Geth 客户端 ==="
+# 🔍 Verify all components
+echo "=== Verify Geth Client ==="
 ./chain/build/bin/geth version
 
-echo "=== 验证系统合约 ==="
+echo "=== Verify System Contracts ==="
 forge test --root ./sys-contract
 
-echo "=== 验证 CLI 工具 ==="
+echo "=== Verify CLI Tools ==="
 ./sys-contract/congress-cli/build/congress-cli --version
 
-echo "=== 验证创世块 ==="
+echo "=== Verify Genesis Block ==="
 ./chain/build/bin/geth --datadir temp_test init ./sys-contract/genesis.json
 rm -rf temp_test
 
-echo "✅ 所有组件验证通过"
+echo "✅ All components verified successfully"
 ```
 
-### 常见编译问题
+### Common Compilation Issues
 
-#### Go 编译问题
+#### Go Compilation Issues
 
-**问题**: `go: cannot find module`
+**Issue**: `go: cannot find module`
 
 ```bash
-# 解决方案: 更新Go模块
+# Solution: Update Go modules
 cd chain
 go mod download
 go mod tidy
 ```
 
-**问题**: CGO编译错误
+**Issue**: CGO compilation error
 
 ```bash
-# 解决方案: 安装C++编译器
+# Solution: Install C++ compiler
 # Ubuntu/Debian:
 sudo apt-get install build-essential
 
@@ -418,44 +418,44 @@ sudo apt-get install build-essential
 xcode-select --install
 ```
 
-#### Foundry 编译问题
+#### Foundry Compilation Issues
 
-**问题**: `forge not found`
+**Issue**: `forge not found`
 
 ```bash
-# 解决方案: 重新安装Foundry
+# Solution: Reinstall Foundry
 curl -L https://foundry.paradigm.xyz | bash
 source ~/.bashrc
 foundryup
 ```
 
-**问题**: 合约依赖错误
+**Issue**: Contract dependency error
 
 ```bash
-# 解决方案: 清理并重新安装
+# Solution: Clean and reinstall
 cd sys-contract
 rm -rf lib/
 forge install
 forge build --force
 ```
 
-## 🚀 节点部署与配置
+## 🚀 Node Deployment and Configuration
 
-### 部署架构选择
+### Deployment Architecture Selection
 
-#### 单节点开发环境
+#### Single Node Development Environment
 
-适用于开发测试，快速验证功能：
+Suitable for development and testing, quick feature verification:
 
 ```bash
-# 🔧 创建开发节点
+# 🔧 Create development node
 mkdir -p dev-node/data
 cd dev-node
 
-# 初始化创世块
+# Initialize genesis block
 ../chain/build/bin/geth --datadir data init ../sys-contract/genesis.json
 
-# 启动开发节点 (自动挖矿)
+# Start development node (auto mining)
 ../chain/build/bin/geth \
   --datadir data \
   --http \
@@ -470,19 +470,19 @@ cd dev-node
   --console
 ```
 
-#### 多节点验证者网络
+#### Multi-node Validator Network
 
-生产环境推荐配置，多验证者确保网络安全：
+Production environment recommended configuration, multi-validator ensures network security:
 
 ```bash
-# 🏗️ 创建多节点网络
+# 🏗️ Create multi-node network
 for i in {1..5}; do
   mkdir -p validator$i/data
   
-  # 初始化每个节点
+  # Initialize each node
   ./chain/build/bin/geth --datadir validator$i/data init sys-contract/genesis.json
   
-  # 配置静态节点连接
+  # Configure static node connections
   echo '[
     "enode://node1@127.0.0.1:30301",
     "enode://node2@127.0.0.1:30302",
@@ -491,88 +491,88 @@ for i in {1..5}; do
 done
 ```
 
-### 节点配置详解
+### Node Configuration Explained
 
-#### 基础配置参数
+#### Basic Configuration Parameters
 
 ```bash
-# 📋 标准验证者节点配置
+# 📋 Standard Validator Node Configuration
 ./chain/build/bin/geth \
-  --datadir data \                    # 数据目录
-  --port 30303 \                      # P2P监听端口
-  --http \                            # 启用HTTP-RPC
-  --http.addr "127.0.0.1" \          # RPC监听地址
-  --http.port 8545 \                 # RPC监听端口
-  --http.api "eth,net,web3,personal,admin,congress" \  # 启用的API
-  --ws \                             # 启用WebSocket
-  --ws.addr "127.0.0.1" \           # WebSocket地址
-  --ws.port 8546 \                  # WebSocket端口
+  --datadir data \                    # Data directory
+  --port 30303 \                      # P2P listening port
+  --http \                            # Enable HTTP-RPC
+  --http.addr "127.0.0.1" \          # RPC listening address
+  --http.port 8545 \                 # RPC listening port
+  --http.api "eth,net,web3,personal,admin,congress" \  # Enabled APIs
+  --ws \                             # Enable WebSocket
+  --ws.addr "127.0.0.1" \           # WebSocket address
+  --ws.port 8546 \                  # WebSocket port
   --ws.api "eth,net,web3,congress" \ # WebSocket API
-  --mine \                          # 启用挖矿
-  --miner.etherbase "0x..." \       # 矿工收益地址
-  --miner.threads 1 \               # 挖矿线程数
-  --miner.gasprice 1000000000 \     # 最低Gas价格
-  --txpool.pricelimit 1000000000 \  # 交易池最低价格
-  --maxpeers 50 \                   # 最大连接节点数
-  --cache 1024 \                    # 缓存大小(MB)
-  --syncmode "full" \               # 同步模式
-  --gcmode "archive"                # 垃圾回收模式
+  --mine \                          # Enable mining
+  --miner.etherbase "0x..." \       # Miner reward address
+  --miner.threads 1 \               # Mining thread count
+  --miner.gasprice 1000000000 \     # Minimum gas price
+  --txpool.pricelimit 1000000000 \  # Transaction pool minimum price
+  --maxpeers 50 \                   # Maximum connected nodes
+  --cache 1024 \                    # Cache size (MB)
+  --syncmode "full" \               # Sync mode
+  --gcmode "archive"                # Garbage collection mode
 ```
 
-#### 高级网络配置
+#### Advanced Network Configuration
 
 ```bash
-# 🌐 网络发现配置
---discovery \                       # 启用节点发现
---bootnodes "enode://..." \        # 引导节点列表
---nat "extip:外部IP" \             # NAT穿透配置
---netrestrict "192.168.0.0/24" \   # 网络限制
+# 🌐 Network Discovery Configuration
+--discovery \                       # Enable node discovery
+--bootnodes "enode://..." \        # Bootstrap node list
+--nat "extip:外部IP" \             # NAT traversal configuration
+--netrestrict "192.168.0.0/24" \   # Network restriction
 
-# 🔒 安全配置
---allow-insecure-unlock \          # 允许HTTP解锁(仅开发)
---unlock "0x..." \                 # 自动解锁账户
---password password.txt \          # 密码文件
---keystore keystore/ \             # 密钥存储目录
+# 🔒 Security Configuration
+--allow-insecure-unlock \          # Allow HTTP unlock (development only)
+--unlock "0x..." \                 # Auto unlock account
+--password password.txt \          # Password file
+--keystore keystore/ \             # Keystore directory
 
-# 📊 监控配置
---metrics \                        # 启用指标收集
---metrics.addr "127.0.0.1" \      # 指标监听地址
---metrics.port 6060 \              # 指标端口
---pprof \                          # 启用性能分析
---pprof.addr "127.0.0.1" \        # 性能分析地址
---pprof.port 6061                  # 性能分析端口
+# 📊 Monitoring Configuration
+--metrics \                        # Enable metrics collection
+--metrics.addr "127.0.0.1" \      # Metrics listening address
+--metrics.port 6060 \              # Metrics port
+--pprof \                          # Enable performance profiling
+--pprof.addr "127.0.0.1" \        # Performance profiling address
+--pprof.port 6061                  # Performance profiling port
 ```
 
-### 验证者账户管理
+### Validator Account Management
 
-#### 创建验证者账户
+#### Create Validator Account
 
 ```bash
-# 🔑 创建新的验证者账户
+# 🔑 Create new validator account
 ./chain/build/bin/geth account new --datadir validator1/data
-# 输入密码并记录地址
+# Enter password and record address
 
-# 🔑 导入现有私钥
-echo "私钥内容" > private.key
+# 🔑 Import existing private key
+echo "Private key content" > private.key
 ./chain/build/bin/geth account import private.key --datadir validator1/data
-rm private.key  # 导入后删除明文私钥
+rm private.key  # Delete plaintext private key after import
 
-# 📋 查看所有账户
+# 📋 View all accounts
 ./chain/build/bin/geth account list --datadir validator1/data
 ```
 
-#### 账户安全管理
+#### Account Security Management
 
 ```bash
-# 🛡️ 创建密码文件
-echo "你的安全密码" > validator1/password.txt
+# 🛡️ Create password file
+echo "Your secure password" > validator1/password.txt
 chmod 600 validator1/password.txt
 
-# 🛡️ 配置密钥存储权限
+# 🛡️ Configure keystore permissions
 chmod 700 validator1/data/keystore/
 chmod 600 validator1/data/keystore/*
 
-# 🛡️ 使用外部签名器 (推荐生产环境)
+# 🛡️ Use external signer (recommended for production environment)
 ./chain/build/bin/clef \
   --keystore validator1/data/keystore \
   --configdir validator1/clef \
@@ -582,46 +582,46 @@ chmod 600 validator1/data/keystore/*
   --http.port 8550
 ```
 
-### 网络连接配置
+### Network Connection Configuration
 
-#### 静态节点配置
+#### Static Node Configuration
 
 ```json
 // validator1/data/static-nodes.json
 [
-  "enode://节点1公钥@IP1:端口1",
-  "enode://节点2公钥@IP2:端口2",
-  "enode://节点3公钥@IP3:端口3"
+  "enode://Node1_PublicKey@IP1:Port1",
+  "enode://Node2_PublicKey@IP2:Port2",
+  "enode://Node3_PublicKey@IP3:Port3"
 ]
 ```
 
-#### 可信节点配置
+#### Trusted Node Configuration
 
 ```json
 // validator1/data/trusted-nodes.json
 [
-  "enode://受信任节点1@IP1:端口1",
-  "enode://受信任节点2@IP2:端口2"
+  "enode://TrustedNode1@IP1:Port1",
+  "enode://TrustedNode2@IP2:Port2"
 ]
 ```
 
-#### 动态节点发现
+#### Dynamic Node Discovery
 
 ```bash
-# 🔍 通过控制台添加节点
+# 🔍 Add node through console
 geth attach validator1/data/geth.ipc
 
-# 在控制台中执行
-admin.addPeer("enode://节点公钥@IP:端口")
+# Execute in console
+admin.addPeer("enode://Node_PublicKey@IP:Port")
 
-# 查看连接状态
+# View connection status
 admin.peers
 net.peerCount
 ```
 
-### 启动脚本示例
+### Startup Script Example
 
-#### 验证者节点启动脚本
+#### Validator Node Startup Script
 
 ```bash
 #!/bin/bash
@@ -629,28 +629,28 @@ net.peerCount
 
 set -e
 
-# 配置变量
+# Configure variables
 DATADIR="./data"
 VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 PASSWORD_FILE="./password.txt"
 LOG_FILE="./validator.log"
 
-# 检查必要文件
+# Check required files
 if [ ! -f "$PASSWORD_FILE" ]; then
-    echo "❌ 密码文件不存在: $PASSWORD_FILE"
+    echo "❌ Password file does not exist: $PASSWORD_FILE"
     exit 1
 fi
 
 if [ ! -d "$DATADIR/keystore" ]; then
-    echo "❌ 密钥存储目录不存在: $DATADIR/keystore"
+    echo "❌ Keystore directory does not exist: $DATADIR/keystore"
     exit 1
 fi
 
-# 启动验证者节点
-echo "🚀 启动验证者节点..."
-echo "📍 验证者地址: $VALIDATOR_ADDR"
-echo "📁 数据目录: $DATADIR"
-echo "📄 日志文件: $LOG_FILE"
+# Start validator node
+echo "🚀 Starting validator node..."
+echo "📍 Validator address: $VALIDATOR_ADDR"
+echo "📁 Data directory: $DATADIR"
+echo "📄 Log file: $LOG_FILE"
 
 ./chain/build/bin/geth \
   --datadir "$DATADIR" \
@@ -678,13 +678,13 @@ echo "📄 日志文件: $LOG_FILE"
   2>&1 | tee -a "$LOG_FILE"
 ```
 
-#### 非验证者节点启动脚本
+#### Non-validator Node Startup Script
 
 ```bash
 #!/bin/bash
 # start-fullnode.sh
 
-# 全节点 (不参与挖矿)
+# Full node (does not participate in mining)
 ./chain/build/bin/geth \
   --datadir "./data" \
   --port 30303 \
@@ -702,66 +702,66 @@ echo "📄 日志文件: $LOG_FILE"
   --console
 ```
 
-## 👥 验证者管理与治理
+## 👥 Validator Management and Governance
 
-### 双合约验证者系统
+### Dual Contract Validator System
 
-JuChain 采用创新的双合约验证者管理机制：
+JuChain adopts innovative dual-contract validator management mechanism:
 
-| 合约 | 地址 | 主要功能 |
+| Contract | Address | Main Functions |
 |------|------|----------|
-| **Validators** | 0xf000 | 验证者状态管理、奖励分发、活跃验证者列表 |
-| **Staking** | 0xf003 | 质押管理、委托机制、经济激励 |
+| **Validators** | 0xf000 | Validator status management, reward distribution, active validator list |
+| **Staking** | 0xf003 | Staking management, delegation mechanism, economic incentives |
 
-### 验证者生命周期
+### Validator Lifecycle
 
 ```mermaid
 graph LR
-    A[提案创建] --> B[投票通过]
+    A[Proposal Creation] --> B[Vote Pass]
     B --> C[Validators合约注册]
     C --> D[Staking合约质押]
-    D --> E[开始验证]
-    E --> F[收益分发]
+    D --> E[Start Validation]
+    E --> F[Reward Distribution]
     F --> G[定期评估]
-    G --> H{是否继续?}
-    H -->|是| E
+    G --> H{Continue?}
+    H -->|Yes| E
     H -->|否| I[退出流程]
 ```
 
-### 添加新验证者
+### Add New Validator
 
-#### 完整流程 (使用自动化脚本)
+#### 完整流程 (使用Automation scripts)
 
 ```bash
-# 🤖 使用一键添加脚本 (推荐)
+# 🤖 Use one-click add script (recommended)
 cd sys-contract/congress-cli
 ./add_validator6.sh
 
-# 该脚本会自动执行以下步骤:
-# 1. 创建添加验证者提案
-# 2. 收集必要的验证者投票
-# 3. 执行提案 (添加到Validators合约)
-# 4. 在Staking合约中注册并质押
-# 5. 验证所有步骤完成
+# The script will automatically execute the following steps:
+# 1. Create add validator proposal
+# 2. Collect necessary validator votes
+# 3. Execute proposal (add to Validators contract)
+# 4. Register and stake in Staking contract
+# 5. Verify all steps completed
 ```
 
-#### 手动执行流程
+#### Manual Execution Process
 
-**步骤 1: 准备新验证者**
+**Step 1: Prepare New Validator**
 
 ```bash
-# 🔑 创建新验证者账户
-NEW_VALIDATOR_ADDR="0x新验证者地址"
-echo "新验证者地址: $NEW_VALIDATOR_ADDR"
+# 🔑 Create new validator account
+NEW_VALIDATOR_ADDR="0xNewValidatorAddress"
+echo "New validator address: $NEW_VALIDATOR_ADDR"
 
-# 确保账户有足够余额用于质押
-echo "请确保账户余额 >= 10000 JU"
+# Ensure account has sufficient balance for staking
+echo "Please ensure account balance >= 10000 JU"
 ```
 
-**步骤 2: 创建添加提案**
+**Step 2: Create Add Proposal**
 
 ```bash
-# 📝 由现有验证者创建提案
+# 📝 Create proposal by existing validator
 PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
 ./build/congress-cli create_proposal \
@@ -770,68 +770,68 @@ PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
   -o add \
   --rpc_laddr http://localhost:8545
 
-# 签名交易
+# Sign transaction
 ./build/congress-cli sign \
   -f createProposal.json \
   -k proposer.key \
   -p password.txt \
   --chainId 202599
 
-# 发送交易
+# Send transaction
 ./build/congress-cli send \
   -f createProposal_signed.json \
   --rpc_laddr http://localhost:8545
 
-echo "✅ 提案已创建，提案ID: [查看交易收据获取]"
+echo "✅ Proposal created, proposal ID: [Check transaction receipt]"
 ```
 
-**步骤 3: 验证者投票**
+**Step 3: Validator Voting**
 
 ```bash
-# 🗳️ 其他验证者投票支持
-PROPOSAL_ID="0x提案ID"
+# 🗳️ Other validators vote in support
+PROPOSAL_ID="0xProposalID"
 
-# 验证者1投票
+# Validator 1 votes
 ./build/congress-cli vote_proposal \
   -s "0x970e8128ab834e3eac664312d6e30df9e93cb357" \
   -i $PROPOSAL_ID \
   -a true \
   --rpc_laddr http://localhost:8545
 
-# 验证者2投票
+# Validator 2 votes
 ./build/congress-cli vote_proposal \
   -s "0x6e30df9e93cb3578ec64c67c554dddd8d1da2c25" \
   -i $PROPOSAL_ID \
   -a true \
   --rpc_laddr http://localhost:8545
 
-# 验证者3投票 (达到多数通过)
+# Validator 3 votes (reached majority)
 ./build/congress-cli vote_proposal \
   -s "0x3858ffca201b0a7d75fd23bb302c12332c5e4000" \
   -i $PROPOSAL_ID \
   -a true \
   --rpc_laddr http://localhost:8545
 
-echo "✅ 提案投票完成，等待执行"
+echo "✅ Proposal voting completed, waiting for execution"
 ```
 
-**步骤 4: Staking合约注册**
+**Step 4: Staking Contract Registration**
 
 ```bash
-# 💰 在Staking合约中注册验证者
+# 💰 Register validator in Staking contract
 ./build/congress-cli staking register \
   --from $NEW_VALIDATOR_ADDR \
   --stake 10000 \
   --commission 500 \
   --rpc_laddr http://localhost:8545
 
-echo "✅ 验证者已在Staking合约中注册"
+echo "✅ Validator registered in Staking contract"
 ```
 
-**步骤 5: 启动验证者节点**
+**Step 5: Start Validator Node**
 
 ```bash
-# 🚀 启动新验证者节点
+# 🚀 Start new validator node
 ./chain/build/bin/geth \
   --datadir newvalidator/data \
   --port 30306 \
@@ -843,61 +843,61 @@ echo "✅ 验证者已在Staking合约中注册"
   --password password.txt \
   --console
 
-echo "✅ 新验证者节点已启动"
+echo "✅ New validator node started"
 ```
 
-### 验证者查询与监控
+### Validator Query and Monitoring
 
-#### 基础查询命令
+#### Basic Query Commands
 
 ```bash
-# 📊 查询所有活跃验证者
+# 📊 Query all active validators
 ./build/congress-cli miners --rpc_laddr http://localhost:8545
 
-# 👤 查询特定验证者详情
+# 👤 Query specific validator details
 ./build/congress-cli miner \
   -a 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --rpc_laddr http://localhost:8545
 
-# 💰 查询Staking合约信息
+# 💰 Query Staking contract information
 ./build/congress-cli staking list-top-validators \
   --rpc_laddr http://localhost:8545
 
-# 🏆 查询特定验证者质押信息
+# 🏆 Query specific validator staking information
 ./build/congress-cli staking query-validator \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --rpc_laddr http://localhost:8545
 ```
 
-#### 高级监控查询
+#### Advanced Monitoring Queries
 
 ```bash
-# 📈 验证者性能统计
+# 📈 Validator performance statistics
 ./build/congress-cli validator-stats \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --blocks 1000 \
   --rpc_laddr http://localhost:8545
 
-# ⚠️ 检查验证者惩罚状态
+# ⚠️ Check validator punishment status
 ./build/congress-cli punishment-status \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --rpc_laddr http://localhost:8545
 
-# 💎 查询验证者奖励
+# 💎 Query validator rewards
 ./build/congress-cli validator-rewards \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --rpc_laddr http://localhost:8545
 ```
 
-### 验证者收益管理
+### Validator Reward Management
 
-#### 收益提取
+#### Reward Withdrawal
 
 ```bash
-# 💸 提取验证者收益
+# 💸 Withdraw validator rewards
 VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
-# 检查可提取收益
+# Check withdrawable rewards
 ./build/congress-cli check-withdrawable \
   -a $VALIDATOR_ADDR \
   --rpc_laddr http://localhost:8545
@@ -918,60 +918,60 @@ VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
   -f withdrawProfits_signed.json \
   --rpc_laddr http://localhost:8545
 
-echo "✅ 收益提取交易已发送"
+echo "✅ Reward withdrawal transaction sent"
 ```
 
-#### 收益分配机制
+#### Reward Distribution Mechanism
 
 | 收益来源 | 分配方式 | 说明 |
 |----------|----------|------|
 | **交易手续费** | 按验证比例分配 | 实时累积到验证者账户 |
-| **区块奖励** | 固定奖励 | 每个区块的基础奖励 |
+| **区blocks奖励** | 固定奖励 | 每个区blocks的基础奖励 |
 | **委托奖励** | 按佣金率分成 | 来自委托用户的质押收益 |
 
-### 验证者移除流程
+### Validator Removal Process
 
 #### 主动退出
 
 ```bash
-# 📤 验证者主动退出
-VALIDATOR_ADDR="0x要退出的验证者地址"
+# 📤 Validator voluntary exit
+VALIDATOR_ADDR="0xValidatorAddressToExit"
 
-# 1. 创建移除提案
+# 1. Create removal proposal
 ./build/congress-cli create_proposal \
   -p $VALIDATOR_ADDR \
   -t $VALIDATOR_ADDR \
   -o remove \
   --rpc_laddr http://localhost:8545
 
-# 2. 收集投票 (需要其他验证者支持)
-echo "等待其他验证者投票支持移除提案"
+# 2. Collect votes (requires other validator support)
+echo "Waiting for other validators to vote in support of removal proposal"
 
 # 3. Staking合约解除质押
 ./build/congress-cli staking unstake \
   --from $VALIDATOR_ADDR \
   --rpc_laddr http://localhost:8545
 
-echo "✅ 验证者退出流程启动"
+echo "✅ Validator exit process started"
 ```
 
-#### 被动移除 (惩罚机制)
+#### Passive Removal (Punishment Mechanism)
 
-当验证者出现以下情况时会被自动处罚：
+When a validator exhibits the following conditions, they will be automatically punished:
 
 | 违规行为 | 惩罚措施 | 触发条件 |
 |----------|----------|----------|
-| **长时间离线** | 收益没收 | 连续错过 24 个块 |
-| **严重离线** | 强制移除 | 连续错过 48 个块 |
-| **双重签名** | 大额罚没 | 在同一高度签署多个块 |
+| **长时间离线** | 收益没收 | 连续错过 24 个blocks |
+| **严重离线** | 强制移除 | 连续错过 48 个blocks |
+| **双重签名** | 大额罚没 | 在同一高度签署多个blocks |
 | **恶意行为** | 永久禁入 | 被治理投票认定的恶意行为 |
 
-### 治理提案系统
+### Governance Proposal System
 
-#### 系统参数修改
+#### System Parameter Modification
 
 ```bash
-# 🔧 修改系统参数提案
+# 🔧 System parameter modification proposal
 PARAM_INDEX=0      # 0: proposalLastingPeriod
 NEW_VALUE=172800   # 48小时
 
@@ -981,36 +981,36 @@ NEW_VALUE=172800   # 48小时
   -v $NEW_VALUE \
   --rpc_laddr http://localhost:8545
 
-echo "✅ 系统参数修改提案已创建"
+echo "✅ System parameter modification proposal created"
 ```
 
-#### 可修改的系统参数
+#### Modifiable System Parameters
 
 | 参数索引 | 参数名称 | 说明 | 默认值 |
 |----------|----------|------|--------|
-| 0 | proposalLastingPeriod | 提案有效期 | 86400秒 (24小时) |
-| 1 | punishThreshold | 惩罚阈值 | 24块 |
-| 2 | removeThreshold | 移除阈值 | 48块 |
+| 0 | proposalLastingPeriod | 提案有效期 | 86400seconds (24小时) |
+| 1 | punishThreshold | 惩罚阈值 | 24blocks |
+| 2 | removeThreshold | 移除阈值 | 48blocks |
 | 3 | decreaseRate | 削减比例 | 24% |
-| 4 | withdrawProfitPeriod | 收益提取间隔 | 28800块 (~24小时) |
+| 4 | withdrawProfitPeriod | 收益提取间隔 | 28800blocks (~24小时) |
 
-## 🔧 系统配置管理
+## 🔧 System Configuration Management
 
 ### 动态参数调整
 
-系统关键参数可通过治理提案进行调整，无需重启网络：
+System key parameters can be adjusted through governance proposals without restarting the network:
 
-#### 创建配置更新提案
+#### Create Configuration Update Proposal
 
 ```bash
-# 📝 配置项参数说明
-echo "0: proposalLastingPeriod (提案有效期，秒)"
-echo "1: punishThreshold (惩罚阈值，块数)"  
-echo "2: removeThreshold (移除阈值，块数)"
+# 📝 Configuration item parameter description
+echo "0: proposalLastingPeriod (提案有效期，seconds)"
+echo "1: punishThreshold (惩罚阈值，block count)"  
+echo "2: removeThreshold (移除阈值，block count)"
 echo "3: decreaseRate (削减比例，百分比)"
-echo "4: withdrawProfitPeriod (收益提取间隔，块数)"
+echo "4: withdrawProfitPeriod (收益提取间隔，block count)"
 
-# 示例：修改提案有效期为48小时
+# Example: Modify proposal validity period to 48 hours
 PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 PARAM_INDEX=0
 NEW_VALUE=172800  # 48小时
@@ -1032,16 +1032,16 @@ NEW_VALUE=172800  # 48小时
   -f createConfigProposal_signed.json \
   --rpc_laddr http://localhost:8545
 
-echo "✅ 配置更新提案已创建"
+echo "✅ Configuration update proposal created"
 ```
 
-#### 查询当前系统参数
+#### Query Current System Parameters
 
 ```bash
-# 📊 查询所有系统参数
+# 📊 Query all system parameters
 ./build/congress-cli get-params --rpc_laddr http://localhost:8545
 
-# 🔍 查询特定参数
+# 🔍 Query specific parameter
 curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
   -d '{
@@ -1057,10 +1057,10 @@ curl -X POST http://localhost:8545 \
 
 ### 奖励分发管理
 
-#### 验证者奖励提取
+#### Validator Reward Withdrawal
 
 ```bash
-# 💰 检查可提取奖励
+# 💰 Check withdrawable rewards
 VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
 ./build/congress-cli check-rewards \
@@ -1084,64 +1084,64 @@ VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
   --rpc_laddr http://localhost:8545
 ```
 
-#### 提取限制与规则
+#### Withdrawal Limits and Rules
 
 | 限制类型 | 规则 | 说明 |
 |----------|------|------|
-| **时间间隔** | 28800块 | 约24小时提取一次 |
+| **时间间隔** | 28800blocks | 约24小时提取一次 |
 | **权限验证** | feeAddr匹配 | 只有指定收益地址可提取 |
 | **状态检查** | 未被惩罚 | 被监禁验证者无法提取 |
 | **余额验证** | 大于0 | 确保有可提取余额 |
 
 ## � 系统监控与运维
 
-### 网络健康监控
+### Network Health Monitoring
 
-#### 基础状态检查
+#### Basic Status Check
 
 ```bash
-# 🌐 网络连接状态
+# 🌐 Network connection status
 curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
 
-# 📊 区块同步状态
+# 📊 Block synchronization status
 curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}'
 
-# 🔗 最新区块信息
+# 🔗 Latest block information
 curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
 
-# ⛏️ 挖矿状态
+# ⛏️ Mining status
 curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"eth_mining","params":[],"id":1}'
 ```
 
-#### 验证者专用监控
+#### Validator-specific Monitoring
 
 ```bash
-# 👥 活跃验证者列表
+# 👥 Active validator list
 ./build/congress-cli validators --rpc_laddr http://localhost:8545
 
-# 📈 验证者性能统计
+# 📈 Validator performance statistics
 ./build/congress-cli validator-performance \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --blocks 1000 \
   --rpc_laddr http://localhost:8545
 
-# ⚠️ 惩罚和监禁状态
+# ⚠️ Punishment and jailing status
 ./build/congress-cli punishment-history \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --rpc_laddr http://localhost:8545
 ```
 
-### 事件监听与告警
+### Event Listening and Alerting
 
-#### 关键事件监听
+#### Key Event Listening
 
 ```javascript
 // 📡 监听验证者变更事件
@@ -1153,8 +1153,8 @@ web3.eth.subscribe('logs', {
     address: '0x000000000000000000000000000000000000f000',
     topics: ['0x...'] // LogCreateValidator 事件签名
 }).on('data', log => {
-    console.log('🎉 新验证者添加:', log);
-    // 发送告警通知
+    console.log('🎉 New validator added:', log);
+    // Send alert notification
 });
 
 // 监听提案创建
@@ -1162,8 +1162,8 @@ web3.eth.subscribe('logs', {
     address: '0x000000000000000000000000000000000000f002',
     topics: ['0x...'] // LogCreateProposal 事件签名
 }).on('data', log => {
-    console.log('📝 新提案创建:', log);
-    // 通知相关验证者投票
+    console.log('📝 New proposal created:', log);
+    // Notify related validators to vote
 });
 
 // 监听惩罚事件
@@ -1171,25 +1171,25 @@ web3.eth.subscribe('logs', {
     address: '0x000000000000000000000000000000000000f001',
     topics: ['0x...'] // LogPunishValidator 事件签名
 }).on('data', log => {
-    console.log('⚠️ 验证者被惩罚:', log);
-    // 发送紧急告警
+    console.log('⚠️ Validator punished:', log);
+    // Send emergency alert
 });
 ```
 
-#### 自动化监控脚本
+#### Automated Monitoring Script
 
 ```bash
 #!/bin/bash
-# monitor.sh - JuChain网络监控脚本
+# monitor.sh - JuChain network monitoring script
 
 set -e
 
-# 配置参数
+# Configuration parameters
 RPC_URL="http://localhost:8545"
 ALERT_WEBHOOK="https://hooks.slack.com/your-webhook"
 LOG_FILE="./monitor.log"
 
-# 获取网络状态
+# Get network status
 get_network_status() {
     local peer_count=$(curl -s -X POST $RPC_URL \
         -H "Content-Type: application/json" \
@@ -1206,9 +1206,9 @@ get_network_status() {
         -d '{"jsonrpc":"2.0","method":"eth_mining","params":[],"id":1}' \
         | jq -r '.result')
     
-    echo "$(date): 连接节点数:$peer_count, 区块高度:$block_number, 挖矿状态:$mining" | tee -a $LOG_FILE
+    echo "$(date): 连接节点数:$peer_count, 区blocks高度:$block_number, 挖矿状态:$mining" | tee -a $LOG_FILE
     
-    # 告警检查
+    # Alert check
     if [ $peer_count -lt 3 ]; then
         send_alert "⚠️ 警告: 连接节点数过少 ($peer_count)"
     fi
@@ -1229,7 +1229,7 @@ send_alert() {
         -d "{\"text\":\"$message\"}" 2>/dev/null || true
 }
 
-# 检查验证者状态
+# Check validator status
 check_validators() {
     local validators=$(./build/congress-cli validators --rpc_laddr $RPC_URL | grep "0x" | wc -l)
     echo "$(date): 活跃验证者数量:$validators" | tee -a $LOG_FILE
@@ -1239,25 +1239,25 @@ check_validators() {
     fi
 }
 
-# 主监控循环
+# Main monitoring loop
 main() {
-    echo "🚀 启动JuChain网络监控..." | tee -a $LOG_FILE
+    echo "🚀 Starting JuChain network monitoring..." | tee -a $LOG_FILE
     
     while true; do
         get_network_status
         check_validators
         echo "---" | tee -a $LOG_FILE
-        sleep 60  # 每分钟检查一次
+        sleep 60  # Check every minute
     done
 }
 
-# 启动监控
+# Start monitoring
 main
 ```
 
-### 性能优化建议
+### Performance Optimization Recommendations
 
-#### 节点性能调优
+#### Node Performance Tuning
 
 ```bash
 # 💾 内存优化
@@ -1291,24 +1291,24 @@ main
 
 ## 🛠️ 故障排除指南
 
-### 常见问题诊断
+### Common Problem Diagnosis
 
-#### 节点无法启动
+#### Node Cannot Start
 
-**问题症状**: 节点启动失败或立即退出
+**Problem Symptoms**: Node startup fails or exits immediately
 
-**诊断步骤**:
+**Diagnosis Steps**:
 
 ```bash
-# 1. 检查数据目录权限
+# 1. Check data directory permissions
 ls -la data/
 chmod 755 data/
 chmod 600 data/keystore/*
 
-# 2. 验证创世块配置
+# 2. Verify genesis block configuration
 ./chain/build/bin/geth --datadir temp init genesis.json
 
-# 3. 检查端口占用
+# 3. Check port usage
 netstat -tulpn | grep :30303
 netstat -tulpn | grep :8545
 
@@ -1316,23 +1316,23 @@ netstat -tulpn | grep :8545
 ./chain/build/bin/geth --datadir data --verbosity 5
 ```
 
-**常见解决方案**:
+**Common Solutions**:
 
 | 错误信息 | 原因 | 解决方案 |
 |----------|------|----------|
 | `permission denied` | 权限问题 | `chmod 755 data/` |
 | `port already in use` | 端口冲突 | 修改端口或停止冲突进程 |
-| `invalid genesis` | 创世块错误 | 重新生成创世块文件 |
+| `invalid genesis` | 创世blocks错误 | 重新生成创世blocks文件 |
 | `account unlock failed` | 账户密码错误 | 检查密码文件 |
 
-#### 网络连接问题
+#### Network Connection Issues
 
-**问题症状**: 节点无法连接到其他节点
+**Problem Symptoms**: Node cannot connect to other nodes
 
-**诊断步骤**:
+**Diagnosis Steps**:
 
 ```bash
-# 1. 检查网络连接
+# 1. Check network connection
 admin.peers              # 查看已连接节点
 net.peerCount           # 连接数量
 admin.nodeInfo          # 本节点信息
@@ -1363,11 +1363,11 @@ sudo ufw allow 30303
 sudo ufw allow 8545
 ```
 
-#### 验证者不出块
+#### 验证者不出blocks
 
-**问题症状**: 验证者节点运行但不产生区块
+**问题症状**: 验证者节点运行但不产生区blocks
 
-**诊断步骤**:
+**Diagnosis Steps**:
 
 ```bash
 # 1. 检查验证者状态
@@ -1497,25 +1497,25 @@ function getValidatorInfo(address val) external view returns (
 );
 ```
 
-### Proposal合约接口
+### Proposal Contract Interface
 
-#### 提案管理函数
+#### Proposal Management Functions
 
 ```solidity
-// 创建提案
+// Create proposal
 function createProposal(
-    address dst,              // 目标验证者地址
-    bool flag,               // true: 添加, false: 移除
-    string calldata details  // 提案描述
+    address dst,              // Target validator address
+    bool flag,               // true: add, false: remove
+    string calldata details  // Proposal description
 ) external returns (bytes32);
 
-// 投票
+// Vote
 function voteProposal(
-    bytes32 id,    // 提案ID
-    bool auth      // true: 支持, false: 反对
+    bytes32 id,    // Proposal ID
+    bool auth      // true: support, false: oppose
 ) external;
 
-// 获取提案信息
+// Get proposal information
 function getProposalInfo(bytes32 id) external view returns (
     address proposer,
     address dst,
@@ -1526,21 +1526,21 @@ function getProposalInfo(bytes32 id) external view returns (
 );
 ```
 
-### Staking合约接口
+### Staking Contract Interface
 
-#### 质押管理函数
+#### Staking Management Functions
 
 ```solidity
-// 注册验证者并质押
+// Register validator and stake
 function register(uint256 commissionRate) external payable;
 
-// 委托质押
+// Delegate stake
 function delegate(address validator) external payable;
 
-// 解除委托
+// Undelegate
 function undelegate(address validator, uint256 amount) external;
 
-// 获取验证者质押信息
+// Get validator stake information
 function getValidatorInfo(address validator) external view returns (
     uint256 selfStake,
     uint256 totalDelegated,
@@ -1551,47 +1551,47 @@ function getValidatorInfo(address validator) external view returns (
 );
 ```
 
-## 📋 最佳实践总结
+## 📋 Best Practices Summary
 
-### 部署检查清单
+### Deployment Checklist
 
-#### 部署前准备
+#### Pre-deployment Preparation
 
-- [ ] **环境配置**: Go 1.23+, Node.js 20+, Foundry已安装
-- [ ] **源码编译**: 所有组件编译成功，无错误
-- [ ] **创世块**: 生成正确的创世块文件
-- [ ] **网络规划**: 节点IP、端口分配合理
-- [ ] **安全配置**: 私钥管理、防火墙设置
+- [ ] **Environment Configuration**: Go 1.23+, Node.js 20+, Foundry installed
+- [ ] **Source Compilation**: All components compiled successfully, no errors
+- [ ] **Genesis Block**: Generate correct genesis block file
+- [ ] **Network Planning**: Node IP and port allocation reasonable
+- [ ] **Security Configuration**: Private key management, firewall settings
 
-#### 节点启动检查
+#### Node Startup Check
 
-- [ ] **数据初始化**: 创世块初始化成功
-- [ ] **账户管理**: 验证者账户创建并解锁
-- [ ] **网络连接**: 节点间可正常通信
-- [ ] **挖矿状态**: 验证者节点正常出块
-- [ ] **合约功能**: 系统合约调用正常
+- [ ] **Data Initialization**: Genesis block initialized successfully
+- [ ] **Account Management**: Validator account created and unlocked
+- [ ] **Network Connectivity**: Nodes can communicate normally
+- [ ] **Mining Status**: Validator nodes producing blocks normally
+- [ ] **Contract Functionality**: System contract calls working normally
 
-#### 运维监控
+#### Operations Monitoring
 
-- [ ] **性能监控**: CPU、内存、磁盘使用率
-- [ ] **网络监控**: 连接节点数、网络延迟
-- [ ] **业务监控**: 出块速度、交易处理
-- [ ] **告警机制**: 异常情况及时通知
-- [ ] **备份策略**: 定期数据备份
+- [ ] **Performance Monitoring**: CPU, memory, disk usage
+- [ ] **Network Monitoring**: Connected node count, network latency
+- [ ] **Business Monitoring**: Block production speed, transaction processing
+- [ ] **Alerting Mechanism**: Timely notification of anomalies
+- [ ] **Backup Strategy**: Regular data backups
 
-### 安全建议
+### Security Recommendations
 
-#### 网络安全
+#### Network Security
 
 ```bash
-# 🔒 防火墙配置
+# 🔒 Firewall Configuration
 sudo ufw enable
 sudo ufw allow ssh
-sudo ufw allow 30303/tcp  # P2P端口
-sudo ufw allow from [信任IP] to any port 8545  # RPC访问限制
+sudo ufw allow 30303/tcp  # P2P port
+sudo ufw allow from [Trusted IP] to any port 8545  # RPC access restriction
 
-# 🔐 TLS配置
-# 为RPC接口配置TLS证书
+# 🔐 TLS Configuration
+# Configure TLS certificates for RPC interface
 ./chain/build/bin/geth \
   --http.corsdomain "*" \
   --http.vhosts "*" \
@@ -1643,11 +1643,11 @@ echo "* hard nofile 65536" >> /etc/security/limits.conf
 
 ## 🎯 总结
 
-JuChain区块链网络通过以下关键组件实现高性能和高安全性：
+JuChain区blocks链网络通过以下关键组件实现高性能和高安全性：
 
 ### 🏛️ 技术架构优势
 
-1. **Congress PoSA共识**: 结合PoA和PoS优势，实现快速出块和经济安全
+1. **Congress PoSA共识**: 结合PoA和PoS优势，实现快速出blocks和经济安全
 2. **双合约系统**: Validators + Staking合约分工明确，功能完整
 3. **治理机制**: 完善的提案投票系统，支持参数动态调整
 4. **惩罚机制**: 多层次惩罚确保验证者诚实行为
@@ -1655,13 +1655,13 @@ JuChain区块链网络通过以下关键组件实现高性能和高安全性：
 ### 🛠️ 运维工具完善
 
 1. **Congress CLI**: 功能全面的命令行管理工具
-2. **自动化脚本**: 一键部署和验证者管理
+2. **Automation scripts**: 一键部署和验证者管理
 3. **监控系统**: 实时网络状态和性能监控
 4. **故障恢复**: 完整的故障诊断和恢复流程
 
 ### 📈 扩展性设计
 
-1. **模块化架构**: 各组件独立，便于升级维护
+1. **模blocks化架构**: 各组件独立，便于升级维护
 2. **参数可调**: 关键参数支持治理调整
 3. **兼容性**: 与以太坊生态完全兼容
 4. **可升级性**: 支持硬分叉升级机制
@@ -1690,4 +1690,4 @@ JuChain区块链网络通过以下关键组件实现高性能和高安全性：
 
 ---
 
-*🚀 恭喜！您已完成JuChain区块链网络的完整部署和配置。如有问题，请参考故障排除章节或联系技术支持团队。*
+*🚀 恭喜！您已完成JuChain区blocks链网络的完整部署和配置。如有问题，请参考故障排除章节或联系技术支持团队。*

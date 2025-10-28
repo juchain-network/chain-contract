@@ -1,131 +1,131 @@
 # Congress CLI v1.1.0
 
-Juchain 区块链治理命令行工具，用于验证者管理、提案投票和网络治理。
+Command-line tool for Juchain blockchain governance, used for validator management, proposal voting, and network governance.
 
-## 🚀 新功能 (v1.1.0)
+## 🚀 What's New (v1.1.0)
 
-- ✅ **改进的输入验证**：完整的参数验证和错误提示
-- ✅ **更好的错误处理**：结构化错误消息和详细错误信息
-- ✅ **增强的用户体验**：彩色输出和清晰的状态指示
-- ✅ **全局参数验证**：自动验证 RPC 地址和链 ID
-- ✅ **配置集中管理**：统一的常量和配置管理
-- ✅ **示例命令**：内置使用示例和帮助文档
-- ✅ **改进的投票系统**：简化的投票语法
-- ✅ **增强的版本信息**：详细的构建和版本信息
+- ✅ **Enhanced Input Validation**: Complete parameter validation and error prompts
+- ✅ **Better Error Handling**: Structured error messages and detailed error information
+- ✅ **Improved User Experience**: Colorized output and clear status indicators
+- ✅ **Global Parameter Validation**: Automatic RPC address and chain ID validation
+- ✅ **Centralized Configuration Management**: Unified constant and configuration management
+- ✅ **Example Commands**: Built-in usage examples and help documentation
+- ✅ **Improved Voting System**: Simplified voting syntax
+- ✅ **Enhanced Version Information**: Detailed build and version information
 
-## 功能概述
+## Feature Overview
 
-Congress CLI 是一个用于 Juchain 区块链治理的命令行工具，提供了完整的验证者管理和提案投票功能。
+Congress CLI is a command-line tool for Juchain blockchain governance, providing complete validator management and proposal voting functionality.
 
-### 核心功能
+### Core Features
 
-- **提案管理**：创建验证者添加/移除提案和配置更新提案
-- **投票系统**：对提案进行投票表决（支持简化的投票语法）
-- **验证者管理**：查询验证者信息和管理收益
-- **交易处理**：签名和发送交易到区块链网络
-- **输入验证**：全面的参数验证和错误处理
+- **Proposal Management**: Create validator add/remove proposals and configuration update proposals
+- **Voting System**: Vote on proposals (supports simplified voting syntax)
+- **Validator Management**: Query validator information and manage rewards
+- **Transaction Processing**: Sign and send transactions to the blockchain network
+- **Input Validation**: Comprehensive parameter validation and error handling
 
-## 安装和编译
+## Installation and Compilation
 
-### 前置要求
+### Prerequisites
 
-- Go 1.23.0 或更高版本
-- Solidity 编译器 (solc 0.8.20)
-- abigen 工具（用于生成 Go 绑定）
+- Go 1.23.0 or higher
+- Solidity compiler (solc 0.8.20)
+- abigen tool (for generating Go bindings)
 
-### 编译步骤
+### Compilation Steps
 
 ```bash
-# 进入项目目录
+# Navigate to project directory
 cd sys-contract/congress-cli
 
-# 编译合约并生成 Go 绑定
+# Compile contracts and generate Go bindings
 make proposal
 
-# 编译可执行文件
+# Compile executable
 make build
 
-# 生成的可执行文件位于 build/congress-cli
+# Generated executable located at build/congress-cli
 ```
 
-### Makefile 目标
+### Makefile Targets
 
-- `make build` - 编译完整项目
-- `make proposal` - 生成 Proposal 合约的 Go 绑定
-- `make cleanContract` - 清理生成的合约文件
-- `make clean` - 清理构建文件
+- `make build` - Compile complete project
+- `make proposal` - Generate Go bindings for Proposal contract
+- `make cleanContract` - Clean generated contract files
+- `make clean` - Clean build files
 
-## 使用指南
+## Usage Guide
 
-### 全局参数
+### Global Parameters
 
-所有命令都支持以下全局参数：
+All commands support the following global parameters:
 
-- `-c, --chainId int` - 指定链ID（测试网：202599，主网：210000）
-- `-l, --rpc_laddr string` - 指定RPC端点地址
-  - 测试网：`https://testnet-rpc.juchain.org`
-  - 主网：`https://rpc.juchain.org`
-  - 本地：`http://localhost:8545`
+- `-c, --chainId int` - Specify chain ID (testnet: 202599, mainnet: 210000)
+- `-l, --rpc_laddr string` - Specify RPC endpoint address
+  - Testnet: `https://testnet-rpc.juchain.org`
+  - Mainnet: `https://rpc.juchain.org`
+  - Local: `http://localhost:8545`
 
-⚠️ **注意**：新版本会自动验证这些参数的有效性
+⚠️ **Note**: New version automatically validates these parameters
 
-### 快速开始
+### Quick Start
 
-1. **查看帮助和示例**：
+1. **View help and examples**:
 
 ```bash
 ./build/congress-cli --help
 ./build/congress-cli examples
-./build/congress-cli [command] --help  # 查看特定命令帮助
+./build/congress-cli [command] --help  # View help for specific command
 ```
 
-2. **查看版本信息**：
+2. **View version information**:
 
 ```bash
 ./build/congress-cli version
 ```
 
-### 网络配置
+### Network Configuration
 
-**测试网络**：
+**Test Network**:
 
 ```bash
-# 全局参数模板
-./build/congress-cli [command] -c 202599 -l https://testnet-rpc.juchain.org [其他参数]
+# Global parameter template
+./build/congress-cli [command] -c 202599 -l https://testnet-rpc.juchain.org [other parameters]
 ```
 
-**主网络**：
+**Main Network**:
 
 ```bash
-# 全局参数模板  
-./build/congress-cli [command] -c 210000 -l https://rpc.juchain.org [其他参数]
+# Global parameter template  
+./build/congress-cli [command] -c 210000 -l https://rpc.juchain.org [other parameters]
 ```
 
-### 命令详解
+### Command Details
 
-#### 1. 查询验证者信息
+#### 1. Query Validator Information
 
-**查询所有验证者：**
+**Query all validators:**
 
 ```bash
-# 测试网
+# Testnet
 ./build/congress-cli miners
 
-# 主网
+# Mainnet
 ./build/congress-cli miners
 ```
 
-**查询特定验证者：**
+**Query specific validator:**
 
 ```bash
-# 测试网示例
+# Testnet示例
 ./build/congress-cli miner -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
 
-# 主网示例  
+# Mainnet示例  
 ./build/congress-cli miner -a 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
 ```
 
-输出示例：
+Output example:
 
 ```text
 Address: 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
@@ -136,122 +136,122 @@ Penalized Rewards: 5323260025816819260865
 Last Withdraw Block: 1206974
 ```
 
-**状态说明：**
+**Status explanation:**
 
-- Status 1 = Active (活跃)
-- Status 2 = Inactive (异常)
+- Status 1 = Active
+- Status 2 = Inactive
 
-#### 2. 创建提案
+#### 2. Create Proposal
 
-**创建验证者添加/移除提案：**
+**Create validator add/remove proposal:**
 
 ```bash
-# 添加验证者 (测试网示例)
+# Add validator (testnet example)
 ./build/congress-cli create_proposal \
   -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -t 0x029DAB47e268575D4AC167De64052FB228B5fA41 \
   -o add
 
-# 移除验证者 (主网示例)
+# Remove validator (mainnet example)
 ./build/congress-cli create_proposal \
   -p 0xccafa71c31bc11ba24d526fd27ba57d743152807 \
   -t 0x4d432df142823ca25b21bc3f9744ed21a275bdea \
   -o remove
 ```
 
-参数说明：
+Parameter description:
 
-- `-p, --proposer` - 提案者地址（必须是有效验证者）
-- `-t, --target` - 目标地址（要添加或移除的验证者）
-- `-o, --operation` - 操作类型（add 或 remove）
+- `-p, --proposer` - Proposer address (must be a valid validator)
+- `-t, --target` - Target address (validator to add or remove)
+- `-o, --operation` - Operation type (add or remove)
 
-**创建配置更新提案：**
+**Create configuration update proposal:**
 
 ```bash
-# 测试网示例：修改 proposalLastingPeriod 为 86400
+# Testnet示例：修改 proposalLastingPeriod 为 86400
 ./build/congress-cli create_config_proposal \
   -p 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -i 0 \
   -v 86400
 
-# 主网示例
+# Mainnet示例
 ./build/congress-cli create_config_proposal \
   -p 0xccafa71c31bc11ba24d526fd27ba57d743152807 \
   -i 0 \
   -v 86400
 ```
 
-参数说明：
+Parameter description:
 
-- `-p, --proposer` - 提案者地址
-- `-i, --cid` - 配置ID：
-  - 0: proposalLastingPeriod（提案持续期）
-  - 1: punishThreshold（惩罚阈值）
-  - 2: removeThreshold（移除阈值）
-  - 3: decreaseRate（减少率）
-  - 4: withdrawProfitPeriod（提取收益周期）
-- `-v, --value` - 新的配置值
+- `-p, --proposer` - Proposer address
+- `-i, --cid` - Configuration ID:
+  - 0: proposalLastingPeriod (proposal duration)
+  - 1: punishThreshold (punishment threshold)
+  - 2: removeThreshold (removal threshold)
+  - 3: decreaseRate (reduction rate)
+- 4: withdrawProfitPeriod (profit withdrawal period)
+- `-v, --value` - New configuration value
 
-#### 3. 投票提案
+#### 3. Vote on Proposal
 
-⚠️ **重要**：投票语法已优化！使用 `-a` 标志表示赞成，省略表示反对。
+⚠️ **Important**: Voting syntax optimized! Use `-a` flag for approval, omit for rejection.
 
 ```bash
-# 赞成票 (测试网示例)
+# Approval vote (testnet example)
 ./build/congress-cli vote_proposal \
   -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf \
   -a
 
-# 反对票 (省略 -a 参数)
+# Rejection vote (omit -a parameter)
 ./build/congress-cli vote_proposal \
   -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf
 
-# 主网示例 (赞成票)
+# Mainnet示例 (赞成票)
 ./build/congress-cli vote_proposal \
   -s 0xccafa71c31bc11ba24d526fd27ba57d743152807 \
   -i PROPOSAL_ID \
   -a
 ```
 
-参数说明：
+Parameter description:
 
-- `-s, --signer` - 签名者地址（必须是有效验证者）
-- `-i, --proposalId` - 提案ID（从创建提案的输出中获取，64位十六进制字符串）
-- `-a, --approve` - 赞成票标志（使用 `-a` 表示赞成，省略表示反对）
+- `-s, --signer` - Signer address (must be a valid validator)
+- `-i, --proposalId` - Proposal ID (obtained from proposal creation output, 64-bit hexadecimal string)
+- `-a, --approve` - Approval vote flag (use `-a` for approval, omit for rejection)
 
-#### 4. 签名和发送交易
+#### 4. Sign and Send Transaction
 
-**签名交易：**
+**Sign transaction:**
 
 ```bash
-# 测试网示例
+# Testnet示例
 ./build/congress-cli sign \
   -f createProposal.json \
   -k /path/to/keystore/UTC--xxx \
   -p /path/to/password.txt
 
-# 主网示例
+# Mainnet示例
 ./build/congress-cli sign \
   -f createProposal.json \
   -k /path/to/keystore/miner1.key \
   -p /path/to/password.file
 ```
 
-**发送已签名的交易：**
+**Send signed transaction:**
 
 ```bash
-# 测试网示例
+# Testnet示例
 ./build/congress-cli send \
   -f createProposal_signed.json
 
-# 主网示例
+# Mainnet示例
 ./build/congress-cli send \
   -f createProposal_signed.json
 ```
 
-**发送成功后的输出示例：**
+**Output example after successful send:**
 
 ```text
 ✅ Transaction broadcast successfully!
@@ -268,33 +268,33 @@ Block: 12535222
 -----
 ```
 
-#### 5. 提取验证者收益
+#### 5. Withdraw Validator Rewards
 
 ```bash
-# 测试网示例
+# Testnet示例
 ./build/congress-cli withdraw_profits -a 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
 
-# 主网示例
+# Mainnet示例
 ./build/congress-cli withdraw_profits -a 0xccafa71c31bc11ba24d526fd27ba57d743152807
 ```
 
-⚠️ **注意**：
+⚠️ **Note**: 
 
-- 提取收益有最小等待块数限制
-- 收益提取不需要投票流程，验证者可以直接提取自己的收益
-- 需要等待足够的区块数才能提取（withdrawProfitPeriod 配置项控制）
+- Profit withdrawal has minimum wait block limit
+- Profit withdrawal does not require voting process, validators can directly withdraw their own profits
+- Need to wait enough blocks to withdraw (controlled by withdrawProfitPeriod configuration)
 
-## 完整工作流程示例
+## Complete Workflow Example
 
-以下是一个完整的提案创建和投票流程（测试网示例）：
+Below is a complete proposal creation and voting workflow (testnet example):
 
-### 1. 查询当前验证者状态
+### 1. Query Current Validator Status
 
 ```bash
 ./build/congress-cli miners
 ```
 
-### 2. 创建验证者添加提案
+### 2. Create Validator Add Proposal
 
 ```bash
 ./build/congress-cli create_proposal \
@@ -303,7 +303,7 @@ Block: 12535222
   -o add
 ```
 
-### 3. 签名交易
+### 3. Sign Transaction
 
 ```bash
 ./build/congress-cli sign \
@@ -312,13 +312,13 @@ Block: 12535222
   -p password.file \
 ```
 
-### 4. 发送交易
+### 4. Send Transaction
 
 ```bash
 ./build/congress-cli send -f createProposal_signed.json
 ```
 
-**输出示例（记录提案ID）：**
+**Output example (record proposal ID):**
 
 ```text
 ✅ Transaction broadcast successfully!
@@ -334,19 +334,19 @@ Block: 24805
 -----
 ```
 
-### 5. 多个验证者投票
+### 5. Multiple Validators Vote
 
-使用上面获取的提案ID进行投票：
+Use the proposal ID obtained above to vote:
 
 ```bash
-# miner1 赞成票
+# miner1 approval vote
 ./build/congress-cli vote_proposal \
   -s 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf \
   -a
 ./build/congress-cli sign -f voteProposal.json -k miner1.key -p password.file
 ./build/congress-cli send -f voteProposal_signed.json
-# miner2 赞成票
+# miner2 approval vote
 ./build/congress-cli vote_proposal \
   -s 0x81f7a79a51edba249efa812eb2d5478f696f7558 \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf \
@@ -354,7 +354,7 @@ Block: 24805
 ./build/congress-cli sign -f voteProposal.json -k miner2.key -p password.file
 ./build/congress-cli send -f voteProposal_signed.json
 
-# miner3 赞成票
+# miner3 approval vote
 ./build/congress-cli vote_proposal \
   -s 0x578c39eaf09a4e1abf428c423970b59bb8baf42e \
   -i b2be7f3cc702c7a24962df6aed188edbcfdebe20fd55f5670efaedace0e4bcdf \
@@ -363,40 +363,40 @@ Block: 24805
 ./build/congress-cli send -f voteProposal_signed.json
 ```
 
-### 6. 验证结果
+### 6. Verify Results
 
 ```bash
-# 查看新验证者信息
+# View new validator information
 ./build/congress-cli miner -a 0x029DAB47e268575D4AC167De64052FB228B5fA41
 
-# 查看所有验证者
+# View all validators
 ./build/congress-cli miners
 ```
 
-## 配置文件
+## Configuration Files
 
-### 生成的交易文件
+### Generated Transaction Files
 
-工具会在当前目录生成以下JSON文件：
+The tool generates the following JSON files in the current directory:
 
-- `createProposal.json` - 创建提案的原始交易
-- `createProposal_signed.json` - 已签名的创建提案交易
-- `createUpdateConfigProposal.json` - 创建配置更新提案的原始交易
-- `createUpdateConfigProposal_signed.json` - 已签名的配置更新提案交易
-- `voteProposal.json` - 投票的原始交易
-- `voteProposal_signed.json` - 已签名的投票交易
+- `createProposal.json` - Original transaction for creating proposal
+- `createProposal_signed.json` - Signed create proposal transaction
+- `createUpdateConfigProposal.json` - Original transaction for configuration update proposal
+- `createUpdateConfigProposal_signed.json` - Signed configuration update proposal transaction
+- `voteProposal.json` - Original voting transaction
+- `voteProposal_signed.json` - Signed voting transaction
 
-### Keystore 文件格式
+### Keystore File Format
 
-使用标准的 Ethereum keystore 格式，例如：
+Uses standard Ethereum keystore format, for example:
 
 ```
 UTC--202599-08-06T08-30-51.139143000Z--f39fd6e51aad88f6f4ce6ab8827279cffFb92266
 ```
 
-## 故障排除
+## Troubleshooting
 
-### 常见错误
+### Common Errors
 
 **1. EIP-155 错误**
 
@@ -404,70 +404,70 @@ UTC--202599-08-06T08-30-51.139143000Z--f39fd6e51aad88f6f4ce6ab8827279cffFb92266
 send tx error only replay-protected (EIP-155) transactions allowed over RPC
 ```
 
-解决方案：签名时必须指定正确的链ID：
+Solution: Must specify correct chain ID when signing:
 
 ```bash
 ./build/congress-cli sign -f transaction.json -k keystore -p password
 ```
 
-**2. 提取收益失败**
+**2. Profit Withdrawal Failed**
 
 ```
 gas estimation failed: execution reverted: You must wait enough blocks to withdraw your profits
 ```
 
-解决方案：需要等待足够的区块数才能提取收益，这是正常的安全机制。
+Solution: Need to wait enough blocks to withdraw profits, this is a normal security mechanism.
 
-**3. 连接RPC失败**
-确保：
+**3. RPC Connection Failed**
+Ensure:
 
-- RPC端点地址正确
-- 区块链节点正在运行
-- 网络连接正常
+- RPC endpoint address is correct
+- Blockchain node is running
+- Network connection is normal
 
-### 调试技巧
+### Debugging Tips
 
-1. 使用 `--help` 参数查看命令详细用法
-2. 检查生成的JSON文件内容
-3. 验证keystore文件路径和密码文件
-4. 确认链ID和RPC地址配置正确
+1. Use `--help` parameter to view detailed command usage
+2. Check generated JSON file contents
+3. Verify keystore file path and password file
+4. Confirm chain ID and RPC address are configured correctly
 
-## 技术架构
+## Technical Architecture
 
-### 项目结构
+### Project Structure
 
 ```
-congress-cli/
-├── cmd/                    # 命令实现
-│   ├── proposal.go        # 提案相关命令
-│   ├── tools.go          # 工具函数
-│   └── validator.go      # 验证者相关命令
-├── contracts/            # 合约绑定（符号链接）
-│   └── generated/       # 自动生成的Go绑定
-├── build/               # 编译输出
-│   └── congress-cli    # 可执行文件
-├── Makefile            # 构建配置
-├── go.mod              # Go模块定义
-└── README.md           # 本文档
+congress-cli/ 
+├── cmd/                    # Command implementation
+│   ├── proposal.go        # Proposal-related commands
+│   ├── tools.go          # Utility functions
+│   └── validator.go      # Validator-related commands
+├── contracts/            # Contract bindings (symlink)
+│   └── generated/       # Auto-generated Go bindings
+├── build/               # Build output
+│   └── congress-cli    # Executable file
+├── Makefile            # Build configuration
+├── go.mod              # Go module definition
+└── README.md           # This document
 ```
 
-### 依赖项
+### Dependencies
 
-- `github.com/ethereum/go-ethereum` - 以太坊客户端库
-- `github.com/spf13/cobra` - CLI框架
-- `golang.org/x/crypto` - 加密库
+- `github.com/ethereum/go-ethereum` - Ethereum client library
+- `github.com/spf13/cobra` - CLI framework
+- `golang.org/x/crypto` - Cryptographic library
 
-## 贡献指南
+## Contributing
 
-1. Fork 项目
-2. 创建功能分支
-3. 提交更改
-4. 创建 Pull Request
+1. Fork the project
+2. Create feature branch
+3. Commit changes
+4. Create Pull Request
 
-## 许可证
+## License
 
-本项目采用 MIT 许可证。
+This project uses the MIT license.
 
-## 版本历史
+## Version History
 
-- v1.0.0 - 初始版本，支持基本的治理功能
+- v1.0.0 - Initial version, supporting basic governance functionality
