@@ -103,86 +103,6 @@ contract Proposal is Params {
         receiverAddr = 0x9014B4DB9D30CeD67DB9d6B096f5DCDbA28cE639;
     }
 
-    /**
-     * @dev Efficiently compute hash for validator proposal
-     * @param proposer Address of the proposer
-     * @param dst Target validator address
-     * @param flag Add/remove flag
-     * @param details Proposal details
-     * @param blockTimestamp Block timestamp
-     * @return id The computed hash
-     */
-    function _hashValidatorProposal(
-        address proposer,
-        address dst,
-        bool flag,
-        string calldata details,
-        uint256 blockTimestamp
-    ) private pure returns (bytes32 id) {
-        assembly {
-            let ptr := mload(0x40)
-            let detailsLen := details.length
-            
-            // Pack data tightly: proposer(20) + dst(20) + flag(1) + details + timestamp(32)
-            let totalLen := add(0x49, detailsLen)  // 20 + 20 + 1 + detailsLen + 32
-            
-            // Store proposer (20 bytes)
-            mstore(ptr, shl(96, proposer))
-            
-            // Store dst (20 bytes) 
-            mstore(add(ptr, 0x14), shl(96, dst))
-            
-            // Store flag (1 byte)
-            mstore8(add(ptr, 0x28), flag)
-            
-            // Copy details from calldata
-            calldatacopy(add(ptr, 0x29), details.offset, detailsLen)
-            
-            // Store timestamp (32 bytes)
-            mstore(add(ptr, add(0x29, detailsLen)), blockTimestamp)
-            
-            // Compute hash
-            id := keccak256(ptr, totalLen)
-        }
-    }
-
-    /**
-     * @dev Efficiently compute hash for config proposal
-     * @param proposer Address of the proposer
-     * @param cid Configuration ID
-     * @param newValue New configuration value
-     * @param blockTimestamp Block timestamp
-     * @return id The computed hash
-     */
-    function _hashConfigProposal(
-        address proposer,
-        uint256 cid,
-        uint256 newValue,
-        uint256 blockTimestamp
-    ) private pure returns (bytes32 id) {
-        assembly {
-            let ptr := mload(0x40)
-            
-            // Pack data tightly: proposer(20) + cid(32) + newValue(32) + timestamp(32)
-            // Total: 116 bytes
-            
-            // Store proposer (20 bytes)
-            mstore(ptr, shl(96, proposer))
-            
-            // Store cid (32 bytes)
-            mstore(add(ptr, 0x14), cid)
-            
-            // Store newValue (32 bytes)
-            mstore(add(ptr, 0x34), newValue)
-            
-            // Store timestamp (32 bytes)
-            mstore(add(ptr, 0x54), blockTimestamp)
-            
-            // Compute hash
-            id := keccak256(ptr, 0x74)  // 116 bytes = 0x74
-        }
-    }
-
     function createProposal(
         address dst,
         bool flag,
@@ -194,8 +114,8 @@ contract Proposal is Params {
             'Cant"t add a already exist dst or Cant"t remove a not passed dst'
         );
 
-        // generate proposal id using optimized hash function
-        bytes32 id = _hashValidatorProposal(msg.sender, dst, flag, details, block.timestamp);
+        // generate proposal id
+        bytes32 id = keccak256(abi.encodePacked(msg.sender, dst, flag, details, block.timestamp));
         require(bytes(details).length <= 3000, 'Details too long');
         require(proposals[id].createTime == 0, 'Proposal already exists');
 
@@ -213,8 +133,7 @@ contract Proposal is Params {
     }
 
     function createUpdateConfigProposal(uint256 cid, uint256 newValue) external returns (bool) {
-        // generate proposal id using optimized hash function
-        bytes32 id = _hashConfigProposal(msg.sender, cid, newValue, block.timestamp);
+        bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, block.timestamp));
 
         ProposalInfo memory proposal;
         proposal.proposer = msg.sender;
