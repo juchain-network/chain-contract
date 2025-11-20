@@ -263,6 +263,7 @@ contract Staking is Params {
     function delegate(address validator) external payable onlyActiveValidator(validator) {
         require(validator != address(0), "Invalid validator address");
         require(msg.value >= MIN_DELEGATION, "Insufficient delegation amount");
+        require(validator != msg.sender, "Cannot delegate to yourself");
         
         _updateRewards(msg.sender, validator);
         
@@ -348,14 +349,21 @@ contract Staking is Params {
         
         if (totalStake == 0) return;
         
-        // Calculate commission
+        // 1. Calculate and allocate commission to validator first
         uint256 commission = msg.value.mul(stake.commissionRate).div(COMMISSION_RATE_BASE);
-        uint256 delegatorRewards = msg.value.sub(commission);
-        
-        // Add commission to validator's accumulated rewards
         stake.accumulatedRewards = stake.accumulatedRewards.add(commission);
         
-        // Update reward per share for delegators
+        // 2. Calculate remaining rewards after commission
+        uint256 remainingRewards = msg.value.sub(commission);
+        
+        // 3. Calculate validator's share from remaining rewards based on their self-stake proportion
+        uint256 validatorShare = remainingRewards.mul(stake.selfStake).div(totalStake);
+        stake.accumulatedRewards = stake.accumulatedRewards.add(validatorShare);
+        
+        // 4. Calculate delegator rewards (remaining after validator's share)
+        uint256 delegatorRewards = remainingRewards.sub(validatorShare);
+        
+        // 5. Update reward per share for delegators
         if (stake.totalDelegated > 0) {
             rewardPerShare[validator] = rewardPerShare[validator].add(
                 delegatorRewards.mul(1e18).div(stake.totalDelegated)
