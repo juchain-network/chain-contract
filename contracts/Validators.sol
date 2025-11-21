@@ -417,10 +417,12 @@ contract Validators is Params {
         
         // Calculate status from Staking contract for backward compatibility
         Status calculatedStatus;
-        if (!this.isValidatorExist(val)) {
-            calculatedStatus = Status.NotExist;
-        } else if (staking.isValidatorJailed(val)) {
+        // Priority: Check jailed status first, even if validator doesn't exist in Staking
+        // This ensures that jailed validators (including those without stake) are correctly identified
+        if (staking.isValidatorJailed(val)) {
             calculatedStatus = Status.Jailed;
+        } else if (!this.isValidatorExist(val)) {
+            calculatedStatus = Status.NotExist;
         } else {
             (bool isActive, ) = staking.getValidatorStatus(val);
             calculatedStatus = isActive ? Status.Active : Status.NotExist;

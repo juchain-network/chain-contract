@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 contract ProposalFoundryTest is BaseSetup {
 
@@ -54,11 +55,13 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testCreateAndVoteAddProposalPass() public {
         Proposal p = Proposal(PROPOSAL);
+        address newValidator = address(0xBEEF);
+        
         // freeze timestamp to compute deterministic id
         vm.warp(1_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), address(0xBEEF), true, "", block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(address(this), newValidator, true, "", block.timestamp));
         // create by anyone (this contract)
-        (bool ok, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, address(0xBEEF), true, ""));
+        (bool ok, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, newValidator, true, ""));
         require(ok, "create failed");
 
         // validators vote
@@ -67,10 +70,20 @@ contract ProposalFoundryTest is BaseSetup {
         vm.prank(v3); p.voteProposal(id, true);
 
         // assert pass recorded
-        bool passed = p.pass(address(0xBEEF));
+        bool passed = p.pass(newValidator);
         require(passed, "should pass");
+        
+        // In POSA mode, validator must register (stake) to become top validator
+        // This is the design: proposal passing only grants permission, validator must actively register
+        // Give new validator enough ETH and register
+        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        vm.deal(newValidator, 20000 ether);
+        vm.prank(newValidator);
+        Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
+        
+        // registerValidator() internally calls tryAddValidatorToHighestSet(), so validator should now be top
         // also ensure validator became top
-        bool isTop = Validators(VALIDATORS).isTopValidator(address(0xBEEF));
+        bool isTop = Validators(VALIDATORS).isTopValidator(newValidator);
         require(isTop, "should be top validator");
     }
 

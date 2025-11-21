@@ -5,6 +5,7 @@ import {BaseSetup} from "./BaseSetup.t.sol";
 import {Punish} from "../contracts/Punish.sol";
 import {Validators} from "../contracts/Validators.sol";
 import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 // 补充缺失的 Punish 合约测试用例
 contract PunishMissingFoundryTest is BaseSetup {
@@ -47,8 +48,9 @@ contract PunishMissingFoundryTest is BaseSetup {
         // 首先惩罚验证者直到被监禁
         vm.coinbase(VALIDATORS); // 设置 coinbase 为 VALIDATORS 合约地址
         vm.startPrank(VALIDATORS);
+        uint256 currentBlock = block.number;
         for (uint256 i = 0; i < 48; i++) {
-            vm.roll(block.number + 1); // 移动到下一个区块
+            vm.roll(currentBlock + i + 1); // 移动到下一个区块
             punish.punish(v1);
         }
         vm.stopPrank();
@@ -56,6 +58,10 @@ contract PunishMissingFoundryTest is BaseSetup {
         // 验证者应该被监禁
         require(isJailed(v1), "v1 should be jailed");
         require(punish.getPunishRecord(v1) == 0, "v1 punish record should be reset after removal");
+        
+        // 获取 jailUntilBlock，确保 jail 期限已过
+        (, , , , uint256 jailUntilBlock) = Staking(STAKING).getValidatorInfo(v1);
+        require(jailUntilBlock > 0, "v1 should have jailUntilBlock set");
         
         // 创建重新激活验证者的提案
         vm.warp(5_000_000);
@@ -67,8 +73,21 @@ contract PunishMissingFoundryTest is BaseSetup {
         vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
         vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
         
+        // 提案通过后，只是设置了 pass[v1] = true，但不会自动 unjail
+        // 验证者仍然处于 jailed 状态
+        require(isJailed(v1), "v1 should still be jailed after proposal passes");
+        require(Proposal(PROPOSAL).pass(v1), "v1 should have pass status after proposal passes");
+        
+        // 等待 jail 期限结束
+        vm.roll(jailUntilBlock + 1);
+        
+        // 在 POSA 模式下，验证者需要手动调用 unjailValidator() 来恢复
+        // unjailValidator() 会检查 pass 状态（如果 violations > 3）
+        vm.prank(v1);
+        Staking(STAKING).unjailValidator(v1);
+        
         // 验证者应该不再被监禁且惩罚记录被清除
-        require(!isJailed(v1), "v1 should not be jailed");
+        require(!isJailed(v1), "v1 should not be jailed after unjail");
         require(punish.getPunishRecord(v1) == 0, "v1 punish record should remain cleaned");
     }
 
@@ -110,17 +129,23 @@ contract PunishMissingFoundryTest is BaseSetup {
         vm.stopPrank();
 
         require(isJailed(v1), "v1 should now be jailed");
-        require(punish.getPunishRecord(v1) == 0, "v1 punish record should be reset after removal");        // 现在两个验证者都被监禁，只有 v3 可以参与投票
-        // 需要至少2票才能通过，但只有1个活跃验证者，所以提案无法通过
+        require(punish.getPunishRecord(v1) == 0, "v1 punish record should be reset after removal");
+        
+        // 现在两个验证者都被监禁，只有 v3 可以参与投票
+        // 根据设计逻辑：threshold = activeValidatorCount / 2 + 1
+        // 当 activeValidatorCount = 1 时：threshold = 1 / 2 + 1 = 1
+        // 所以如果只有1个活跃验证者，1票就可以通过提案
         vm.warp(6_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), v1, true, "", block.timestamp));
         Proposal(PROPOSAL).createProposal(v1, true, "");
         
         vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
         
-        // 提案不应该通过，因为只有1票，需要至少2票
-        require(!Proposal(PROPOSAL).pass(v1), "proposal should not pass with only 1 vote");
-        require(isJailed(v1), "v1 should still be jailed");
+        // 提案应该通过，因为只有1个活跃验证者时，1票就可以通过（threshold = 1）
+        require(Proposal(PROPOSAL).pass(v1), "proposal should pass with 1 vote when only 1 active validator");
+        // 注意：提案通过只是设置了 pass[v1] = true，v1 仍然处于 jailed 状态
+        // v1 需要先 unjail，然后注册质押才能重新成为 active validator
+        require(isJailed(v1), "v1 should still be jailed (proposal passing doesn't auto unjail)");
     }
 
     function testPunishPermission() public {

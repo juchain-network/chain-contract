@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Validators} from "../contracts/Validators.sol";
 import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 // 完整的验证者测试，对应 test/validators.js 的所有功能
 contract ValidatorsCompleteFoundryTest is BaseSetup {
@@ -85,14 +86,34 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // 先通过提案授权
         _passProposal(validator, true);
         
-        // 创建验证者
+        // 创建验证者（设置验证者信息）
         vm.prank(validator);
         bool success = Validators(VALIDATORS).createOrEditValidator(payable(validator), "", "", "", "", "");
         require(success, "create validator should succeed");
         
-        // 检查状态
-        (, Validators.Status status,,,) = Validators(VALIDATORS).getValidatorInfo(validator);
-        require(uint256(status) == ACTIVE, "validator should be active");
+        // 在 POSA 模式下，创建验证者后必须注册（质押）才能成为 active
+        // 给验证者足够的 ETH 并注册
+        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        vm.deal(validator, 20000 ether);
+        vm.prank(validator);
+        Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
+        
+        // 检查验证者是否已注册（存在）
+        require(Validators(VALIDATORS).isValidatorExist(validator), "validator should exist after registration");
+        
+        // 检查验证者是否在 highestValidatorsSet 中（注册后会自动添加）
+        require(Validators(VALIDATORS).isTopValidator(validator), "validator should be in highestValidatorsSet after registration");
+        
+        // 注意：在 POSA 模式下，getValidatorStatus 的 isActive 检查的是验证者是否在 currentValidatorSet 中
+        // 新注册的验证者不会立即进入 currentValidatorSet，需要等待下一个 epoch 更新
+        // 所以这里检查验证者是否存在且不是 jailed 状态即可
+        // 验证者状态应该是 NotExist（因为还没进入 currentValidatorSet）或 Active（如果已经在 currentValidatorSet 中）
+        // 但至少验证者应该存在且不是 jailed
+        require(!Validators(VALIDATORS).isValidatorJailed(validator), "validator should not be jailed");
+        
+        // 验证者应该能够被查询到信息（已注册）
+        (address payable feeAddr, , , ,) = Validators(VALIDATORS).getValidatorInfo(validator);
+        require(feeAddr == validator, "validator info should be set");
     }
 
     function testEditValidatorInfo() public {
@@ -126,9 +147,19 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // 创建并投票通过提案
         _passProposal(nval, true);
         
-        // 现在应该是验证者
-        require(Validators(VALIDATORS).isTopValidator(nval), "should be validator after proposal");
+        // 在 POSA 模式下，提案通过只是设置了 pass[nval] = true
+        // 验证者还需要注册（质押）才能成为 top validator
         require(Proposal(PROPOSAL).pass(nval), "should be marked as passed");
+        require(!Validators(VALIDATORS).isTopValidator(nval), "should not be top validator yet (not registered)");
+        
+        // 给新验证者足够的 ETH 并注册
+        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        vm.deal(nval, 20000 ether);
+        vm.prank(nval);
+        Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
+        
+        // 现在应该是验证者
+        require(Validators(VALIDATORS).isTopValidator(nval), "should be validator after registration");
     }
 
     function testProposeRemoveValidator() public {

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Validators} from "../contracts/Validators.sol";
 import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 contract ValidatorsFoundryTest is BaseSetup {
 
@@ -17,11 +18,16 @@ contract ValidatorsFoundryTest is BaseSetup {
         address[] memory initVals = new address[](3);
         initVals[0] = v1; initVals[1] = v2; initVals[2] = v3;
         deploySystem(initVals);
+        
+        // Note: deploySystem() already registers genesis validators via initializeWithValidators()
+        // So we don't need to register them again here
+        
         miner = v1; // simulate coinbase
         vm.coinbase(miner);
         // Give miner enough ETH for testing
         vm.deal(miner, 100 ether);
     }
+    
 
     function testDistributeBlockRewardEqually() public {
         // send 1 ether from coinbase

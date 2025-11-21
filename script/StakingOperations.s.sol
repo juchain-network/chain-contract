@@ -98,7 +98,7 @@ contract StakingOperationsScript is BaseSetup {
         Staking stakingContract = Staking(STAKING);
         
         // 安全地获取顶级验证者
-        try stakingContract.getTopValidators(5) returns (address[] memory topValidators) {
+        try stakingContract.getTopValidators() returns (address[] memory topValidators) {
             if (topValidators.length > 0) {
                 address validator = topValidators[0];
                 emit ValidatorInfo("Example delegation to validator", validator, 0);
@@ -131,7 +131,7 @@ contract StakingOperationsScript is BaseSetup {
         Staking stakingContract = Staking(STAKING);
         
         // 安全地获取顶级验证者
-        try stakingContract.getTopValidators(5) returns (address[] memory topValidators) {
+        try stakingContract.getTopValidators() returns (address[] memory topValidators) {
             emit StakingInfo("Total top validators", topValidators.length);
             
             for (uint i = 0; i < topValidators.length && i < 3; i++) {

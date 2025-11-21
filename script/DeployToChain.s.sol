@@ -221,9 +221,9 @@ contract DeployToChainScript is Script {
         console.log("Staking initialized with", initialValidators.length, "pre-registered validators");
         console.log("Default commission rate: 5%");
 
-        // 3. 初始化 Punish (传入 validators 和 proposal 地址)
+        // 3. 初始化 Punish (传入 validators、proposal 和 staking 地址)
         console.log("Initializing Punish...");
-        Punish(punish).initialize(validators, proposal);
+        Punish(punish).initialize(validators, proposal, staking);
         console.log("Punish initialized successfully");
 
         // 4. 最后初始化 Validators (传入所有其他合约地址)
