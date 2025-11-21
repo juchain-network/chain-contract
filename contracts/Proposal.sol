@@ -20,6 +20,19 @@ contract Proposal is Params {
 
     // record
     mapping(address => bool) public pass;
+    // Record when proposal passed (for 7-day staking requirement)
+    mapping(address => uint256) public proposalPassedTime;
+    // Period for validator to stake after proposal passed (7 days)
+    uint256 public constant STAKING_DEADLINE_PERIOD = 7 days;
+    
+    // Maximum violations allowed for auto unjail without reproposal
+    uint256 public constant MAX_VIOLATIONS_FOR_AUTO_UNJAIL = 3;
+    
+    // Violation count for graded punishment mechanism
+    // violationCount[validator] = 0: No violations
+    // violationCount[validator] = 1-3: Can auto unjail and restore pass
+    // violationCount[validator] >= 4: Must repropose before unjail
+    mapping(address => uint256) public violationCount;
 
     struct ProposalInfo {
         // who propose this proposal
@@ -75,6 +88,9 @@ contract Proposal is Params {
     event LogPassProposal(bytes32 indexed id, uint256 time);
     event LogRejectProposal(bytes32 indexed id, uint256 time);
     event LogSetUnpassed(address indexed val, uint256 time);
+    event LogViolationCountIncreased(address indexed val, uint256 newCount, uint256 time);
+    event LogPassAutoRestored(address indexed val, uint256 time);
+    event LogViolationCountReset(address indexed val, uint256 time);
 
     modifier onlyValidator() {
         require(validators.isActiveValidator(msg.sender), 'Validator only');
@@ -169,17 +185,31 @@ contract Proposal is Params {
             return true;
         }
 
-        if (results[id].agree >= validators.getActiveValidators().length / 2 + 1) {
+        // Check threshold using only votes from currently active validators
+        // This ensures that votes from validators who were removed after voting are not counted
+        uint256 activeAgree = getActiveVoteCount(id, true);
+        uint256 activeReject = getActiveVoteCount(id, false);
+        uint256 activeValidatorCount = validators.getActiveValidatorCount();
+        uint256 threshold = activeValidatorCount / 2 + 1;
+
+        if (activeAgree >= threshold) {
             results[id].resultExist = true;
 
             if (proposals[id].proposalType == 1) {
                 if (proposals[id].flag) {
                     // add to validators
                     pass[proposals[id].dst] = true;
-                    // try to active validator if it isn't the first time
-                    validators.tryActive(proposals[id].dst);
+                    // Record proposal passed time for 7-day staking requirement
+                    proposalPassedTime[proposals[id].dst] = block.timestamp;
+                    // Reset violation count after proposal passed
+                    if (violationCount[proposals[id].dst] > 0) {
+                        violationCount[proposals[id].dst] = 0;
+                        emit LogViolationCountReset(proposals[id].dst, block.timestamp);
+                    }
+                    // Validator needs to stake first, then will be activated at next epoch
                 } else {
                     pass[proposals[id].dst] = false;
+                    proposalPassedTime[proposals[id].dst] = 0; // Clear passed time
                     validators.tryRemoveValidator(proposals[id].dst);
                 }
             } else if (proposals[id].proposalType == 2) {
@@ -191,7 +221,7 @@ contract Proposal is Params {
             return true;
         }
 
-        if (results[id].reject >= validators.getActiveValidators().length / 2 + 1) {
+        if (activeReject >= threshold) {
             results[id].resultExist = true;
             emit LogRejectProposal(id, block.timestamp);
         }
@@ -217,11 +247,107 @@ contract Proposal is Params {
         }
     }
 
+    /**
+     * @dev Set validator as unpassed and increase violation count 
+     * @param val Validator address
+     * @notice This function is called when validator is removed due to punishment
+     * @notice violationCount is incremented to track repeated violations
+     */
     function setUnpassed(address val) external onlyValidatorsContract returns (bool) {
         // set validator unpass
         pass[val] = false;
-
+        proposalPassedTime[val] = 0; // Clear passed time
+        
+        // Increment violation count for graded punishment mechanism
+        violationCount[val] = violationCount[val] + 1;
+        
         emit LogSetUnpassed(val, block.timestamp);
+        emit LogViolationCountIncreased(val, violationCount[val], block.timestamp);
         return true;
+    }
+    
+    /**
+     * @dev Auto restore pass status for violators 
+     * @param validator Validator address
+     * @notice This function is called when validator unjails
+     * @notice Only restores pass if violationCount <= 3 (允许 3 次以下违规自动恢复)
+     * @return Whether pass status was restored
+     */
+    function autoRestorePass(address validator) external onlyValidatorsContract returns (bool) {
+        // Auto restore for violations <= MAX_VIOLATIONS_FOR_AUTO_UNJAIL
+        if (violationCount[validator] <= MAX_VIOLATIONS_FOR_AUTO_UNJAIL && violationCount[validator] > 0) {
+            pass[validator] = true;
+            // Set proposal passed time to current time (no 7-day wait for auto restore)
+            proposalPassedTime[validator] = block.timestamp;
+            emit LogPassAutoRestored(validator, block.timestamp);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * @dev Reset violation count after validator runs normally for N epochs 
+     * @param validator Validator address
+     * @notice This function is called when validator has been running normally
+     * @notice Allows validator to get a fresh start after demonstrating good behavior
+     */
+    function resetViolationCount(address validator) external onlyValidatorsContract returns (bool) {
+        if (violationCount[validator] > 0) {
+            violationCount[validator] = 0;
+            emit LogViolationCountReset(validator, block.timestamp);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * @dev Get violation count for a validator
+     * @param validator Validator address
+     * @return Current violation count
+     */
+    function getViolationCount(address validator) external view returns (uint256) {
+        return violationCount[validator];
+    }
+
+    /**
+     * @dev Get count of votes from currently active validators only
+     * @param id Proposal ID
+     * @param isAgree Whether to count agree votes (true) or reject votes (false)
+     * @return Count of votes from currently active validators
+     */
+    function getActiveVoteCount(bytes32 id, bool isAgree) internal view returns (uint256) {
+        address[] memory activeValidators = validators.getActiveValidators();
+        uint256 count = 0;
+        
+        for (uint256 i = 0; i < activeValidators.length; i++) {
+            address voter = activeValidators[i];
+            VoteInfo memory vote = votes[voter][id];
+            // Check if this validator voted and the vote matches the requested type
+            if (vote.voteTime != 0 && vote.auth == isAgree) {
+                count++;
+            }
+        }
+        
+        return count;
+    }
+
+    /**
+     * @dev Check if proposal passed time is still valid (within 7 days) for NEW registration
+     * @notice This function is ONLY used to check if a NEW validator can register within 7 days
+     * @notice Once a validator is registered (has selfStake >= MIN_VALIDATOR_STAKE), 
+     *         this check is no longer applied. Validators are removed by setUnpassed() when punished.
+     * @param validator Validator address
+     * @return Whether the proposal is still valid for new staking registration
+     */
+    function isProposalValidForStaking(address validator) external view returns (bool) {
+        if (!pass[validator]) {
+            return false;
+        }
+        uint256 passedTime = proposalPassedTime[validator];
+        if (passedTime == 0) {
+            return false; // No proposal passed time recorded
+        }
+        // Check if within 7 days - only applies to NEW registrations
+        return block.timestamp <= passedTime + STAKING_DEADLINE_PERIOD;
     }
 }
