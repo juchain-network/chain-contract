@@ -209,17 +209,17 @@ contract DeployToChainScript is Script {
         
         // 按依赖关系正确初始化合约
         
-        // 1. 初始化 Staking (传入 validators 地址和初始验证者，直接预注册)
-        console.log("Initializing Staking with pre-registered validators...");
-        uint256 defaultCommissionRate = 500; // 5% 佣金率
-        Staking(staking).initializeWithValidators(validators, initialValidators, defaultCommissionRate);
-        console.log("Staking initialized with", initialValidators.length, "pre-registered validators");
-        console.log("Default commission rate: 5%");
-
-        // 2. 初始化 Proposal (传入 validators 地址)
+        // 1. 先初始化 Proposal (Staking 需要 Proposal 地址)
         console.log("Initializing Proposal...");
         Proposal(proposal).initialize(initialValidators, validators);
         console.log("Proposal initialized successfully");
+
+        // 2. 初始化 Staking (传入 validators、proposal 地址和初始验证者，直接预注册)
+        console.log("Initializing Staking with pre-registered validators...");
+        uint256 defaultCommissionRate = 500; // 5% 佣金率
+        Staking(staking).initializeWithValidators(validators, proposal, initialValidators, defaultCommissionRate);
+        console.log("Staking initialized with", initialValidators.length, "pre-registered validators");
+        console.log("Default commission rate: 5%");
 
         // 3. 初始化 Punish (传入 validators 和 proposal 地址)
         console.log("Initializing Punish...");

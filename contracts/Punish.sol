@@ -3,10 +3,13 @@
 pragma solidity ^0.8.20;
 
 import {Params} from './Params.sol';
+import {Staking} from './Staking.sol';
 import {Validators} from './Validators.sol';
 import {Proposal} from './Proposal.sol';
 
 contract Punish is Params {
+    // Number of blocks a validator must wait after being jailed before eligible for unjailing
+    uint256 public constant VALIDATOR_UNJAIL_PERIOD = 86400;
     struct PunishRecord {
         uint256 missedBlocksCounter;
         uint256 index;
@@ -15,6 +18,7 @@ contract Punish is Params {
 
     Validators validators;
     Proposal proposal;
+    Staking staking;
 
     mapping(address => PunishRecord) punishRecords;
     address[] public punishValidators;
@@ -37,13 +41,15 @@ contract Punish is Params {
 
     function initialize(
         address _validators,
-        address _proposal
+        address _proposal,
+        address _staking
     ) external onlyNotInitialized {
         require(_validators != address(0), "Invalid validators address");
         require(_proposal != address(0), "Invalid proposal address");
         
         validators = Validators(_validators);
         proposal = Proposal(_proposal);
+        staking = Staking(_staking);
 
         initialized = true;
     }
@@ -58,9 +64,12 @@ contract Punish is Params {
         punishRecords[val].missedBlocksCounter++;
 
         if (punishRecords[val].missedBlocksCounter % proposal.removeThreshold() == 0) {
-            validators.removeValidator(val);
             // reset validator's missed blocks counter
             punishRecords[val].missedBlocksCounter = 0;
+            // jail validator first (sets isJailed in Staking contract)
+            staking.jailValidator(val, VALIDATOR_UNJAIL_PERIOD);
+            // then remove validator (which will check isJailed status)
+            validators.removeValidator(val);
         } else if (punishRecords[val].missedBlocksCounter % proposal.punishThreshold() == 0) {
             validators.removeValidatorIncoming(val);
         }

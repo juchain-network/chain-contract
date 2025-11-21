@@ -45,6 +45,17 @@ contract Validators is Params {
     address[] public highestValidatorsSet;
     // total jailed hb
     uint256 public totalJailedHb;
+    
+    // Track consecutive normal epochs for validators to reset violation count
+    // consecutiveNormalEpochs[validator] = N: validator has run normally for N consecutive epochs
+    // When N >= RESET_VIOLATION_THRESHOLD (10), reset violation count
+    mapping(address => uint256) public consecutiveNormalEpochs;
+    // Threshold for resetting violation count
+    // Design Intent: Validators must run normally for 10 consecutive epochs to reset their violation count.
+    // This ensures that validators demonstrate consistent good behavior before getting a fresh start.
+    // If a validator is removed or jailed, consecutiveNormalEpochs is reset to 0, requiring them to
+    // start over. This is intentional - it encourages stable, long-term participation.
+    uint256 public constant RESET_VIOLATION_THRESHOLD = 10; // Run normally for 10 epochs to reset violation count
 
     // System contracts
     Proposal proposal;
@@ -104,10 +115,10 @@ contract Validators is Params {
             if (validatorInfo[vals[i]].feeAddr == address(0)) {
                 validatorInfo[vals[i]].feeAddr = payable(vals[i]);
             }
-            // Important: NotExist validator can't get profits
-            if (validatorInfo[vals[i]].status == Status.NotExist) {
-                validatorInfo[vals[i]].status = Status.Active;
-            }
+            // Important: Initialize validator info for genesis validators
+            // Status is now managed by Staking contract, we only set feeAddr here
+            // Note: Genesis validators are pre-registered in Staking contract with default stake
+            // They are activated by default and don't need separate staking to start producing blocks
         }
 
         initialized = true;
@@ -123,7 +134,7 @@ contract Validators is Params {
     ) external onlyInitialized returns (bool) {
         require(feeAddr != address(0), 'Invalid fee address');
         require(validateDescription(moniker, identity, website, email, details), 'Invalid description');
-    address payable validator = payable(msg.sender);
+        address payable validator = payable(msg.sender);
         require(proposal.pass(validator), 'You must be authorized first');
 
         if (validatorInfo[validator].feeAddr != feeAddr) {
@@ -136,16 +147,34 @@ contract Validators is Params {
         return true;
     }
 
-    function tryActive(address validator) external onlyProposalContract onlyInitialized returns (bool) {
-        if (validatorInfo[validator].status == Status.Active) {
+    /**
+     * @dev Activate a validator (called by Proposal or Staking contract)
+     * @param validator Validator address to activate
+     * @notice This function is called when:
+     *   - Proposal passes (by Proposal contract)
+     *   - Validator is unjailed (by Staking contract)
+     * @notice Validator should already be unjailed before calling this function
+     */
+    function tryActive(address validator) external onlyInitialized returns (bool) {
+        require(
+            msg.sender == address(proposal) || msg.sender == address(staking),
+            "Only Proposal or Staking contract can call"
+        );
+        
+        // Check if validator is already active (from Staking contract)
+        (bool isActive, ) = staking.getValidatorStatus(validator);
+        if (isActive) {
             return true;
         }
 
-        tryAddValidatorToHighestSet(validator);
-        if (validatorInfo[validator].status == Status.Jailed) {
-            require(punish.cleanPunishRecord(validator), 'clean failed');
-        }
-        validatorInfo[validator].status = Status.Active;
+        // Add validator to highest validators set if not already there
+        _tryAddValidatorToHighestSet(validator);
+        
+        // Clean punish record if validator was previously jailed
+        // This clears any missed blocks counter from previous punishments
+        punish.cleanPunishRecord(validator);
+        
+        // Note: Status is now managed by Staking contract, we don't set it here
 
         emit LogActive(validator, block.timestamp);
 
@@ -155,7 +184,8 @@ contract Validators is Params {
     // feeAddr can withdraw profits of it's validator
     function withdrawProfits(address validator) external returns (bool) {
         address payable feeAddr = payable(msg.sender);
-        require(validatorInfo[validator].status != Status.NotExist, 'Validator not exist');
+        // Check if validator exists (has staked) from Staking contract
+        require(this.isValidatorExist(validator), 'Validator not exist');
         require(validatorInfo[validator].feeAddr == feeAddr, 'You are not the fee receiver of this validator');
         require(
             validatorInfo[validator].lastWithdrawProfitsBlock + proposal.withdrawProfitPeriod() <= block.number,
@@ -170,7 +200,8 @@ contract Validators is Params {
 
         // send profits to fee address
         if (aacIncoming > 0) {
-            feeAddr.transfer(aacIncoming);
+            (bool success, ) = feeAddr.call{value: aacIncoming}("");
+            require(success, "Transfer failed");
         }
 
         emit LogWithdrawProfits(validator, feeAddr, aacIncoming, block.timestamp);
@@ -191,8 +222,8 @@ contract Validators is Params {
         address val = msg.sender;
         uint256 hb = msg.value;
 
-        // never reach this
-        if (validatorInfo[val].status == Status.NotExist) {
+        // Check if validator exists (has staked) from Staking contract
+        if (!this.isValidatorExist(val)) {
             return;
         }
 
@@ -226,30 +257,85 @@ contract Validators is Params {
     /**
      * @dev Update validator set based on staking (JPoSA mechanism)
      * This function is called by the consensus engine to update validators based on stake
+     * @param epoch Current epoch number
+     * @return Updated validator list (based on current state, excludes jailed validators)
      */
     function updateValidatorSetByStake(uint256 epoch)
         public
         onlyMiner
         onlyInitialized
         onlyBlockEpoch(epoch)
+        returns (address[] memory)
     {
         // Check if validators have already been updated for this block
         if (operationsDone[block.number][uint8(Operations.UpdateValidators)] == true) {
-            return; // Silently return to avoid consensus issues
+            // Return current validator set if already updated
+            return currentValidatorSet;
         }
         
         // Set updated flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.UpdateValidators)] = true;
         
-        // Get top validators from staking contract
-        address[] memory topValidators = staking.getTopValidators(21); // Max 21 validators
+        // Get top validators from staking contract (based on current state)
+        // This will automatically exclude jailed validators since getTopValidators checks jail status
+        address[] memory topValidators = staking.getTopValidators(); // Returns up to MAX_VALIDATORS
         require(topValidators.length > 0, 'No staked validators available');
         
         // Update both current and highest validator sets
         currentValidatorSet = topValidators;
         highestValidatorsSet = topValidators;
         
+        // Track consecutive normal epochs for validators to reset violation count
+        _updateConsecutiveNormalEpochs(topValidators);
+        
         emit LogUpdateValidator(topValidators);
+        
+        return topValidators;
+    }
+    
+    /**
+     * @dev Update consecutive normal epochs for validators
+     * @param activeValidators Current active validators list
+     * @notice This function tracks validators that run normally for consecutive epochs
+     * @notice When a validator runs normally for RESET_VIOLATION_THRESHOLD epochs, reset violation count
+     * @notice Design Intent: Only validators that run continuously for 10 epochs can reset their violation count.
+     *         If a validator is removed or jailed, their consecutive count is reset to 0, requiring them to
+     *         start over. This encourages stable, long-term participation and discourages frequent violations.
+     */
+    function _updateConsecutiveNormalEpochs(address[] memory activeValidators) private {
+        // Track which validators are in the new active set
+        for (uint256 i = 0; i < activeValidators.length; i++) {
+            address validator = activeValidators[i];
+            // Increment consecutive normal epochs for active validators
+            consecutiveNormalEpochs[validator] = consecutiveNormalEpochs[validator] + 1;
+            
+            // If validator has run normally for enough epochs, reset violation count
+            if (consecutiveNormalEpochs[validator] >= RESET_VIOLATION_THRESHOLD) {
+                try proposal.resetViolationCount(validator) {} catch {}
+                // Reset counter after resetting violation count
+                consecutiveNormalEpochs[validator] = 0;
+            }
+        }
+        
+        // Reset consecutive normal epochs for validators not in active set
+        // (they were removed or jailed)
+        // Design Intent: This ensures that validators must run continuously without interruption
+        // to reset their violation count. If they are removed or jailed, they must start over.
+        for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+            address validator = currentValidatorSet[i];
+            bool isActive = false;
+            for (uint256 j = 0; j < activeValidators.length; j++) {
+                if (activeValidators[j] == validator) {
+                    isActive = true;
+                    break;
+                }
+            }
+            if (!isActive) {
+                // Validator was removed or jailed, reset consecutive normal epochs
+                // This is intentional - validators must demonstrate continuous good behavior
+                consecutiveNormalEpochs[validator] = 0;
+            }
+        }
     }
 
     function removeValidator(address val) external onlyPunishContract {
@@ -262,7 +348,9 @@ contract Validators is Params {
 
     function removeValidatorInternal(address val) private {
         uint256 hb = validatorInfo[val].aacIncoming;
-        validatorInfo[val].status = Status.Jailed;
+        // Note: Status is now managed by Staking contract
+        // jailValidator() is called before removeValidator(), so isJailed should already be set
+        // We don't set status here anymore
 
         tryRemoveValidatorIncoming(val);
 
@@ -304,6 +392,16 @@ contract Validators is Params {
         );
     }
 
+    /**
+     * @dev Get validator information
+     * @param val Validator address
+     * @return feeAddr Fee address
+     * @return status Status (deprecated, use isValidatorJailed/isValidatorActive instead)
+     * @return aacIncoming Accumulated transaction fee income
+     * @return totalJailedHb Total jailed income
+     * @return lastWithdrawProfitsBlock Last withdraw profits block
+     * @notice Status field is deprecated. Use isValidatorJailed() and isValidatorActive() instead.
+     */
     function getValidatorInfo(address val)
         public
         view
@@ -316,12 +414,80 @@ contract Validators is Params {
         )
     {
         Validator memory v = validatorInfo[val];
+        
+        // Calculate status from Staking contract for backward compatibility
+        Status calculatedStatus;
+        if (!this.isValidatorExist(val)) {
+            calculatedStatus = Status.NotExist;
+        } else if (staking.isValidatorJailed(val)) {
+            calculatedStatus = Status.Jailed;
+        } else {
+            (bool isActive, ) = staking.getValidatorStatus(val);
+            calculatedStatus = isActive ? Status.Active : Status.NotExist;
+        }
 
-        return (v.feeAddr, v.status, v.aacIncoming, v.totalJailedHb, v.lastWithdrawProfitsBlock);
+        return (v.feeAddr, calculatedStatus, v.aacIncoming, v.totalJailedHb, v.lastWithdrawProfitsBlock);
     }
 
+    /**
+     * @dev Get active validators list (excluding jailed validators)
+     * @notice Returns validators from currentValidatorSet that are not jailed
+     * @notice currentValidatorSet represents validators that are actually active in consensus
+     * @notice This ensures that jailed validators are excluded immediately, even before next epoch
+     * @return Array of active validators from currentValidatorSet (excluding jailed validators)
+     */
     function getActiveValidators() public view returns (address[] memory) {
+        // Always use currentValidatorSet as base, which represents validators actually active in consensus
+        // Filter out jailed validators (if Staking contract is available)
+        if (address(staking) != address(0) && initialized) {
+            // POSA mode: Filter out jailed validators from currentValidatorSet
+            // Count non-jailed validators
+            uint256 activeCount = 0;
+            for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+                if (!staking.isValidatorJailed(currentValidatorSet[i])) {
+                    activeCount++;
+                }
+            }
+            
+            // Create filtered array
+            address[] memory filteredValidators = new address[](activeCount);
+            uint256 index = 0;
+            for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+                if (!staking.isValidatorJailed(currentValidatorSet[i])) {
+                    filteredValidators[index] = currentValidatorSet[i];
+                    index++;
+                }
+            }
+            return filteredValidators;
+        }
+        
+        // POA mode without Staking: return currentValidatorSet as-is
         return currentValidatorSet;
+    }
+
+    /**
+     * @dev Get count of active validators (excluding jailed validators)
+     * @notice Returns count of validators in currentValidatorSet that are not jailed
+     * @notice More efficient than getActiveValidators().length as it doesn't create an array
+     * @return Count of active validators in currentValidatorSet (excluding jailed validators)
+     */
+    function getActiveValidatorCount() public view returns (uint256) {
+        // Always count non-jailed validators in currentValidatorSet
+        // currentValidatorSet represents validators that are actually active in consensus
+        // getTopValidators() may include newly registered validators that haven't entered currentValidatorSet yet
+        if (address(staking) != address(0) && initialized) {
+            // POSA mode: Filter out jailed validators from currentValidatorSet
+            uint256 count = 0;
+            for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+                if (!staking.isValidatorJailed(currentValidatorSet[i])) {
+                    count++;
+                }
+            }
+            return count;
+        }
+        
+        // POA mode without Staking: return currentValidatorSet length
+        return currentValidatorSet.length;
     }
 
     function isActiveValidator(address who) public view returns (bool) {
@@ -334,6 +500,35 @@ contract Validators is Params {
         return false;
     }
 
+    /**
+     * @dev Check if validator is jailed (query from Staking contract)
+     * @param validator Validator address
+     * @return Whether validator is currently jailed
+     */
+    function isValidatorJailed(address validator) external view returns (bool) {
+        return staking.isValidatorJailed(validator);
+    }
+
+    /**
+     * @dev Check if validator is active (query from Staking contract)
+     * @param validator Validator address
+     * @return Whether validator is active (can participate in consensus)
+     */
+    function isValidatorActive(address validator) external view returns (bool) {
+        (bool isActive, ) = staking.getValidatorStatus(validator);
+        return isActive;
+    }
+
+    /**
+     * @dev Check if validator exists (has staked)
+     * @param validator Validator address
+     * @return Whether validator exists (has staked)
+     */
+    function isValidatorExist(address validator) external view returns (bool) {
+        (uint256 selfStake, , , , ) = staking.getValidatorInfo(validator);
+        return selfStake > 0;
+    }
+
     function isTopValidator(address who) public view returns (bool) {
         for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
             if (highestValidatorsSet[i] == who) {
@@ -344,8 +539,22 @@ contract Validators is Params {
         return false;
     }
 
+    /**
+     * @dev Get top validators (POA mode - returns cached highestValidatorsSet)
+     * @return Top validators list from cached set
+     */
     function getTopValidators() public view returns (address[] memory) {
         return highestValidatorsSet;
+    }
+
+    /**
+     * @dev Get top validators by stake (POSA mode - calls Staking contract)
+     * @return Top validators list based on stake (up to MAX_VALIDATORS)
+     * @notice This function provides a unified interface for POSA mode
+     *         It calls Staking.getTopValidators() to get real-time validator list
+     */
+    function getTopValidatorsByStake() external view returns (address[] memory) {
+        return staking.getTopValidators();
     }
 
     function validateDescription(
@@ -364,7 +573,7 @@ contract Validators is Params {
         return true;
     }
 
-    function tryAddValidatorToHighestSet(address val) internal {
+    function _tryAddValidatorToHighestSet(address val) internal {
         // do nothing if you are already in highestValidatorsSet set
         for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
             if (highestValidatorsSet[i] == val) {
@@ -376,9 +585,18 @@ contract Validators is Params {
         emit LogAddToTopValidators(val, block.timestamp);
     }
 
+    /**
+     * @dev Add validator to highest validators set (called by Staking contract)
+     * @param validator Validator address to add
+     */
+    function tryAddValidatorToHighestSet(address validator) external onlyStakingContract onlyInitialized {
+        _tryAddValidatorToHighestSet(validator);
+    }
+
+
     function tryRemoveValidatorIncoming(address val) private {
-        // do nothing if validator not exist(impossible)
-        if (validatorInfo[val].status == Status.NotExist || currentValidatorSet.length <= 1) {
+        // do nothing if validator not exist or only one validator
+        if (!this.isValidatorExist(val) || currentValidatorSet.length <= 1) {
             return;
         }
 
@@ -413,7 +631,8 @@ contract Validators is Params {
 
         for (uint256 i = 0; i < currentValidatorSet.length; i++) {
             address val = currentValidatorSet[i];
-            if (validatorInfo[val].status != Status.Jailed && val != punishedVal) {
+            // Check if validator is not jailed (from Staking contract) and not punished
+            if (!staking.isValidatorJailed(val) && val != punishedVal) {
                 validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming.add(per);
 
                 last = val;
@@ -429,7 +648,8 @@ contract Validators is Params {
         uint256 l;
         for (uint256 i = 0; i < currentValidatorSet.length; i++) {
             address val = currentValidatorSet[i];
-            if (validatorInfo[val].status != Status.Jailed && val != punishedVal) {
+            // Check if validator is not jailed (from Staking contract) and not punished
+            if (!staking.isValidatorJailed(val) && val != punishedVal) {
                 l++;
             }
         }
