@@ -107,6 +107,10 @@ contract Proposal is Params {
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
             pass[vals[i]] = true;
+            // Set proposalPassedTime for genesis validators (no 7-day limit for genesis)
+            // This ensures consistency with normal proposal flow, even though genesis validators
+            // don't need to pass isProposalValidForStaking() check (they use initializeWithValidators)
+            proposalPassedTime[vals[i]] = block.timestamp;
         }
 
         proposalLastingPeriod = 7 days;
