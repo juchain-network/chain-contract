@@ -112,15 +112,21 @@ function generateStakingStorage() {
     // slot 6: totalStaked uint256
     // slot 7: rewardPerShare mapping(address => uint256)
     // slot 8: validatorsContract IValidators
+    // slot 9: proposalContract Proposal
     
     const storage = {};
     
-    // 注意：不设置 initialized，让 Congress 共识引擎调用 initialize() 方法
+    // 注意：不设置 initialized，让 Congress 共识引擎调用 initialize() 或 initializeWithValidators() 方法
     
     // 设置 validatorsContract 地址 (slot 8)
     const validatorsAddress = CONTRACT_ADDRESSES.Validators.toLowerCase();
     storage['0x0000000000000000000000000000000000000000000000000000000000000008'] = 
         '0x' + validatorsAddress.slice(2).padStart(64, '0');
+    
+    // 设置 proposalContract 地址 (slot 9)
+    const proposalAddress = CONTRACT_ADDRESSES.Proposal.toLowerCase();
+    storage['0x0000000000000000000000000000000000000000000000000000000000000009'] = 
+        '0x' + proposalAddress.slice(2).padStart(64, '0');
     
     // 为每个验证者设置质押信息
     const minValidatorStake = BigInt('10000000000000000000000'); // 10,000 ether in wei

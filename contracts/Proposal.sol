@@ -243,6 +243,12 @@ contract Proposal is Params {
         } else if (cid == 5) {
             increasePeriod = value;
         } else if (cid == 6) {
+            // casting to 'uint160' is safe because:
+            // 1. Ethereum addresses are 20 bytes (160 bits), which matches uint160 exactly
+            // 2. The value is expected to be a valid address passed through the proposal system
+            // 3. Addresses are typically converted from address to uint256(uint160(addr)) when creating proposals
+            // 4. This conversion is reversible and safe for valid Ethereum addresses
+            // forge-lint: disable-next-line(unsafe-typecast)
             receiverAddr = address(uint160(value));
         }
     }

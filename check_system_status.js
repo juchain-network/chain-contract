@@ -202,8 +202,12 @@ async function checkSystemStatus() {
         console.log(`   💰 总质押量: ${totalStaked / BigInt('1000000000000000000')} JU`);
         console.log(`   📊 当前区块: ${blockNumber}`);
         
-        if (allInitialized && qualifiedValidators >= 1) {
-            console.log(`   🚀 JPoSA 共识状态: ✅ 系统正常运行`);
+        // MIN_VALIDATORS is now 3 (changed from 5)
+        const MIN_VALIDATORS = 3;
+        if (allInitialized && qualifiedValidators >= MIN_VALIDATORS) {
+            console.log(`   🚀 JPoSA 共识状态: ✅ 系统正常运行 (${qualifiedValidators} >= ${MIN_VALIDATORS})`);
+        } else if (allInitialized && qualifiedValidators > 0 && qualifiedValidators < MIN_VALIDATORS) {
+            console.log(`   ⚠️  JPoSA 共识状态: ⚠️  验证者数量不足 (${qualifiedValidators} < ${MIN_VALIDATORS})`);
         } else if (allInitialized && qualifiedValidators === 0) {
             console.log(`   ⚠️  JPoSA 共识状态: ❌ 无合规验证者`);
         } else {

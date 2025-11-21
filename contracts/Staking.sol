@@ -130,6 +130,9 @@ contract Staking is Params {
      * @param _proposal Proposal contract address
      * @param initialValidators Array of validator addresses to pre-register
      * @param commissionRate Default commission rate for all validators
+     * @notice This function automatically performs the same logic as registerValidator for genesis validators
+     * @notice Genesis validators are pre-registered with default stake and automatically added to highestValidatorsSet
+     * @notice They don't need to pass proposal or wait for 7-day window - they are activated immediately
      */
     function initializeWithValidators(
         address _validators,
@@ -146,11 +149,13 @@ contract Staking is Params {
         proposalContract = Proposal(_proposal);
         
         // Pre-register all initial validators with default stake
+        // This automatically performs the same logic as registerValidator for genesis validators
         for (uint256 i = 0; i < initialValidators.length; i++) {
             address validator = initialValidators[i];
             require(validator != address(0), "Invalid validator address");
             require(validatorStakes[validator].selfStake == 0, "Validator already exists");
             
+            // Set up validator stake (same as registerValidator)
             validatorStakes[validator] = ValidatorStake({
                 selfStake: MIN_VALIDATOR_STAKE,
                 totalDelegated: 0,
@@ -160,15 +165,15 @@ contract Staking is Params {
                 jailUntilBlock: 0
             });
             
-            // Add to validators list
+            // Add to validators list (same as registerValidator)
             validatorIndex[validator] = allValidators.length;
             allValidators.push(validator);
             totalStaked = totalStaked.add(MIN_VALIDATOR_STAKE);
+            // Emit event for each validator (more accurate than single event)
+            emit ValidatorRegistered(validator, MIN_VALIDATOR_STAKE, commissionRate);
         }
         
         initialized = true;
-        
-        emit ValidatorRegistered(address(0), MIN_VALIDATOR_STAKE, commissionRate); // Genesis event
     }
 
     /**

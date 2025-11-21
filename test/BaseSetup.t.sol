@@ -22,10 +22,27 @@ abstract contract BaseSetup is Test {
         vm.etch(PROPOSAL, type(Proposal).runtimeCode);
         vm.etch(STAKING, type(Staking).runtimeCode);
 
-        // initialize with provided validators - use actual addresses
-        Staking(STAKING).initialize(VALIDATORS);
+        // Initialize contracts in correct order
+        // 1. Proposal first (needed by others)
         Proposal(PROPOSAL).initialize(initVals, VALIDATORS);
-        Punish(PUNISH).initialize(VALIDATORS, PROPOSAL);
+        
+        // 2. Staking with genesis validators (but don't call tryAddValidatorToHighestSet yet)
+        // Use initializeWithValidators to automatically register genesis validators in Staking
+        // This ensures genesis validators are immediately available without needing to register separately
+        Staking(STAKING).initializeWithValidators(VALIDATORS, PROPOSAL, initVals, 1000); // 10% commission
+        
+        // 3. Punish (needs Staking)
+        Punish(PUNISH).initialize(VALIDATORS, PROPOSAL, STAKING);
+        
+        // 4. Validators last (needs all others)
         Validators(VALIDATORS).initialize(initVals, PROPOSAL, PUNISH, STAKING);
+        
+        // 5. Now that Validators is initialized, add genesis validators to highestValidatorsSet
+        // This completes the registration process that was started in initializeWithValidators
+        // Must call from STAKING address to satisfy onlyStakingContract modifier
+        for (uint256 i = 0; i < initVals.length; i++) {
+            vm.prank(STAKING);
+            Validators(VALIDATORS).tryAddValidatorToHighestSet(initVals[i]);
+        }
     }
 }
