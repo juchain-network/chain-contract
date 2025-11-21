@@ -1,3 +1,15 @@
+/**
+ * Test Transfer Script
+ * 
+ * This is an example script for testing fund transfers to additional validators.
+ * 
+ * Note: The default local testnet configuration uses 3 validators (validator1-3).
+ * This script is used when adding additional validators via governance proposals.
+ * 
+ * Default RPC endpoint: http://localhost:8545 (validator1)
+ * You can modify the RPC endpoint to connect to other validators if needed.
+ */
+
 const { Web3 } = require('web3');
 const web3 = new Web3('http://localhost:8545');
 
