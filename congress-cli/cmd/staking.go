@@ -308,7 +308,7 @@ func innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, websi
 
 	// Use default values if not provided
 	if moniker == "" {
-		moniker = "validator6"
+		moniker = "validator"
 	}
 	if identity == "" {
 		identity = ""
@@ -320,7 +320,7 @@ func innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, websi
 		email = ""
 	}
 	if details == "" {
-		details = "Validator6 node"
+		details = "Validator node"
 	}
 
 	abiData, err := validatorsAbi.Pack("createOrEditValidator",

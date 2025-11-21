@@ -64,9 +64,9 @@ go build -o build/congress-cli
 
 | 网络环境 | RPC地址 | Chain ID | 说明 |
 |----------|---------|----------|------|
-| **主网** | `https://rpc.juchain.io` | 202599 | 生产环境 |
-| **测试网** | `https://testnet-rpc.juchain.io` | 202583 | 测试环境 |
-| **本地网** | `http://localhost:8545` | 自定义 | 开发环境 |
+| **主网** | `https://rpc.juchain.org` | 210000 | 生产环境 |
+| **测试网** | `https://testnet-rpc.juchain.org` | 202599 | 测试环境 |
+| **本地网** | `http://localhost:8545` | 202599 | 开发环境（默认） |
 
 #### 密钥管理
 
@@ -121,23 +121,75 @@ JuChain Staking 系统提供以下核心命令：
 
 ### 注册验证者
 
-成为网络验证者需要质押至少 10,000 JU 代币：
+成为网络验证者需要完成以下步骤：
+
+#### 步骤 1: 创建提案（由现有验证者发起）
+
+验证者必须先通过治理提案才能注册。现有验证者需要创建添加验证者的提案：
 
 ```bash
-# 📝 创建验证者注册交易
+# 📝 创建验证者添加提案
+./build/congress-cli create_proposal \
+  --rpc_laddr http://localhost:8545 \
+  --chainId 202599 \
+  --proposer 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
+  --target 0x新验证者地址 \
+  --operation add
+
+# 签名并发送提案
+./build/congress-cli sign -f createProposal.json -k keystore -p password --chainId 202599
+./build/congress-cli send -f createProposal_signed.json
+```
+
+#### 步骤 2: 验证者投票
+
+现有验证者需要对提案进行投票（需要多数同意）：
+
+```bash
+# 🗳️ 验证者投票（赞成）
+./build/congress-cli vote_proposal \
+  --rpc_laddr http://localhost:8545 \
+  --chainId 202599 \
+  --signer 0x验证者地址 \
+  --proposalId 提案ID \
+  --approve
+
+# 签名并发送投票
+./build/congress-cli sign -f voteProposal.json -k keystore -p password --chainId 202599
+./build/congress-cli send -f voteProposal_signed.json
+```
+
+#### 步骤 3: 等待 7 天注册期限
+
+提案通过后，验证者必须在 **7 天内**完成注册质押，否则资格失效。
+
+#### 步骤 4: 注册并质押
+
+```bash
+# 📝 创建验证者注册交易（必须在提案通过后7天内）
 ./build/congress-cli staking register-validator \
   --rpc_laddr http://localhost:8545 \
-  --proposer 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
+  --chainId 202599 \
+  --proposer 0x新验证者地址 \
   --stake-amount 10000 \
   --commission-rate 500
 
 # 参数说明:
-# --proposer: 验证者账户地址 (必需)
+# --proposer: 验证者账户地址 (必需，必须是提案通过的目标地址)
 # --stake-amount: 质押金额 (最低10,000 JU)
 # --commission-rate: 佣金率，以基点计算 (500 = 5%)
+
+# 签名并发送
+./build/congress-cli sign -f registerValidator.json -k keystore -p password --chainId 202599
+./build/congress-cli send -f registerValidator_signed.json
 ```
 
 **输出文件**: `registerValidator.json`
+
+**重要提示**：
+- ⚠️ 必须在提案通过后 **7 天内**完成注册，否则需要重新提案
+- ⚠️ 注册时账户必须有足够的余额（至少 10,000 JU + Gas 费用）
+- ⚠️ 注册后需要等待下一个 Epoch（约 24 小时）才能开始出块
 
 #### 佣金率设置指南
 
@@ -221,10 +273,12 @@ echo "4. 治理参与: 支持积极参与治理的验证者"
 
 ```bash
 # ⏰ 解绑期说明
-echo "解绑周期: 7天 (201,600个区块)"
+echo "解绑周期: 7天 (604,800个区块)"
 echo "区块时间: 1秒/块"
 echo "解绑开始: 交易确认后立即开始"
-echo "资金可用: 解绑期结束后自动释放"
+echo "资金可用: 解绑期结束后可提取（使用 withdrawUnbonded）"
+echo ""
+echo "注意: 解绑期间代币仍计入验证者总质押，但无法转移"
 ```
 
 ### 委托者奖励提取
@@ -343,7 +397,7 @@ echo "✅ 已生成交易文件: registerValidator.json"
   --file registerValidator.json \
   --key ./keystore/UTC--2024-... \
   --password ./password.txt \
-  --chainId 210000
+  --chainId 202599
 
 echo "✅ 已生成签名文件: registerValidator_signed.json"
 ```
@@ -429,7 +483,7 @@ set -e
 RPC_URL="http://localhost:8545"
 KEYSTORE="./keystore/UTC--2024-..."
 PASSWORD="./password.txt"
-CHAIN_ID="210000"  # 主网，测试网使用 202599
+CHAIN_ID="202599"  # 测试网，主网使用 210000
 DELEGATOR="0x3858ffca201b0a7d75fd23bb302c12332c5e4000"
 
 # 函数：执行完整质押流程
@@ -479,15 +533,15 @@ echo "=== 批量委托完成 ==="
 
 Common JuChain RPC endpoints:
 
-- **Mainnet**: `https://rpc.ju.finance`
-- **Testnet**: `https://testnet-rpc.ju.finance`
-- **Local**: `http://localhost:8545`
+- **Mainnet**: `https://rpc.juchain.org` (Chain ID: 210000)
+- **Testnet**: `https://testnet-rpc.juchain.org` (Chain ID: 202599)
+- **Local**: `http://localhost:8545` (Chain ID: 202599)
 
 ### Chain IDs
 
-- **Mainnet**: `202599`
-- **Testnet**: `202588`
-- **Local**: Your custom chain ID
+- **Mainnet**: `210000`
+- **Testnet**: `202599`
+- **Local**: `202599` (默认，可自定义)
 
 ### Gas Configuration
 
@@ -649,7 +703,7 @@ check_rpc() {
     if [[ $response == *"210000"* ]]; then
         echo "✅ RPC连接正常 - 主网"
     elif [[ $response == *"202599"* ]]; then
-        echo "✅ RPC连接正常 - 测试网"
+        echo "✅ RPC连接正常 - 测试网/本地网"
     else
         echo "❌ RPC连接异常"
     fi
@@ -718,10 +772,10 @@ done
 
 | 合约名称 | 地址 | 功能描述 |
 |---------|------|----------|
-| Validators | 0xf000000000000000000000000000000000000000 | 验证者管理和治理 |
-| Punish | 0xf000000000000000000000000000000000000001 | 惩罚机制和监禁 |
-| Proposal | 0xf000000000000000000000000000000000000002 | 治理提案投票 |
-| Staking | 0xf000000000000000000000000000000000000003 | 质押和委托管理 |
+| Validators | `0x000000000000000000000000000000000000f000` | 验证者管理和治理 |
+| Punish | `0x000000000000000000000000000000000000f001` | 惩罚机制和监禁 |
+| Proposal | `0x000000000000000000000000000000000000f002` | 治理提案投票 |
+| Staking | `0x000000000000000000000000000000000000f003` | 质押和委托管理 |
 
 ### 网络参数
 
@@ -730,10 +784,11 @@ done
 | Chain ID | 210000 | 202599 | 网络标识符 |
 | RPC端点 | `https://rpc.juchain.org` | `https://testnet-rpc.juchain.org` | 网络接入点 |
 | 出块时间 | 1秒 | 1秒 | 区块生成间隔 |
-| 验证周期 | 86400区块 | 86400区块 | ~24小时轮换 |
+| Epoch周期 | 86400区块 | 86400区块 | ~24小时轮换 |
 | 最低质押 | 10,000 JU | 10,000 JU | 验证者注册要求 |
 | 最低委托 | 1 JU | 1 JU | 委托最小金额 |
-| 解绑期间 | 518400区块 | 518400区块 | ~6天锁定期 |
+| 解绑期间 | 604800区块 | 604800区块 | 7天锁定期 |
+| 注册期限 | 7天 | 7天 | 提案通过后必须在此期限内注册 |
 
 ### 有用链接
 
@@ -745,9 +800,17 @@ done
 
 ---
 
-**版本**: v1.0.0  
-**更新时间**: 2024年8月27日  
+**版本**: v1.1.0  
+**更新时间**: 2025年1月21日  
 **适用范围**: JuChain主网和测试网
+
+**更新内容（v1.1.0）：**
+- 修正合约地址格式（使用正确的 `0x0000...f000` 格式）
+- 统一 Chain ID（主网 210000，测试网 202599）
+- 更新验证者注册流程，添加提案前置步骤说明
+- 添加 7 天注册期限的重要提示
+- 修正解绑期说明（604800 块 = 7 天）
+- 更新 RPC 端点地址
 
 *本文档会持续更新，请关注最新版本以获取准确信息。*
 

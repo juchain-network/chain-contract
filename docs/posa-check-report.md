@@ -95,9 +95,10 @@
 
 **修复方案：**
 1. **统一过滤被 jail 的验证者**：
-   - POSA 模式：使用 `staking.getTopValidators()`（已过滤）
+   - POSA 模式：`getActiveValidators()` 手动过滤 `currentValidatorSet`，排除被 jail 的验证者
    - POA 模式：手动过滤 `currentValidatorSet`，排除被 jail 的验证者
    - 确保无论哪种模式，都返回不包含被 jail 验证者的列表
+   - **注意**：`staking.getTopValidators()` 用于获取候选验证者列表（可能包含新注册但未进入 currentValidatorSet 的验证者），而 `getActiveValidators()` 返回的是当前在共识中生效的验证者（基于 currentValidatorSet）
 
 2. **添加高效的计数方法**：
    - 新增 `getActiveValidatorCount()` 方法

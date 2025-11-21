@@ -466,9 +466,9 @@ type Snapshot struct {
 **POSA 模式**：
 1. `Staking.getTopValidators()` 筛选条件：
    - `selfStake >= MIN_VALIDATOR_STAKE` (10000 ether)
-   - `!isJailed || block.number >= jailUntilBlock`
-   - `proposalContract.pass(validator) == true`
-   - `proposalContract.isProposalValidForStaking(validator) == true` (7 天要求)
+   - `!isJailed` (验证者未被监禁)
+   - `proposalContract.pass(validator) == true` (已通过提案)
+   - **注意**：不检查 `isProposalValidForStaking()`，7天有效期仅用于新注册验证者（在 `registerValidator()` 中检查）
 2. 按总质押排序：`selfStake + totalDelegated`
 3. 返回前 `MAX_VALIDATORS` (21) 个验证者
 
@@ -683,7 +683,7 @@ type Snapshot struct {
   │   │   └─> emit ValidatorJailed(...)
   │   └─> 确保验证者立即停止出块，平滑退出
   ├─> 更新: selfStake = 0
-  ├─> 更新: totalStaked -= selfStake
+  ├─> 更新: totalStaked -= withdrawAmount (withdrawAmount 是退出前的 selfStake 值)
   ├─> 从 allValidators 数组中移除验证者
   │   └─> _removeFromAllValidators(msg.sender)
   │       └─> 使用 swap-and-pop 技术安全移除
@@ -962,9 +962,9 @@ Punish.punish(validator)
   │       └─> Staking.getTopValidators()
   │           ├─> 筛选条件:
   │           │   - selfStake >= MIN_VALIDATOR_STAKE
-  │           │   - !isJailed || block.number >= jailUntilBlock
+  │           │   - !isJailed (验证者未被监禁)
   │           │   - proposalContract.pass(validator) == true
-  │           │   - **注意**：不再检查 `isProposalValidForStaking()`，7天有效期仅用于新注册
+  │           │   - **注意**：不检查 `isProposalValidForStaking()`，7天有效期仅用于新注册（在 `registerValidator()` 中检查）
   │           ├─> 按总质押排序: selfStake + totalDelegated
   │           └─> 返回前 MAX_VALIDATORS (21) 个
   └─> 写入 header.Extra
@@ -1122,9 +1122,9 @@ Punish.punish(validator)
 
 **筛选条件**：
 - `selfStake >= MIN_VALIDATOR_STAKE` (10000 ether)
-- `!isJailed || block.number >= jailUntilBlock`
-- `proposalContract.pass(validator) == true`
-- **注意**：不再检查 `isProposalValidForStaking()`，7天有效期仅用于新注册验证者
+- `!isJailed` (验证者未被监禁，不检查 `jailUntilBlock`，只要 `isJailed == false` 即可)
+- `proposalContract.pass(validator) == true` (已通过提案)
+- **注意**：不检查 `isProposalValidForStaking()`，7天有效期仅用于新注册验证者（在 `registerValidator()` 中检查）
 
 **排序规则**：
 - 按总质押排序：`selfStake + totalDelegated`
@@ -1520,9 +1520,15 @@ A:
 
 ---
 
-**文档版本**：v1.1  
-**最后更新**：2024-12-19  
+**文档版本**：v1.2  
+**最后更新**：2025-01-21  
 **维护者**：POSA 开发团队
+
+**更新内容（v1.2）：**
+- 修正 `getTopValidators()` 筛选条件：移除 `isProposalValidForStaking()` 检查，明确只检查 `pass[validator]` 和 `!isJailed`
+- 明确 7 天注册期限仅在 `registerValidator()` 中检查，不在 `getTopValidators()` 中检查
+- 更新 `emergencyExit()` 流程描述，修正 `totalStaked` 更新逻辑
+- 更新 `getActiveValidators()` 修复方案描述，明确与 `getTopValidators()` 的区别
 
 **更新内容（v1.1）：**
 - 更新 `emergencyExit()` 流程：添加退出后剩余验证者数量检查、jail 机制、allValidators 数组清理

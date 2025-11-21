@@ -1,6 +1,19 @@
+/**
+ * Transfer Funds Script
+ * 
+ * This is an example script for transferring funds to additional validators
+ * (validator6, validator7, etc.) when adding them to the network.
+ * 
+ * Note: The default local testnet configuration uses 3 validators (validator1-3).
+ * This script is used when adding additional validators via governance proposals.
+ * 
+ * Default RPC endpoint: http://localhost:8545 (validator1)
+ * You can modify the RPC endpoint to connect to other validators if needed.
+ */
+
 const { Web3 } = require('web3');
 
-// 连接到本地私链
+// 连接到本地私链 (默认连接到 validator1)
 const web3 = new Web3('http://localhost:8545');
 
 // 转账函数
