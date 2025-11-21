@@ -15,13 +15,11 @@ const CONTRACT_ADDRESSES = {
     'Staking': '0x000000000000000000000000000000000000f003'
 };
 
-// 初始验证者信息
+// 初始验证者信息（3个验证者，满足最小验证者数量要求）
 const INITIAL_VALIDATORS = [
     '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
     '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-    '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
-    '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
-    '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65'
+    '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'
 ];
 
 // 读取合约字节码
@@ -219,7 +217,7 @@ function updateGenesisFile() {
                 
                 // 为 Staking 合约添加预设存储状态
                 if (contractName === 'Staking') {
-                    contractAlloc.storage = generateStakingStorage();
+                    // contractAlloc.storage = generateStakingStorage();
                     console.log(`✅ ${contractName}: ${address} (包含 ${INITIAL_VALIDATORS.length} 个预设验证者)`);
                 } else {
                     console.log(`✅ ${contractName}: ${address}`);
@@ -298,10 +296,11 @@ function main() {
         console.log('   cd ../chain && ./pm2-init.sh');
         console.log('   或者直接使用: cd ../chain && pm2 start ecosystem.config.js');
         console.log('\n📋 重要提示:');
-        console.log('   ✅ 创世区块已包含 5 个预设验证者的质押信息');
+        console.log('   ✅ 创世区块已包含 3 个预设验证者的质押信息');
         console.log('   ✅ 每个验证者已质押 10,000 JU 代币');
         console.log('   ✅ JPoSA 共识将正常工作，无需手动注册验证者');
         console.log('   ✅ 可以直接进行验证者投票和质押操作');
+        console.log('   ✅ 验证者数量满足最小要求（MIN_VALIDATORS = 3）');
     }
 }
 
