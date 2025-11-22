@@ -88,6 +88,11 @@ contract Staking is Params {
     // Rewards per share (scaled by 1e18 for precision)
     mapping(address => uint256) public rewardPerShare;
 
+    // Operations enum for tracking operations done per block
+    enum Operations {Distribute}
+    // Record the operations is done or not.
+    mapping(uint256 => mapping(uint8 => bool)) operationsDone;
+
     // System contracts
     IValidators public validatorsContract;
     Proposal public proposalContract;
@@ -399,13 +404,45 @@ contract Staking is Params {
     }
 
     /**
-     * @dev Distribute rewards to a validator
-     * @param validator Validator address
+     * @dev Distribute rewards to the current block miner (validator)
+     * @notice Validator address is obtained from block.coinbase
+     * @notice Similar to Validators.distributeBlockReward(), no parameters needed
      */
-    function distributeRewards(address validator) external payable onlyMiner onlyActiveValidator(validator) {
-        require(msg.value > 0, "No rewards to distribute");
+    function distributeRewards() external payable onlyMiner onlyInitialized {
+        // Check if block reward has already been distributed for this block
+        if (operationsDone[block.number][uint8(Operations.Distribute)] == true) {
+            return; // Silently return to avoid consensus issues
+        }
         
+        // Clean up previous block's data to save storage
+        // This prevents storage accumulation while maintaining reentrancy protection
+        // Note: We only need to track the current block, historical data is never accessed
+        if (block.number > 0) {
+            delete operationsDone[block.number - 1][uint8(Operations.Distribute)];
+        }
+        
+        // Set distributed flag immediately to prevent reentrancy
+        operationsDone[block.number][uint8(Operations.Distribute)] = true;
+        
+        // Check if there are rewards to distribute
+        if (msg.value == 0) {
+            return;
+        }
+        
+        // Get validator address from block.coinbase (similar to Validators.distributeBlockReward())
+        address validator = block.coinbase;
+        
+        // Check if validator exists (has staked)
         ValidatorStake storage stake = validatorStakes[validator];
+        if (stake.selfStake == 0) {
+            return; // Validator doesn't exist, silently return
+        }
+        
+        // Check if validator is active (has sufficient stake and not jailed)
+        if (stake.selfStake < MIN_VALIDATOR_STAKE || stake.isJailed) {
+            return; // Validator not active, silently return
+        }
+        
         uint256 totalStake = stake.selfStake.add(stake.totalDelegated);
         
         if (totalStake == 0) return;
@@ -471,7 +508,7 @@ contract Staking is Params {
     }
 
     /**
-     * @dev Unjail a validator 
+     * @dev Unjail a validator
      * @param validator Validator address to unjail
      */
     function unjailValidator(address validator) external {

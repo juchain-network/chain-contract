@@ -738,9 +738,10 @@ contract StakingTest is Test {
         vm.deal(miner, rewardAmount);
         
         // Set miner as coinbase for the block
-        vm.coinbase(miner);
-        vm.startPrank(miner);
-        Staking(STAKING).distributeRewards{value: rewardAmount}(VALIDATOR1);
+        // distributeRewards() now gets validator from msg.sender (block.coinbase)
+        vm.coinbase(VALIDATOR1);
+        vm.startPrank(VALIDATOR1);
+        Staking(STAKING).distributeRewards{value: rewardAmount}();
         vm.stopPrank();
         
         // Check that rewards were distributed (basic test)

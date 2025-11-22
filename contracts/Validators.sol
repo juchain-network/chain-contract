@@ -216,6 +216,13 @@ contract Validators is Params {
             return; // Silently return to avoid consensus issues
         }
         
+        // Clean up previous block's data to save storage
+        // This prevents storage accumulation while maintaining reentrancy protection
+        // Note: We only need to track the current block, historical data is never accessed
+        if (block.number > 0) {
+            delete operationsDone[block.number - 1][uint8(Operations.Distribute)];
+        }
+        
         // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
         
@@ -242,6 +249,13 @@ contract Validators is Params {
         // Check if validators have already been updated for this block
         if (operationsDone[block.number][uint8(Operations.UpdateValidators)] == true) {
             return; // Silently return to avoid consensus issues
+        }
+        
+        // Clean up previous block's data to save storage
+        // This prevents storage accumulation while maintaining reentrancy protection
+        // Note: We only need to track the current block, historical data is never accessed
+        if (block.number > 0) {
+            delete operationsDone[block.number - 1][uint8(Operations.UpdateValidators)];
         }
         
         // Set updated flag immediately to prevent reentrancy
@@ -271,6 +285,13 @@ contract Validators is Params {
         if (operationsDone[block.number][uint8(Operations.UpdateValidators)] == true) {
             // Return current validator set if already updated
             return currentValidatorSet;
+        }
+        
+        // Clean up previous block's data to save storage
+        // This prevents storage accumulation while maintaining reentrancy protection
+        // Note: We only need to track the current block, historical data is never accessed
+        if (block.number > 0) {
+            delete operationsDone[block.number - 1][uint8(Operations.UpdateValidators)];
         }
         
         // Set updated flag immediately to prevent reentrancy
