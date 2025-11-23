@@ -132,10 +132,11 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testConfigUpdateAll() public {
         Proposal p = Proposal(PROPOSAL);
-        // 注意: cid 5 (increasePeriod) 和 cid 6 (receiverAddr) 已移除，系统不再支持代币增发
-        uint256[5] memory cids = [uint256(0),1,2,3,4];
+        // 注意: cid 5 (blockReward) 和 cid 6 (unbondingPeriod) 已添加
+        // cid 5 和 6 之前是增发相关配置，现已改为 blockReward 和 unbondingPeriod
+        uint256[7] memory cids = [uint256(0),1,2,3,4,5,6];
         // cid 0 (proposalLastingPeriod) 需要 >= 1 hours && <= 30 days，使用 3600 秒（1小时）
-        uint256[5] memory vals = [uint256(3600),200,300,400,500];
+        uint256[7] memory vals = [uint256(3600),200,300,400,500,833_000_000_000_000_000,604800];
         for (uint i = 0; i < cids.length; i++) {
             vm.warp(4_000_000 + i);
             bytes32 id = keccak256(abi.encodePacked(address(this), cids[i], vals[i], block.timestamp));
@@ -149,6 +150,8 @@ contract ProposalFoundryTest is BaseSetup {
             else if (cids[i]==2) require(p.removeThreshold()==vals[2], "cid2");
             else if (cids[i]==3) require(p.decreaseRate()==vals[3], "cid3");
             else if (cids[i]==4) require(p.withdrawProfitPeriod()==vals[4], "cid4");
+            else if (cids[i]==5) require(p.blockReward()==vals[5], "cid5");
+            else if (cids[i]==6) require(p.unbondingPeriod()==vals[6], "cid6");
         }
     }
 }

@@ -41,9 +41,6 @@ contract Staking is Params, ReentrancyGuard {
     // Commission rate precision (10000 = 100%)
     uint256 public constant COMMISSION_RATE_BASE = 10000;
     
-    // Unbonding period in blocks (approximately 7 days)
-    uint256 public constant UNBONDING_PERIOD = 604800; // 7 days * 24 hours * 3600 seconds / 1 second per block
-    
     // Maximum number of unbonding entries to process in a single withdrawUnbonded call
     uint256 public constant MAX_UNBONDING_ENTRIES_PER_WITHDRAW = 50;
 
@@ -54,6 +51,8 @@ contract Staking is Params, ReentrancyGuard {
         uint256 accumulatedRewards; // Accumulated rewards for distribution
         bool isJailed;              // Whether validator is jailed
         uint256 jailUntilBlock;     // Block number until which validator is jailed
+        uint256 totalClaimedRewards; // Total claimed rewards (cumulative)
+        uint256 lastClaimBlock;      // Block number of last reward claim
     }
 
     struct Delegation {
@@ -168,7 +167,9 @@ contract Staking is Params, ReentrancyGuard {
                 commissionRate: commissionRate,
                 accumulatedRewards: 0,
                 isJailed: false,
-                jailUntilBlock: 0
+                jailUntilBlock: 0,
+                totalClaimedRewards: 0,
+                lastClaimBlock: 0
             });
             
             // Add to validators list (same as registerValidator)
@@ -202,7 +203,9 @@ contract Staking is Params, ReentrancyGuard {
             commissionRate: commissionRate,
             accumulatedRewards: 0,
             isJailed: false,
-            jailUntilBlock: 0
+            jailUntilBlock: 0,
+            totalClaimedRewards: 0,
+            lastClaimBlock: 0
         });
 
         validatorIndex[msg.sender] = allValidators.length;
@@ -385,7 +388,7 @@ contract Staking is Params, ReentrancyGuard {
         // Add to unbonding
         unbondingDelegations[msg.sender][validator].push(UnbondingEntry({
             amount: amount,
-            completionBlock: block.number + UNBONDING_PERIOD
+            completionBlock: block.number + proposalContract.unbondingPeriod()
         }));
         
         // Update reward debt
@@ -517,16 +520,32 @@ contract Staking is Params, ReentrancyGuard {
     /**
      * @dev Claim pending rewards
      * @param validator Validator address
+     * @notice Validators must wait withdrawProfitPeriod blocks between claims
+     * @notice Tracks total claimed rewards and last claim block for statistics
+     * @notice First claim is always allowed (when lastClaimBlock == 0)
      */
     function claimRewards(address validator) external nonReentrant {
         _updateRewards(msg.sender, validator);
         
         // For validator claiming their commission
         if (msg.sender == validator) {
-            uint256 commission = validatorStakes[validator].accumulatedRewards;
+            ValidatorStake storage stake = validatorStakes[validator];
+            uint256 commission = stake.accumulatedRewards;
+            
             if (commission > 0) {
+                // Check withdrawal period restriction (allow first claim when lastClaimBlock == 0)
+                if (stake.lastClaimBlock > 0) {
+                    uint256 withdrawPeriod = proposalContract.withdrawProfitPeriod();
+                    require(
+                        block.number >= stake.lastClaimBlock + withdrawPeriod,
+                        "Must wait withdrawProfitPeriod blocks between claims"
+                    );
+                }
+                
                 // Effects: update state before external call
-                validatorStakes[validator].accumulatedRewards = 0;
+                stake.accumulatedRewards = 0;
+                stake.totalClaimedRewards = stake.totalClaimedRewards + commission;
+                stake.lastClaimBlock = block.number;
                 
                 // Interactions: external call after state update
                 (bool success, ) = payable(msg.sender).call{value: commission}("");
@@ -735,23 +754,32 @@ contract Staking is Params, ReentrancyGuard {
      * @return selfStake Validator's self stake
      * @return totalDelegated Total delegated amount
      * @return commissionRate Commission rate
+     * @return accumulatedRewards Accumulated rewards available for claim
      * @return isJailed Whether validator is jailed
      * @return jailUntilBlock Block until which validator is jailed
+     * @return totalClaimedRewards Total claimed rewards (cumulative)
+     * @return lastClaimBlock Block number of last reward claim
      */
     function getValidatorInfo(address validator) external view returns (
         uint256 selfStake,
         uint256 totalDelegated,
         uint256 commissionRate,
+        uint256 accumulatedRewards,
         bool isJailed,
-        uint256 jailUntilBlock
+        uint256 jailUntilBlock,
+        uint256 totalClaimedRewards,
+        uint256 lastClaimBlock
     ) {
         ValidatorStake storage stake = validatorStakes[validator];
         return (
             stake.selfStake,
             stake.totalDelegated,
             stake.commissionRate,
+            stake.accumulatedRewards,
             stake.isJailed,
-            stake.jailUntilBlock
+            stake.jailUntilBlock,
+            stake.totalClaimedRewards,
+            stake.lastClaimBlock
         );
     }
 

@@ -356,6 +356,10 @@ func getConfigIDName(cid int64) string {
 		return "Decrease Rate 减少率"
 	case 4:
 		return "Withdraw Profit Period 提取收益周期"
+	case 5:
+		return "Block Reward 区块奖励"
+	case 6:
+		return "Unbonding Period 解绑期"
 	default:
 		return "Unknown Config 未知配置"
 	}

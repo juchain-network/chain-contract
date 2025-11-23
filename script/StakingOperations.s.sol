@@ -56,8 +56,11 @@ contract StakingOperationsScript is BaseSetup {
                     uint256 selfStake,
                     uint256 totalDelegated,
                     uint256, /* commissionRate */
+                    uint256, /* accumulatedRewards */
                     bool, /* isJailed */
-                    uint256 /* jailUntilBlock */
+                    uint256, /* jailUntilBlock */
+                    uint256, /* totalClaimedRewards */
+                    uint256 /* lastClaimBlock */
                 ) {
                     emit ValidatorInfo("Validator", validator, selfStake + totalDelegated);
                 } catch {
@@ -139,8 +142,11 @@ contract StakingOperationsScript is BaseSetup {
                     uint256 selfStake,
                     uint256 totalDelegated,
                     uint256 commissionRate,
+                    uint256, /* accumulatedRewards */
                     bool isJailed,
-                    uint256 jailUntilBlock
+                    uint256 jailUntilBlock,
+                    uint256, /* totalClaimedRewards */
+                    uint256 /* lastClaimBlock */
                 ) {
                     emit ValidatorInfo("Validator info", topValidators[i], selfStake);
                     emit StakingInfo("Total delegated", totalDelegated);
