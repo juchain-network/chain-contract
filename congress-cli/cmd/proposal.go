@@ -360,6 +360,8 @@ func getConfigIDName(cid int64) string {
 		return "Block Reward 区块奖励"
 	case 6:
 		return "Unbonding Period 解绑期"
+	case 7:
+		return "Validator Unjail Period 验证者解除监禁期"
 	default:
 		return "Unknown Config 未知配置"
 	}

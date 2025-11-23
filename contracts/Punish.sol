@@ -8,8 +8,6 @@ import {Validators} from './Validators.sol';
 import {Proposal} from './Proposal.sol';
 
 contract Punish is Params {
-    // Number of blocks a validator must wait after being jailed before eligible for unjailing
-    uint256 public constant VALIDATOR_UNJAIL_PERIOD = 86400;
     struct PunishRecord {
         uint256 missedBlocksCounter;
         uint256 index;
@@ -67,7 +65,7 @@ contract Punish is Params {
             // reset validator's missed blocks counter
             punishRecords[val].missedBlocksCounter = 0;
             // jail validator first (sets isJailed in Staking contract)
-            staking.jailValidator(val, VALIDATOR_UNJAIL_PERIOD);
+            staking.jailValidator(val, proposal.validatorUnjailPeriod());
             // then remove validator (which will check isJailed status)
             validators.removeValidator(val);
         } else if (punishRecords[val].missedBlocksCounter % proposal.punishThreshold() == 0) {

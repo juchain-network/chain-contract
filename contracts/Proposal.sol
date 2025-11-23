@@ -17,6 +17,8 @@ contract Proposal is Params {
     uint256 public blockReward;
     // Unbonding period in blocks (time before delegators can withdraw undelegated funds)
     uint256 public unbondingPeriod;
+    // Validator unjail period in blocks (time before jailed validator can unjail)
+    uint256 public validatorUnjailPeriod;
 
     // record
     mapping(address => bool) public pass;
@@ -110,6 +112,8 @@ contract Proposal is Params {
         blockReward = 833_000_000_000_000_000; // 833 * 10^15 wei = 0.833 ether
         // Default unbonding period: 7 days in blocks (604800 blocks = 7 days * 24 hours * 3600 seconds / 1 second per block)
         unbondingPeriod = 604800;
+        // Default validator unjail period: 24 hours in blocks (86400 blocks = 24 hours * 3600 seconds / 1 second per block)
+        validatorUnjailPeriod = 86400;
         initialized = true;
     }
 
@@ -243,6 +247,9 @@ contract Proposal is Params {
         } else if (cid == 6) {
             require(value > 0, "Unbonding period must be positive");
             unbondingPeriod = value;
+        } else if (cid == 7) {
+            require(value > 0, "Validator unjail period must be positive");
+            validatorUnjailPeriod = value;
         }
     }
 

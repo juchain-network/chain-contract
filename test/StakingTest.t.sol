@@ -71,16 +71,17 @@ contract StakingTest is Test {
         // - Params: initialized (slot 0)
         // - Proposal: proposalLastingPeriod (slot 1), punishThreshold (slot 2), removeThreshold (slot 3),
         //             decreaseRate (slot 4), withdrawProfitPeriod (slot 5), blockReward (slot 6),
-        //             unbondingPeriod (slot 7), pass mapping (slot 8), proposalPassedTime mapping (slot 9)
+        //             unbondingPeriod (slot 7), validatorUnjailPeriod (slot 8),
+        //             pass mapping (slot 9), proposalPassedTime mapping (slot 10)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(8))), // pass mapping slot (updated: was 7, now 8 due to unbondingPeriod)
+            keccak256(abi.encode(validator, uint256(9))), // pass mapping slot (updated: was 8, now 9 due to validatorUnjailPeriod)
             bytes32(uint256(1))
         );
         // Set proposalPassedTime to current time (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(9))), // proposalPassedTime mapping slot (updated: was 8, now 9 due to unbondingPeriod)
+            keccak256(abi.encode(validator, uint256(10))), // proposalPassedTime mapping slot (updated: was 9, now 10 due to validatorUnjailPeriod)
             bytes32(block.timestamp)
         );
     }
