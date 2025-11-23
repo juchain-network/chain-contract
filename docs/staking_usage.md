@@ -11,6 +11,8 @@ JuChain 采用创新的 JPoSA (JuChain Proof of Stake Authority) 混合共识机
 - **🔒 安全机制**: 7天解绑期和作恶惩罚
 - **🎖️ 治理参与**: 质押者参与网络治理决策
 - **📈 动态调整**: 佣金率和质押量实时可调
+- **🛡️ 安全增强**: ReentrancyGuard 保护，配置参数验证
+- **⚡ 性能优化**: 移除 SafeMath，使用 Solidity 0.8+ 内置运算符
 
 # 签名交易
 ./build/congress-cli sign
@@ -554,6 +556,8 @@ The CLI automatically estimates gas with a 20% buffer. For custom gas settings, 
 1. **Keystore Safety**: Store keystore files securely and never share passwords
 2. **Amount Verification**: Double-check stake amounts before signing
 3. **Address Validation**: Verify all addresses are correct before transactions
+4. **Reentrancy Protection**: All critical functions are protected by `ReentrancyGuard`
+5. **Parameter Validation**: All configuration parameters have range validation to prevent errors
 
 ### Staking Strategy
 
@@ -800,9 +804,14 @@ done
 
 ---
 
-**版本**: v1.1.0  
+**版本**: v1.2.0  
 **更新时间**: 2025年1月21日  
 **适用范围**: JuChain主网和测试网
+
+**更新内容（v1.2.0）：**
+- 更新安全机制说明：添加 ReentrancyGuard 保护说明
+- 更新配置参数：移除增发相关配置（cid 5 和 6）
+- 更新技术细节：所有合约使用 Solidity 0.8+ 内置运算符（已移除 SafeMath）
 
 **更新内容（v1.1.0）：**
 - 修正合约地址格式（使用正确的 `0x0000...f000` 格式）

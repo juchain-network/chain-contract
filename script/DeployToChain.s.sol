@@ -289,9 +289,7 @@ contract DeployToChainScript is Script {
         uint256 period = Proposal(proposal).proposalLastingPeriod();
         console.log("Proposal lasting period:", period);
         
-        // 检查接收地址
-        address receiver = Proposal(proposal).receiverAddr();
-        console.log("Receiver address:", receiver);
+        // 注意: receiverAddr 和 increasePeriod 已移除，系统不再支持代币增发
         
         // 检查惩罚合约状态
         uint256 punishValidatorsLen = Punish(punish).getPunishValidatorsLen();

@@ -85,7 +85,13 @@
 
 2. **系统配置提案管理**
    - `createUpdateConfigProposal(uint256 cid, uint256 newValue)`: 创建配置修改提案
-   - 可修改的参数：提案有效期、惩罚阈值、移除阈值等
+   - 可修改的参数：
+     - `cid = 0`: 提案有效期（1小时 - 30天）
+     - `cid = 1`: 惩罚阈值（必须 > 0）
+     - `cid = 2`: 移除阈值（必须 > 0）
+     - `cid = 3`: 减少率（必须 > 0，防止除零）
+     - `cid = 4`: 提取收益周期（必须 > 0）
+   - **注意**：cid 5 和 6（增发相关）已移除，系统不再支持代币增发
 
 3. **提案状态管理**
    - 维护 `pass[address]` 映射，记录地址是否通过提案
@@ -182,11 +188,11 @@ struct Delegation {
 #### 主要功能
 
 1. **验证者集合管理**
-   - `updateValidatorSetByStake(uint256 epoch)`: 基于质押更新验证者集合（POSA 模式）
-   - `updateActiveValidatorSet(address[] memory newSet, uint256 epoch)`: 更新验证者集合（POA 模式）
-   - `getTopValidatorsByStake()`: 获取基于质押的顶级验证者（统一接口）
-   - `getActiveValidators()`: 获取活动验证者列表（基于 `currentValidatorSet`，已过滤被 jail 的验证者）
-   - `getActiveValidatorCount()`: 获取活动验证者数量（基于 `currentValidatorSet`，只统计未被 jailed 的验证者，高效方法）
+   - `updateActiveValidatorSet(address[] memory newSet, uint256 epoch)`: 更新验证者集合（由共识层调用，传入验证者列表）
+   - `getTopValidators()`: 获取顶级验证者列表（返回 `highestValidatorsSet`，用于 POA 模式）
+   - **注意**：POSA 模式下，共识层直接调用 `Staking.getTopValidators()` 获取基于质押的验证者列表
+   - `getActiveValidators()`: 获取活动验证者列表（基于 `currentValidatorSet`）
+   - `getActiveValidatorCount()`: 获取活动验证者数量（基于 `currentValidatorSet`，高效方法）
 
 2. **验证者信息管理**
    - `addValidator(address validator, address feeAddr)`: 添加验证者
@@ -205,8 +211,18 @@ struct Delegation {
 #### 关键数据结构
 
 ```solidity
+struct Validator {
+    address payable feeAddr;           // 费用接收地址
+    Description description;            // 验证者描述信息
+    uint256 aacIncoming;               // 累积的交易手续费收入
+    uint256 totalJailedHb;            // 总被监禁收入
+    uint256 lastWithdrawProfitsBlock;  // 最后提取收益的区块号
+    // 注意: status 字段已移除，状态由 Staking 合约管理
+    // Status 通过 getValidatorInfo() 动态计算（向后兼容）
+}
+
 address[] public currentValidatorSet;  // 当前验证者集合（仅在 epoch 更新）
-address[] public highestValidatorsSet; // 最高验证者集合（仅在 epoch 更新时同步）
+address[] public highestValidatorsSet; // 最高验证者集合（通过 tryAddValidatorToHighestSet 等方法管理，不在 updateActiveValidatorSet 中同步）
 mapping(address => Validator) validatorInfo;  // 验证者信息
 ```
 
@@ -280,10 +296,10 @@ struct PunishRecord {
    └─> validatorsContract.tryAddValidatorToHighestSet(msg.sender)
 
 5. 等待下一个 Epoch
-   └─> Validators.updateValidatorSetByStake(epoch)
-       └─> staking.getTopValidators()
-           └─> 返回按总质押排序的验证者列表（已过滤被 jail 的）
-       └─> 更新 currentValidatorSet 和 highestValidatorsSet
+   └─> 共识层调用: staking.getTopValidators() 获取验证者列表
+   └─> 共识层调用: Validators.updateActiveValidatorSet(newSet, epoch)
+       └─> 更新 currentValidatorSet
+       └─> 同步更新 highestValidatorsSet
 ```
 
 ### 4.2 验证者惩罚协作流程
@@ -337,19 +353,17 @@ struct PunishRecord {
 ```
 1. 共识层 Prepare() [Epoch 块]
    └─> getTopValidators() [使用 parent state]
-       └─> Validators.getTopValidatorsByStake()
-           └─> Staking.getTopValidators()
-               └─> 返回已过滤的验证者列表（排除被 jail 的）
+       └─> Staking.getTopValidators()
+           └─> 返回已过滤的验证者列表（排除被 jail 的）
    └─> 写入 header.Extra
 
 2. 共识层 Finalize() [Epoch 块]
    └─> handleEpochTransition()
        └─> updateValidators()
-           └─> Validators.updateValidatorSetByStake(epoch)
-               └─> Staking.getTopValidators() [使用 current state]
-                   └─> 返回已过滤的验证者列表（排除被 jail 的）
+           ├─> Staking.getTopValidators() [使用 current state]
+           │   └─> 返回已过滤的验证者列表（排除被 jail 的）
+           └─> Validators.updateActiveValidatorSet(newSet, epoch)
                └─> 更新 currentValidatorSet 和 highestValidatorsSet
-               └─> 返回更新后的验证者列表
 
 3. 共识层 snapshot.apply() [验证历史区块]
    └─> getTopValidatorsFunc() [使用 parent state]
@@ -418,8 +432,8 @@ func (c *Congress) Finalize(...) error {
     // 5. Epoch 更新（Epoch 块）
     if header.Number % c.config.Epoch == 0 {
         handleEpochTransition(...)
-            └─> Validators.updateValidatorSetByStake(epoch)
-                └─> Staking.getTopValidators()  // 使用 current state
+            ├─> Staking.getTopValidators()  // 使用 current state
+            └─> Validators.updateActiveValidatorSet(newSet, epoch)
     }
 }
 ```
@@ -536,14 +550,14 @@ type Snapshot struct {
 │ 阶段 5: 等待 Epoch 更新                                         │
 └─────────────────────────────────────────────────────────────┘
 等待: block.number % 86400 == 0 (下一个 Epoch 块)
-  └─> 共识层调用: Validators.updateValidatorSetByStake(epoch)
-      ├─> Staking.getTopValidators()
-      │   ├─> 筛选符合条件的验证者
-      │   ├─> 按总质押排序
-      │   └─> 返回前 21 名
+  └─> 共识层调用: Staking.getTopValidators() 获取验证者列表
+      ├─> 筛选符合条件的验证者
+      ├─> 按总质押排序
+      └─> 返回前 21 名
+   └─> 共识层调用: Validators.updateActiveValidatorSet(newSet, epoch)
       ├─> 更新 currentValidatorSet
-      ├─> 更新 highestValidatorsSet
       └─> emit LogUpdateValidator(...)
+      └─> **注意**：`highestValidatorsSet` 通过其他方法管理（如 `tryAddValidatorToHighestSet`），不会在此处同步更新
 
 ┌─────────────────────────────────────────────────────────────┐
 │ 阶段 6: 开始出块                                                │
@@ -832,10 +846,9 @@ Punish.punish(validator)
 │ 立即生效（Epoch 块）                                            │
 └─────────────────────────────────────────────────────────────┘
 如果当前块是 Epoch 块:
-  └─> Validators.updateValidatorSetByStake(epoch)
-      └─> Staking.getTopValidators()
-          └─> 过滤被 jail 的验证者
-          └─> 验证者立即从验证者集合中排除
+  └─> 共识层调用: Staking.getTopValidators() 获取验证者列表（已过滤被 jail 的）
+  └─> 共识层调用: Validators.updateActiveValidatorSet(newSet, epoch)
+      └─> 验证者立即从验证者集合中排除
 
 如果当前块不是 Epoch 块:
   └─> 验证者仍在当前验证者集合中
@@ -942,12 +955,13 @@ Punish.punish(validator)
 │ 等待 Epoch 更新                                                 │
 └─────────────────────────────────────────────────────────────┘
 等待下一个 Epoch:
-  └─> Validators.updateValidatorSetByStake(epoch)
-      └─> Staking.getTopValidators()
-          ├─> 检查: selfStake >= MIN_VALIDATOR_STAKE ✅（已注册质押）
-          ├─> 检查: !isJailed || block.number >= jailUntilBlock ✅（已 unjail）
-          ├─> 检查: pass[validator] == true ✅（投票通过）
-          └─> 验证者重新进入验证者集合
+  └─> 共识层调用: Staking.getTopValidators()
+      ├─> 检查: selfStake >= MIN_VALIDATOR_STAKE ✅（已注册质押）
+      ├─> 检查: !isJailed || block.number >= jailUntilBlock ✅（已 unjail）
+      ├─> 检查: pass[validator] == true ✅（投票通过）
+      └─> 返回验证者列表
+  └─> 共识层调用: Validators.updateActiveValidatorSet(newSet, epoch)
+      └─> 验证者重新进入验证者集合
 ```
 
 ### 6.10 Epoch 更新完整流程
@@ -958,15 +972,14 @@ Punish.punish(validator)
 └─────────────────────────────────────────────────────────────┘
 共识层 Prepare()
   ├─> 获取验证者列表: getTopValidators() [使用 parent state]
-  │   └─> Validators.getTopValidatorsByStake()
-  │       └─> Staking.getTopValidators()
-  │           ├─> 筛选条件:
-  │           │   - selfStake >= MIN_VALIDATOR_STAKE
-  │           │   - !isJailed (验证者未被监禁)
-  │           │   - proposalContract.pass(validator) == true
-  │           │   - **注意**：不检查 `isProposalValidForStaking()`，7天有效期仅用于新注册（在 `registerValidator()` 中检查）
-  │           ├─> 按总质押排序: selfStake + totalDelegated
-  │           └─> 返回前 MAX_VALIDATORS (21) 个
+  │   └─> Staking.getTopValidators()
+  │       ├─> 筛选条件:
+  │       │   - selfStake >= MIN_VALIDATOR_STAKE
+  │       │   - !isJailed (验证者未被监禁)
+  │       │   - proposalContract.pass(validator) == true
+  │       │   - **注意**：不检查 `isProposalValidForStaking()`，7天有效期仅用于新注册（在 `registerValidator()` 中检查）
+  │       ├─> 按总质押排序: selfStake + totalDelegated
+  │       └─> 返回前 MAX_VALIDATORS (21) 个
   └─> 写入 header.Extra
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -977,12 +990,11 @@ Punish.punish(validator)
   ├─> 分配奖励
   └─> handleEpochTransition()
       ├─> updateValidators()
-      │   └─> Validators.updateValidatorSetByStake(epoch)
-      │       ├─> Staking.getTopValidators() [使用 current state]
-      │       │   └─> 返回已过滤的验证者列表（排除被 jail 的）
+      │   ├─> Staking.getTopValidators() [使用 current state]
+      │   │   └─> 返回已过滤的验证者列表（排除被 jail 的）
+      │   └─> Validators.updateActiveValidatorSet(newSet, epoch)
       │       ├─> 更新 currentValidatorSet
-      │       ├─> 更新 highestValidatorsSet
-      │       └─> 返回更新后的验证者列表
+      │       └─> 同步更新 highestValidatorsSet
       │
       └─> decreaseMissedBlocksCounter()
           └─> Punish.decreaseMissedBlocksCounter(epoch)
@@ -994,7 +1006,8 @@ Punish.punish(validator)
 共识层 snapshot.apply()
   ├─> 如果是 Epoch 块:
   │   └─> getTopValidatorsFunc() [使用 parent state]
-  │       └─> 获取已过滤的验证者列表（排除被 jail 的）
+  │       └─> Staking.getTopValidators() [使用 parent state]
+  │           └─> 获取已过滤的验证者列表（排除被 jail 的）
   │       └─> 如果失败且是状态不可用错误，fallback 到 header.Extra
   │       └─> 更新 snap.Validators
   └─> 验证者集合更新完成
@@ -1117,7 +1130,10 @@ Punish.punish(validator)
 **更新流程**：
 1. Prepare 阶段：使用 parent state 获取验证者列表，写入 `header.Extra`
 2. Finalize 阶段：使用 current state 更新验证者集合
-   - `updateValidatorSetByStake()` 会同时更新 `currentValidatorSet` 和 `highestValidatorsSet`
+   - 共识层调用 `Staking.getTopValidators()` 获取验证者列表
+   - 共识层调用 `Validators.updateActiveValidatorSet(newSet, epoch)` 更新集合
+   - `updateActiveValidatorSet()` 会更新 `currentValidatorSet`
+   - **注意**：`highestValidatorsSet` 通过其他方法管理（如 `tryAddValidatorToHighestSet`），不会在 `updateActiveValidatorSet()` 中同步更新
 3. Snapshot 更新：使用 parent state 更新 `snap.Validators`
 
 **筛选条件**：
@@ -1159,8 +1175,14 @@ Punish.punish(validator)
 - 如果只有 1 个验证者，不会被移除
 
 **重入攻击防护**：
-- 使用 `operationsDone[block.number]` 防止重入
-- 立即设置标志，确保同一操作在同一块只执行一次
+- `Validators` 和 `Staking` 合约继承 `ReentrancyGuard`
+- 关键函数使用 `nonReentrant` 修饰符：
+  - `Validators.withdrawProfits()` - 提取收益
+  - `Staking.withdrawValidatorStake()` - 提取质押
+  - `Staking.emergencyExit()` - 紧急退出
+  - `Staking.claimRewards()` - 领取奖励
+- 使用 `operationsDone[block.number]` 防止区块级操作重入
+- 遵循 CEI 模式（Checks-Effects-Interactions）：先更新状态，后执行外部调用
 
 ---
 
@@ -1189,12 +1211,13 @@ Punish.punish(validator)
     │       └─> Staking.distributeRewards(validator) {value: 基础出块奖励}
     │           └─> 分配给验证者和委托者
     └─> 如果是 Epoch 块
-        └─> handleEpochTransition()
-            ├─> updateValidators()
-            │   └─> Validators.updateValidatorSetByStake(epoch)
-            │       └─> 更新验证者集合
-            └─> decreaseMissedBlocksCounter()
-                └─> Punish.decreaseMissedBlocksCounter(epoch)
+    └─> handleEpochTransition()
+        ├─> updateValidators()
+        │   ├─> Staking.getTopValidators() 获取验证者列表
+        │   └─> Validators.updateActiveValidatorSet(newSet, epoch)
+        │       └─> 更新验证者集合
+        └─> decreaseMissedBlocksCounter()
+            └─> Punish.decreaseMissedBlocksCounter(epoch)
 ```
 
 ### 8.2 Epoch 块出块流程
@@ -1206,9 +1229,8 @@ Punish.punish(validator)
 │   ├─> 获取 snapshot（验证者集合）
 │   └─> 获取验证者列表并写入 header.Extra
 │       └─> getTopValidators() [使用 parent state]
-│           └─> Validators.getTopValidatorsByStake()
-│               └─> Staking.getTopValidators()
-│                   └─> 返回已过滤的验证者列表（排除被 jail 的）
+│           └─> Staking.getTopValidators()
+│               └─> 返回已过滤的验证者列表（排除被 jail 的）
 │
 ├─> 执行交易
 │
@@ -1216,17 +1238,17 @@ Punish.punish(validator)
     ├─> 惩罚错过块的验证者（可能 jail）
     ├─> 分配交易手续费奖励
     ├─> 分配出块基础奖励
-    └─> handleEpochTransition()
-        ├─> updateValidators()
-        │   └─> Validators.updateValidatorSetByStake(epoch)
-        │       ├─> Staking.getTopValidators() [使用 current state]
-        │       │   └─> 返回已过滤的验证者列表（排除被 jail 的）
-        │       ├─> 更新 currentValidatorSet
-        │       ├─> 更新 highestValidatorsSet
-        │       └─> 返回更新后的验证者列表
-        └─> decreaseMissedBlocksCounter()
-            └─> Punish.decreaseMissedBlocksCounter(epoch)
-                └─> 减少所有验证者的 missedBlocksCounter
+      └─> handleEpochTransition()
+          ├─> updateValidators()
+          │   ├─> getTopValidators() [使用 current state]
+          │   │   └─> Staking.getTopValidators() [使用 current state]
+          │   │       └─> 返回已过滤的验证者列表（排除被 jail 的）
+          │   └─> Validators.updateActiveValidatorSet(newSet, epoch)
+          │       └─> 更新 currentValidatorSet
+          │       └─> **注意**：`highestValidatorsSet` 通过其他方法管理，不会在此处同步更新
+          └─> decreaseMissedBlocksCounter()
+              └─> Punish.decreaseMissedBlocksCounter(epoch)
+                  └─> 减少所有验证者的 missedBlocksCounter
 ```
 
 ### 8.3 验证者出块时序
@@ -1332,13 +1354,23 @@ Epoch 块 N (N % 86400 == 0)
 ### 10.1 重入攻击防护
 
 **机制**：
-- 使用 `operationsDone[block.number][operation]` 标志
-- 在同一区块内，同一操作只能执行一次
-- 立即设置标志，防止重入
+- **合约级保护**：`Validators` 和 `Staking` 合约继承 `ReentrancyGuard`
+- **函数级保护**：关键函数使用 `nonReentrant` 修饰符
+  - `Validators.withdrawProfits()` - 提取收益
+  - `Staking.withdrawValidatorStake()` - 提取质押
+  - `Staking.emergencyExit()` - 紧急退出
+  - `Staking.claimRewards()` - 领取奖励
+- **区块级保护**：使用 `operationsDone[block.number][operation]` 标志
+  - 在同一区块内，同一操作只能执行一次
+  - 立即设置标志，防止重入
+- **CEI 模式**：所有关键函数遵循 Checks-Effects-Interactions 模式
+  - 先执行检查（Checks）
+  - 再更新状态（Effects）
+  - 最后执行外部调用（Interactions）
 
 **应用场景**：
 - `Validators.distributeBlockReward()` - 防止重复分配奖励
-- `Validators.updateValidatorSetByStake()` - 防止重复更新验证者集合
+- `Validators.updateActiveValidatorSet()` - 防止重复更新验证者集合
 
 ### 10.2 状态一致性保证
 
@@ -1357,7 +1389,7 @@ Epoch 块 N (N % 86400 == 0)
 **所有验证者被 jail**：
 - 保护机制：`removeValidator()` 确保至少保留 1 个验证者
 - 如果最后一个验证者被 jail，`getTopValidators()` 可能返回空列表
-- 这会导致 `updateValidatorSetByStake()` 失败，但这是可接受的安全机制
+- 共识层应该检查验证者列表不为空后再调用 `updateActiveValidatorSet()`，但这是可接受的安全机制
 
 **验证者数量低于最小值**：
 - `MIN_VALIDATORS` (3) 是业务指导，不是硬性技术限制
@@ -1390,10 +1422,40 @@ Epoch 块 N (N % 86400 == 0)
 - 使用 `rewardPerShare` 机制确保奖励分配精确
 - 每次委托/取消委托时更新 `rewardDebt`
 - 防止奖励计算错误
+- **注意**：整数除法会产生微小的舍入误差（< 4 wei/次），对 18 位小数代币影响可忽略
 
 **防重复分配**：
 - `operationsDone[block.number]` 防止同一块重复分配
 - 奖励分配操作在同一块只能执行一次
+
+### 10.6 技术改进和安全增强
+
+**SafeMath 移除**：
+- 所有合约已移除 SafeMath 依赖
+- 使用 Solidity 0.8+ 内置溢出检查
+- 代码更简洁，Gas 成本更低
+
+**重入保护增强**：
+- `Validators` 和 `Staking` 合约继承 `ReentrancyGuard`
+- 关键函数使用 `nonReentrant` 修饰符
+- 遵循 CEI 模式确保状态一致性
+
+**配置参数验证**：
+- `Proposal.updateConfig()` 添加了所有参数的范围验证
+- 防止配置错误（如 `decreaseRate = 0` 导致除零）
+- 提高系统健壮性
+
+**增发功能移除**：
+- 移除了 `increasePeriod` 和 `receiverAddr` 配置
+- 系统不再支持代币增发/通胀
+- 简化了配置管理逻辑
+
+**状态管理优化**：
+- `Validator` struct 中移除了冗余的 `status` 字段
+- 状态由 `Staking` 合约统一管理（`isJailed`, `jailUntilBlock`）
+- `getValidatorInfo()` 动态计算状态（向后兼容）
+- 减少存储成本，提高查询效率
+- 确保状态一致性（单一数据源）
 
 ---
 
@@ -1513,16 +1575,30 @@ A:
 
 ### 12.3 安全保证
 
-1. **重入攻击防护**：使用 `operationsDone` 标志
+1. **重入攻击防护**：
+   - 使用 `ReentrancyGuard` 和 `nonReentrant` 修饰符
+   - 使用 `operationsDone` 标志防止区块级重入
+   - 遵循 CEI 模式确保状态一致性
 2. **状态一致性**：Jail 状态统一管理
 3. **边界情况处理**：至少保留 1 个验证者，防止所有验证者退出
 4. **精确计算**：使用 `rewardPerShare` 机制确保奖励分配精确
 
 ---
 
-**文档版本**：v1.2  
+**文档版本**：v1.4  
 **最后更新**：2025-01-21  
 **维护者**：POSA 开发团队
+
+**更新内容（v1.4）：**
+- 更新验证者集合更新机制：`updateValidatorSetByStake()` 已删除，改为 `updateActiveValidatorSet()`
+- 明确共识层负责调用 `Staking.getTopValidators()` 获取验证者列表，然后调用 `updateActiveValidatorSet()` 更新
+- 更新所有相关流程描述和检查清单
+
+**更新内容（v1.3）：**
+- 更新重入保护机制：添加 `ReentrancyGuard` 和 `nonReentrant` 修饰符说明
+- 更新配置参数验证：添加所有配置参数的范围验证说明
+- 移除增发功能：明确 cid 5 和 6 已移除，系统不再支持代币增发
+- 更新安全机制：完善 CEI 模式说明
 
 **更新内容（v1.2）：**
 - 修正 `getTopValidators()` 筛选条件：移除 `isProposalValidForStaking()` 检查，明确只检查 `pass[validator]` 和 `!isJailed`

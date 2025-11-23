@@ -131,18 +131,24 @@ contract PunishMissingFoundryTest is BaseSetup {
         require(isJailed(v1), "v1 should now be jailed");
         require(punish.getPunishRecord(v1) == 0, "v1 punish record should be reset after removal");
         
-        // 现在两个验证者都被监禁，只有 v3 可以参与投票
+        // 现在两个验证者都被监禁，但它们仍然在 currentValidatorSet 中（直到下一个 epoch）
+        // 被 jail 的验证者仍然可以投票，因为它们还在 currentValidatorSet 中
         // 根据设计逻辑：threshold = activeValidatorCount / 2 + 1
-        // 当 activeValidatorCount = 1 时：threshold = 1 / 2 + 1 = 1
-        // 所以如果只有1个活跃验证者，1票就可以通过提案
+        // 当 activeValidatorCount = 3 时（v1, v2, v3 都在 currentValidatorSet 中）：threshold = 3 / 2 + 1 = 2
+        // 所以需要至少 2 票才能通过提案
         vm.warp(6_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), v1, true, "", block.timestamp));
         Proposal(PROPOSAL).createProposal(v1, true, "");
         
+        // v3 投票（1票）
         vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
         
-        // 提案应该通过，因为只有1个活跃验证者时，1票就可以通过（threshold = 1）
-        require(Proposal(PROPOSAL).pass(v1), "proposal should pass with 1 vote when only 1 active validator");
+        // 提案不应该通过，因为 threshold = 2，只有 1 票
+        // 需要再有一票（可以是 v1 或 v2，虽然它们被 jail，但仍在 currentValidatorSet 中）
+        vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
+        
+        // 现在有 2 票，应该通过（threshold = 2）
+        require(Proposal(PROPOSAL).pass(v1), "proposal should pass with 2 votes when threshold is 2");
         // 注意：提案通过只是设置了 pass[v1] = true，v1 仍然处于 jailed 状态
         // v1 需要先 unjail，然后注册质押才能重新成为 active validator
         require(isJailed(v1), "v1 should still be jailed (proposal passing doesn't auto unjail)");

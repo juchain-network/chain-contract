@@ -108,11 +108,16 @@ contract BatchValidatorStakeScript is Script {
         Staking staking = Staking(stakingAddress);
         
         uint256 totalStaked = staking.totalStaked();
+        // Use getValidatorCount() to get the count of all registered validators
         uint256 validatorCount = staking.getValidatorCount();
         
         console.log("=== Final Status ===");
         console.log("Total staked:", totalStaked / 1 ether, "JU");
         console.log("Total validators:", validatorCount);
-        console.log("Average stake per validator:", (totalStaked / validatorCount) / 1 ether, "JU");
+        if (validatorCount > 0) {
+            console.log("Average stake per validator:", (totalStaked / validatorCount) / 1 ether, "JU");
+        } else {
+            console.log("No validators registered yet");
+        }
     }
 }

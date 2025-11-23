@@ -33,14 +33,7 @@ contract DebugProposalScript is BaseSetup {
             console.log("proposalLastingPeriod failed with unknown error");
         }
         
-        // 检查receiverAddr
-        try Proposal(PROPOSAL).receiverAddr() returns (address receiver) {
-            console.log("Receiver address:", receiver);
-        } catch Error(string memory reason) {
-            console.log("receiverAddr failed:", reason);
-        } catch {
-            console.log("receiverAddr failed with unknown error");
-        }
+        // 注意: receiverAddr 和 increasePeriod 已移除，系统不再支持代币增发
         
         // 检查punishThreshold
         try Proposal(PROPOSAL).punishThreshold() returns (uint256 threshold) {

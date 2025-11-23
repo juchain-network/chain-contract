@@ -13,8 +13,9 @@ contract ProposalTest {
         proposal.initialize(vals, address(0xCAFE));
     }
 
-    function testReceiverAddrInitializedNonZero() public view {
-        // 初始化后，receiverAddr 应该为非零地址（见合约 initialize 默认值）
-        require(proposal.receiverAddr() != address(0), "receiverAddr should be non-zero");
-    }
+    // 注意: receiverAddr 和 increasePeriod 已移除，系统不再支持代币增发
+    // 以下测试已移除，因为相关功能已删除
+    // function testReceiverAddrInitializedNonZero() public view {
+    //     require(proposal.receiverAddr() != address(0), "receiverAddr should be non-zero");
+    // }
 }
