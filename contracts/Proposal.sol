@@ -13,6 +13,8 @@ contract Proposal is Params {
     uint256 public decreaseRate;
     // Validator have to wait withdrawProfitPeriod blocks to withdraw his profits
     uint256 public withdrawProfitPeriod;
+    // Block reward per block (in wei)
+    uint256 public blockReward;
 
     // record
     mapping(address => bool) public pass;
@@ -102,6 +104,8 @@ contract Proposal is Params {
         removeThreshold = 48;
         decreaseRate = 24;
         withdrawProfitPeriod = 86400;
+        // Default block reward: 0.833 ether per block (72,000 JU/day ÷ 86,400 blocks/day)
+        blockReward = 833_000_000_000_000_000; // 833 * 10^15 wei = 0.833 ether
         initialized = true;
     }
 
@@ -202,6 +206,17 @@ contract Proposal is Params {
         return true;
     }
 
+    /**
+     * @dev Update system configuration
+     * @param cid Configuration ID:
+     *   - 0: proposalLastingPeriod (1 hour - 30 days)
+     *   - 1: punishThreshold (must > 0)
+     *   - 2: removeThreshold (must > 0)
+     *   - 3: decreaseRate (must > 0, prevents division by zero)
+     *   - 4: withdrawProfitPeriod (must > 0)
+     *   - 5: blockReward (must > 0, in wei)
+     * @param value New configuration value
+     */
     function updateConfig(uint256 cid, uint256 value) private {
         if (cid == 0) {
             require(value >= 1 hours && value <= 30 days, "Invalid proposal period");
@@ -218,9 +233,11 @@ contract Proposal is Params {
         } else if (cid == 4) {
             require(value > 0, "Withdraw profit period must be positive");
             withdrawProfitPeriod = value;
+        } else if (cid == 5) {
+            require(value > 0, "Block reward must be positive");
+            blockReward = value;
         }
-        // Note: cid 5 and 6 (increasePeriod and receiverAddr) are removed
-        // as the system no longer supports token minting/inflation
+        // Note: cid 6 (receiverAddr) is removed as the system no longer supports token minting/inflation
     }
 
     /**

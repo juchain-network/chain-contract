@@ -70,17 +70,17 @@ contract StakingTest is Test {
         // Storage layout: 
         // - Params: initialized (slot 0)
         // - Proposal: proposalLastingPeriod (slot 1), punishThreshold (slot 2), removeThreshold (slot 3),
-        //             decreaseRate (slot 4), withdrawProfitPeriod (slot 5),
-        //             pass mapping (slot 6), proposalPassedTime mapping (slot 7)
+        //             decreaseRate (slot 4), withdrawProfitPeriod (slot 5), blockReward (slot 6),
+        //             pass mapping (slot 7), proposalPassedTime mapping (slot 8)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(6))), // pass mapping slot
+            keccak256(abi.encode(validator, uint256(7))), // pass mapping slot (updated: was 6, now 7 due to blockReward)
             bytes32(uint256(1))
         );
         // Set proposalPassedTime to current time (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(7))), // proposalPassedTime mapping slot
+            keccak256(abi.encode(validator, uint256(8))), // proposalPassedTime mapping slot (updated: was 7, now 8 due to blockReward)
             bytes32(block.timestamp)
         );
     }
