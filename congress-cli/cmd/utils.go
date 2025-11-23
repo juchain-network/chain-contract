@@ -70,8 +70,8 @@ func ValidateOperation(operation string) error {
 
 // ValidateConfigID 验证配置ID
 func ValidateConfigID(cid int64) error {
-	if cid < 0 || cid > 4 {
-		return fmt.Errorf("invalid config ID: %d, must be 0-4", cid)
+	if cid < 0 || cid > 6 {
+		return fmt.Errorf("invalid config ID: %d, must be 0-6", cid)
 	}
 	return nil
 }
@@ -107,6 +107,15 @@ func GetConfigIDName(cid int64) string {
 	case 3:
 		return "decreaseRate"
 	case 4:
+		return "withdrawProfitPeriod"
+	case 5:
+		return "blockReward"
+	case 6:
+		return "unbondingPeriod"
+	default:
+		return "unknown"
+	}
+}
 		return "withdrawProfitPeriod"
 	default:
 		return "unknown"

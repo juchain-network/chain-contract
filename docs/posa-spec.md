@@ -741,7 +741,7 @@ type Snapshot struct {
   ├─> 创建解绑记录:
   │   └─> unbondingDelegations[msg.sender][validator].push({
   │       amount: amount,
-  │       completionBlock: block.number + UNBONDING_PERIOD (7天)
+  │       completionBlock: block.number + proposalContract.unbondingPeriod() (默认7天，可配置)
   │   })
   └─> emit Undelegated(...)
   └─> **注意**：验证者集合在下一个 Epoch 更新时自动同步
@@ -1327,7 +1327,7 @@ Epoch 块 N (N % 86400 == 0)
 |---------|-----|------|
 | `Epoch` | 86400 块 | Epoch 周期（约 24 小时） |
 | `VALIDATOR_UNJAIL_PERIOD` | 86400 块 | 验证者监禁期（约 24 小时） |
-| `UNBONDING_PERIOD` | 604800 块 | 解绑期（约 7 天） |
+| `unbondingPeriod` | 604800 块（默认） | 解绑期（约 7 天），可通过提案配置（cid = 6） |
 | `PROPOSAL_STAKING_DELAY` | 7 天 | 提案通过后等待期（时间戳） |
 
 ### 9.3 惩罚相关参数

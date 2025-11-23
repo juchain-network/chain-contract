@@ -15,6 +15,8 @@ contract Proposal is Params {
     uint256 public withdrawProfitPeriod;
     // Block reward per block (in wei)
     uint256 public blockReward;
+    // Unbonding period in blocks (time before delegators can withdraw undelegated funds)
+    uint256 public unbondingPeriod;
 
     // record
     mapping(address => bool) public pass;
@@ -106,6 +108,8 @@ contract Proposal is Params {
         withdrawProfitPeriod = 86400;
         // Default block reward: 0.833 ether per block (72,000 JU/day ÷ 86,400 blocks/day)
         blockReward = 833_000_000_000_000_000; // 833 * 10^15 wei = 0.833 ether
+        // Default unbonding period: 7 days in blocks (604800 blocks = 7 days * 24 hours * 3600 seconds / 1 second per block)
+        unbondingPeriod = 604800;
         initialized = true;
     }
 
@@ -236,8 +240,10 @@ contract Proposal is Params {
         } else if (cid == 5) {
             require(value > 0, "Block reward must be positive");
             blockReward = value;
+        } else if (cid == 6) {
+            require(value > 0, "Unbonding period must be positive");
+            unbondingPeriod = value;
         }
-        // Note: cid 6 (receiverAddr) is removed as the system no longer supports token minting/inflation
     }
 
     /**

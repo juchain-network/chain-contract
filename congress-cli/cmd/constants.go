@@ -122,7 +122,7 @@ const stakingABI = `[
 		"type": "function"
 	},
 	{
-		"inputs": [{"internalType": "uint256", "name": "limit", "type": "uint256"}],
+		"inputs": [],
 		"name": "getTopValidators",
 		"outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
 		"stateMutability": "view",
