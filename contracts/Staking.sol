@@ -440,6 +440,7 @@ contract Staking is Params, ReentrancyGuard {
     /**
      * @dev Distribute rewards to the current block miner (validator)
      * @notice Validator address is obtained from block.coinbase
+     * @notice Block reward is passed via msg.value (consensus layer reads from Proposal contract)
      * @notice Jailed validators can still produce blocks and receive rewards in the current epoch
      * @notice They will be excluded from the validator set at the next epoch transition
      */
@@ -459,8 +460,12 @@ contract Staking is Params, ReentrancyGuard {
         // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
         
+        // Get block reward from msg.value (consensus layer reads from Proposal contract and passes it here)
+        // This avoids duplicate contract calls and saves gas
+        uint256 blockReward = msg.value;
+        
         // Check if there are rewards to distribute
-        if (msg.value == 0) {
+        if (blockReward == 0) {
             return;
         }
         
@@ -483,11 +488,11 @@ contract Staking is Params, ReentrancyGuard {
         if (totalStake == 0) return;
         
         // 1. Calculate and allocate commission to validator first
-        uint256 commission = msg.value * stake.commissionRate / COMMISSION_RATE_BASE;
+        uint256 commission = blockReward * stake.commissionRate / COMMISSION_RATE_BASE;
         stake.accumulatedRewards = stake.accumulatedRewards + commission;
         
         // 2. Calculate remaining rewards after commission
-        uint256 remainingRewards = msg.value - commission;
+        uint256 remainingRewards = blockReward - commission;
         
         // 3. Calculate validator's share from remaining rewards based on their self-stake proportion
         uint256 validatorShare = remainingRewards * stake.selfStake / totalStake;
@@ -506,7 +511,7 @@ contract Staking is Params, ReentrancyGuard {
             stake.accumulatedRewards = stake.accumulatedRewards + delegatorRewards;
         }
         
-        emit RewardsDistributed(validator, msg.value);
+        emit RewardsDistributed(validator, blockReward);
     }
 
     /**
