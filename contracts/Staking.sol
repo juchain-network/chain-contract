@@ -3,8 +3,8 @@
 pragma solidity ^0.8.20;
 
 import {Params} from './Params.sol';
-import {SafeMath} from './library/SafeMath.sol';
 import {Proposal} from './Proposal.sol';
+import {ReentrancyGuard} from './library/ReentrancyGuard.sol';
 
 // Interface for Validators contract to avoid circular dependency
 interface IValidators {
@@ -12,14 +12,15 @@ interface IValidators {
     function tryActive(address validator) external returns (bool);
     function isActiveValidator(address who) external view returns (bool);
     function getActiveValidatorCount() external view returns (uint256);
+    function getTopValidators() external view returns (address[] memory);
+    function removeFromHighestSet(address validator) external;
 }
 
 /**
  * @title Staking Contract for JPoSA Consensus
  * @dev Implements staking mechanism for JuChain Proof of Stake Authorization
  */
-contract Staking is Params {
-    using SafeMath for uint256;
+contract Staking is Params, ReentrancyGuard {
 
     // Minimum staking amount to become a validator
     uint256 public constant MIN_VALIDATOR_STAKE = 10000 ether; // 10,000 JU
@@ -173,7 +174,7 @@ contract Staking is Params {
             // Add to validators list (same as registerValidator)
             validatorIndex[validator] = allValidators.length;
             allValidators.push(validator);
-            totalStaked = totalStaked.add(MIN_VALIDATOR_STAKE);
+            totalStaked = totalStaked + MIN_VALIDATOR_STAKE;
             // Emit event for each validator (more accurate than single event)
             emit ValidatorRegistered(validator, MIN_VALIDATOR_STAKE, commissionRate);
         }
@@ -206,7 +207,7 @@ contract Staking is Params {
 
         validatorIndex[msg.sender] = allValidators.length;
         allValidators.push(msg.sender);
-        totalStaked = totalStaked.add(msg.value);
+        totalStaked = totalStaked + msg.value;
 
         // Add to Validators highest validators set
         validatorsContract.tryAddValidatorToHighestSet(msg.sender);
@@ -222,8 +223,8 @@ contract Staking is Params {
         // Check if jailed (jailed validators must unjail first before adding stake)
         require(!validatorStakes[msg.sender].isJailed, "Validator is jailed, must unjail first");
         
-        validatorStakes[msg.sender].selfStake = validatorStakes[msg.sender].selfStake.add(msg.value);
-        totalStaked = totalStaked.add(msg.value);
+        validatorStakes[msg.sender].selfStake = validatorStakes[msg.sender].selfStake + msg.value;
+        totalStaked = totalStaked + msg.value;
     }
 
     /**
@@ -245,36 +246,62 @@ contract Staking is Params {
      * @notice If remaining stake would be less than MIN_VALIDATOR_STAKE, the withdrawal will fail
      * @notice Use emergencyExit() to withdraw all stake (requires minimum validators requirement)
      */
-    function withdrawValidatorStake(uint256 amount) external onlyValidValidator(msg.sender) {
+    function withdrawValidatorStake(uint256 amount) external nonReentrant onlyValidValidator(msg.sender) {
         require(amount > 0, "Amount must be positive");
         
         ValidatorStake storage stake = validatorStakes[msg.sender];
         require(stake.selfStake >= amount, "Insufficient self-stake");
         
         // Calculate remaining stake after withdrawal
-        uint256 remainingStake = stake.selfStake.sub(amount);
+        uint256 remainingStake = stake.selfStake - amount;
         
         // If partial withdrawal, remaining stake must meet minimum requirement
         // If complete withdrawal (remainingStake == 0), use emergencyExit() instead
         require(remainingStake >= MIN_VALIDATOR_STAKE, "Remaining stake below minimum, use emergencyExit() to withdraw all");
         
+        // Effects: update state before external call
         stake.selfStake = remainingStake;
-        totalStaked = totalStaked.sub(amount);
+        totalStaked = totalStaked - amount;
         
         emit ValidatorStakeWithdrawn(msg.sender, amount);
         
-        // Transfer the withdrawn amount
+        // Interactions: external call after state update
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         require(success, "Transfer failed");
     }
 
     /**
-     * @dev Emergency exit for validator (withdraw all stake)
-     * @notice This function is only callable by validators that meet the minimum validator requirement
-     * @notice Removes validator from allValidators array upon exit
-     * @notice If validator is currently in currentValidatorSet, they will be jailed first to ensure smooth exit
+     * @dev Allow validator to resign from validator role
+     * @notice This function allows validators to voluntarily resign from their validator role
+     * @notice Validator will be removed from highestValidatorsSet and pass will be set to false
+     * @notice Validator's transaction fee income (aacIncoming) will NOT be removed
+     * @notice After resigning, validator will be excluded from currentValidatorSet at next epoch
+     * @notice After being excluded, validator can call emergencyExit() to withdraw all stake
      */
-    function emergencyExit() external onlyValidValidator(msg.sender) {
+    function resignValidator() external onlyValidValidator(msg.sender) {
+        ValidatorStake storage stake = validatorStakes[msg.sender];
+        
+        // Cannot resign if already jailed/resigned
+        require(!stake.isJailed, "Validator already resigned or jailed");
+        
+        // Mark validator as jailed to ensure exclusion from currentValidatorSet at next epoch
+        // This is a technical mechanism to ensure smooth exit, not a punishment
+        stake.isJailed = true;
+        stake.jailUntilBlock = block.number + 86400;
+        emit ValidatorJailed(msg.sender, stake.jailUntilBlock);
+        
+        // Remove from highestValidatorsSet and set pass = false
+        // Note: This does NOT remove transaction fee income (aacIncoming)
+        validatorsContract.removeFromHighestSet(msg.sender);
+    }
+
+    /**
+     * @dev Emergency exit - withdraw all stake and exit validator role
+     * @notice Validators in currentValidatorSet (active in current epoch) cannot exit
+     * @notice Validators must jail themselves first, then wait until next epoch to exit
+     * @notice This ensures smooth exit without disrupting consensus
+     */
+    function emergencyExit() external nonReentrant onlyValidValidator(msg.sender) {
         ValidatorStake storage stake = validatorStakes[msg.sender];
         uint256 withdrawAmount = stake.selfStake;
         
@@ -282,32 +309,33 @@ contract Staking is Params {
         // Note: isActiveValidator() checks currentValidatorSet, not jail status
         bool isInCurrentSet = validatorsContract.isActiveValidator(msg.sender);
         
-        // Calculate remaining validators after exit
-        uint256 currentActiveCount = getActiveValidatorCount();
-        // If validator is in currentValidatorSet and not jailed, they count as active
-        // If they exit, remaining count decreases by 1
-        uint256 remainingCount = (isInCurrentSet && !stake.isJailed) ? currentActiveCount - 1 : currentActiveCount;
+        // Validators in active set cannot exit - they must resign first
+        // After resigning, they will be excluded from currentValidatorSet at next epoch
+        require(!isInCurrentSet, "Cannot exit: validator is in active set, resign first and wait until next epoch");
         
-        // Ensure remaining validators meet minimum requirement after exit
-        require(remainingCount >= MIN_VALIDATORS, "Cannot exit: would leave less than minimum validators");
+        // Note: Since validator is not in currentValidatorSet, their exit won't affect
+        // the active validator count, so no need to check MIN_VALIDATORS here
         
-        // If validator is currently active in consensus (in currentValidatorSet and not jailed), jail them first
-        // This ensures they stop producing blocks immediately and exit smoothly at next epoch
-        if (isInCurrentSet && !stake.isJailed) {
-            // Jail validator for 1 epoch (86400 blocks) to ensure smooth exit
-            // This prevents immediate disruption to consensus
-            stake.isJailed = true;
-            stake.jailUntilBlock = block.number + 86400; // 1 epoch
-            emit ValidatorJailed(msg.sender, stake.jailUntilBlock);
-        }
-        
+        // Effects: update state before external call
         stake.selfStake = 0;
-        totalStaked = totalStaked.sub(withdrawAmount);
+        totalStaked = totalStaked - withdrawAmount;
+        
+        // Note: If validator called resignValidator() before, they are already removed from
+        // highestValidatorsSet and pass is already set to false, so no need to do it again
+        // Only remove from highestValidatorsSet and set pass = false if validator didn't call resignValidator
+        // Check if validator is still in highestValidatorsSet (by checking if pass is still true)
+        if (proposalContract.pass(msg.sender)) {
+            // Validator didn't call resignValidator(), so we need to remove them now
+            validatorsContract.removeFromHighestSet(msg.sender);
+        }
+        // If pass is already false, validator already called resignValidator(), no need to do anything
         
         // Remove validator from allValidators array
         _removeFromAllValidators(msg.sender);
         
         emit ValidatorExited(msg.sender, withdrawAmount);
+        
+        // Interactions: external call after state update
         (bool success, ) = payable(msg.sender).call{value: withdrawAmount}("");
         require(success, "Transfer failed");
     }
@@ -320,18 +348,17 @@ contract Staking is Params {
         require(validator != address(0), "Invalid validator address");
         require(msg.value >= MIN_DELEGATION, "Insufficient delegation amount");
         require(validator != msg.sender, "Cannot delegate to yourself");
-        require(proposalContract.pass(validator), "Validator must pass proposal");
         
         _updateRewards(msg.sender, validator);
         
-        delegations[msg.sender][validator].amount = delegations[msg.sender][validator].amount.add(msg.value);
-        validatorStakes[validator].totalDelegated = validatorStakes[validator].totalDelegated.add(msg.value);
-        totalStaked = totalStaked.add(msg.value);
+        delegations[msg.sender][validator].amount = delegations[msg.sender][validator].amount + msg.value;
+        validatorStakes[validator].totalDelegated = validatorStakes[validator].totalDelegated + msg.value;
+        totalStaked = totalStaked + msg.value;
         
         // Update reward debt
         delegations[msg.sender][validator].rewardDebt = delegations[msg.sender][validator].amount
-            .mul(rewardPerShare[validator])
-            .div(1e18);
+            * rewardPerShare[validator]
+            / 1e18;
 
         emit Delegated(msg.sender, validator, msg.value);
     }
@@ -351,21 +378,21 @@ contract Staking is Params {
         
         _updateRewards(msg.sender, validator);
         
-        delegations[msg.sender][validator].amount = delegations[msg.sender][validator].amount.sub(amount);
-        validatorStakes[validator].totalDelegated = validatorStakes[validator].totalDelegated.sub(amount);
-        totalStaked = totalStaked.sub(amount);
+        delegations[msg.sender][validator].amount = delegations[msg.sender][validator].amount - amount;
+        validatorStakes[validator].totalDelegated = validatorStakes[validator].totalDelegated - amount;
+        totalStaked = totalStaked - amount;
         
         // Add to unbonding
         unbondingDelegations[msg.sender][validator].push(UnbondingEntry({
             amount: amount,
-            completionBlock: block.number.add(UNBONDING_PERIOD)
+            completionBlock: block.number + UNBONDING_PERIOD
         }));
         
         // Update reward debt
         delegations[msg.sender][validator].rewardDebt = delegations[msg.sender][validator].amount
-            .mul(rewardPerShare[validator])
-            .div(1e18);
-
+            * rewardPerShare[validator]
+            / 1e18;
+        
         emit Undelegated(msg.sender, validator, amount);
     }
 
@@ -384,7 +411,7 @@ contract Staking is Params {
         
         for (uint256 i = 0; i < entries.length && processed < maxEntries;) {
             if (entries[i].completionBlock <= block.number) {
-                totalWithdraw = totalWithdraw.add(entries[i].amount);
+                totalWithdraw = totalWithdraw + entries[i].amount;
                 
                 // Remove completed entry
                 entries[i] = entries[entries.length - 1];
@@ -401,12 +428,20 @@ contract Staking is Params {
         (bool success, ) = payable(msg.sender).call{value: totalWithdraw}("");
         require(success, "Transfer failed");
         emit UnbondingCompleted(msg.sender, validator, totalWithdraw);
+        
+        // If delegation amount is 0 and all unbonding entries are withdrawn, delete the delegation entry
+        // This helps save storage when delegation is completely removed
+        if (delegations[msg.sender][validator].amount == 0 && 
+            unbondingDelegations[msg.sender][validator].length == 0) {
+            delete delegations[msg.sender][validator];
+        }
     }
 
     /**
      * @dev Distribute rewards to the current block miner (validator)
      * @notice Validator address is obtained from block.coinbase
-     * @notice Similar to Validators.distributeBlockReward(), no parameters needed
+     * @notice Jailed validators can still produce blocks and receive rewards in the current epoch
+     * @notice They will be excluded from the validator set at the next epoch transition
      */
     function distributeRewards() external payable onlyMiner onlyInitialized {
         // Check if block reward has already been distributed for this block
@@ -438,37 +473,37 @@ contract Staking is Params {
             return; // Validator doesn't exist, silently return
         }
         
-        // Check if validator is active (has sufficient stake and not jailed)
-        if (stake.selfStake < MIN_VALIDATOR_STAKE || stake.isJailed) {
-            return; // Validator not active, silently return
-        }
+        // Note: We don't check selfStake >= MIN_VALIDATOR_STAKE here because:
+        // 1. Validators in active set cannot exit (emergencyExit() rejects them)
+        // 2. Validators cannot reduce stake below MIN_VALIDATOR_STAKE (withdrawValidatorStake() requires remainingStake >= MIN_VALIDATOR_STAKE)
+        // 3. If validator can produce a block, they must be in active set and have sufficient stake
         
-        uint256 totalStake = stake.selfStake.add(stake.totalDelegated);
+        uint256 totalStake = stake.selfStake + stake.totalDelegated;
         
         if (totalStake == 0) return;
         
         // 1. Calculate and allocate commission to validator first
-        uint256 commission = msg.value.mul(stake.commissionRate).div(COMMISSION_RATE_BASE);
-        stake.accumulatedRewards = stake.accumulatedRewards.add(commission);
+        uint256 commission = msg.value * stake.commissionRate / COMMISSION_RATE_BASE;
+        stake.accumulatedRewards = stake.accumulatedRewards + commission;
         
         // 2. Calculate remaining rewards after commission
-        uint256 remainingRewards = msg.value.sub(commission);
+        uint256 remainingRewards = msg.value - commission;
         
         // 3. Calculate validator's share from remaining rewards based on their self-stake proportion
-        uint256 validatorShare = remainingRewards.mul(stake.selfStake).div(totalStake);
-        stake.accumulatedRewards = stake.accumulatedRewards.add(validatorShare);
+        uint256 validatorShare = remainingRewards * stake.selfStake / totalStake;
+        stake.accumulatedRewards = stake.accumulatedRewards + validatorShare;
         
         // 4. Calculate delegator rewards (remaining after validator's share)
-        uint256 delegatorRewards = remainingRewards.sub(validatorShare);
+        uint256 delegatorRewards = remainingRewards - validatorShare;
         
         // 5. Update reward per share for delegators
         if (stake.totalDelegated > 0) {
-            rewardPerShare[validator] = rewardPerShare[validator].add(
-                delegatorRewards.mul(1e18).div(stake.totalDelegated)
+            rewardPerShare[validator] = rewardPerShare[validator] + (
+                delegatorRewards * 1e18 / stake.totalDelegated
             );
         } else {
             // If no delegators, allocate delegatorRewards to validator
-            stake.accumulatedRewards = stake.accumulatedRewards.add(delegatorRewards);
+            stake.accumulatedRewards = stake.accumulatedRewards + delegatorRewards;
         }
         
         emit RewardsDistributed(validator, msg.value);
@@ -478,17 +513,20 @@ contract Staking is Params {
      * @dev Claim pending rewards
      * @param validator Validator address
      */
-    function claimRewards(address validator) external {
+    function claimRewards(address validator) external nonReentrant {
         _updateRewards(msg.sender, validator);
         
         // For validator claiming their commission
         if (msg.sender == validator) {
             uint256 commission = validatorStakes[validator].accumulatedRewards;
             if (commission > 0) {
-                // Transfer first, then update state to avoid state inconsistency on failure
+                // Effects: update state before external call
+                validatorStakes[validator].accumulatedRewards = 0;
+                
+                // Interactions: external call after state update
                 (bool success, ) = payable(msg.sender).call{value: commission}("");
                 require(success, "Transfer failed");
-                validatorStakes[validator].accumulatedRewards = 0;
+                
                 emit RewardsClaimed(msg.sender, validator, commission);
             }
         }
@@ -499,17 +537,26 @@ contract Staking is Params {
      * @param validator Validator address to jail
      * @param jailBlocks Number of blocks to jail for
      */
+    /**
+     * @dev Jail a validator for misbehavior (called by Punish contract)
+     * @param validator Validator address to jail
+     * @param jailBlocks Number of blocks to jail for
+     * @notice Only Punish contract can call this function
+     * @notice Validators should use resignValidator() to voluntarily resign from validator role
+     */
     function jailValidator(address validator, uint256 jailBlocks) external onlyPunishContract {
         require(validator != address(0), "Invalid validator address");
         require(jailBlocks > 0, "Jail blocks must be positive");
         validatorStakes[validator].isJailed = true;
-        validatorStakes[validator].jailUntilBlock = block.number.add(jailBlocks);
+        validatorStakes[validator].jailUntilBlock = block.number + jailBlocks;
         emit ValidatorJailed(validator, validatorStakes[validator].jailUntilBlock);
     }
 
     /**
      * @dev Unjail a validator
      * @param validator Validator address to unjail
+     * @notice Validator must have passed a proposal (reproposal) before unjailing
+     * @notice Once jailed, validator must go through the voting process again to regain validator status
      */
     function unjailValidator(address validator) external {
         require(validator != address(0), "Invalid validator address");
@@ -520,37 +567,15 @@ contract Staking is Params {
         // Check if validator has sufficient stake to be active
         require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Insufficient stake, must add stake first");
         
-        uint256 violations = proposalContract.getViolationCount(validator);
-        
-        // If violations > 3, must have passed proposal (reproposal required)
-        if (violations > proposalContract.MAX_VIOLATIONS_FOR_AUTO_UNJAIL()) {
-            require(proposalContract.pass(validator), "Too many violations, must pass reproposal first");
-        }
+        // Must have passed proposal (reproposal required) - no automatic restoration
+        require(proposalContract.pass(validator), "Must pass reproposal first");
         
         validatorStakes[validator].isJailed = false;
         validatorStakes[validator].jailUntilBlock = 0;
         emit ValidatorUnjailed(validator);
         
-        // If violations <= 3, auto restore pass status
-        // If violations > 3, pass should already be true from reproposal
-        if (violations <= proposalContract.MAX_VIOLATIONS_FOR_AUTO_UNJAIL()) {
-            bool restored = false;
-            try proposalContract.autoRestorePass(validator) returns (bool success) {
-                restored = success;
-            } catch {}
-            
-            if (restored) {
-                // Only reactivate if pass was restored
-                try validatorsContract.tryActive(validator) {} catch {}
-            }
-            // Note: If auto restore failed, validator is unjailed but pass=false
-            // This is acceptable - validator can create a proposal to regain pass status
-            // Creating a proposal doesn't require pass status
-        } else {
-            // For violations > 3, pass should already be true from reproposal
-            // Just try to reactivate
-            try validatorsContract.tryActive(validator) {} catch {}
-        }
+        // Try to reactivate validator (pass should already be true from reproposal)
+        try validatorsContract.tryActive(validator) {} catch {}
     }
 
     /**
@@ -583,28 +608,42 @@ contract Staking is Params {
 
     /**
      * @dev Get top validators by total stake
-     * @return Top validators list (up to MAX_VALIDATORS)
+     * @notice First gets validators from Validators contract (highestValidatorsSet),
+     *         then sorts them by total stake (selfStake + totalDelegated)
+     * @return Top validators list (up to MAX_VALIDATORS), sorted by total stake
      */
     function getTopValidators() external view returns (address[] memory) {
-        // Create array of all active validators with their total stake
-        address[] memory activeValidators = new address[](allValidators.length);
-        uint256[] memory totalStakes = new uint256[](allValidators.length);
-        uint256 activeCount = 0;
+        // First, get validators from Validators contract (highestValidatorsSet)
+        address[] memory validatorsFromContract = validatorsContract.getTopValidators();
         
-        for (uint256 i = 0; i < allValidators.length; i++) {
-            address validator = allValidators[i];
-            if (validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE && 
-                !validatorStakes[validator].isJailed &&
-                proposalContract.pass(validator)) {
-                activeValidators[activeCount] = validator;
-                totalStakes[activeCount] = validatorStakes[validator].selfStake.add(validatorStakes[validator].totalDelegated);
-                activeCount++;
-            }
+        if (validatorsFromContract.length == 0) {
+            return new address[](0);
+        }
+        
+        // Create arrays for validators and their total stakes
+        address[] memory candidateValidators = new address[](validatorsFromContract.length);
+        uint256[] memory totalStakes = new uint256[](validatorsFromContract.length);
+        uint256 candidateCount = 0;
+        
+        // Collect validators and their total stakes for sorting
+        // Note: validatorsContract.getTopValidators() should only return validators
+        // that meet all requirements
+        for (uint256 i = 0; i < validatorsFromContract.length; i++) {
+            address validator = validatorsFromContract[i];
+            ValidatorStake storage stake = validatorStakes[validator];
+            
+            candidateValidators[candidateCount] = validator;
+            totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
+            candidateCount++;
+        }
+        
+        if (candidateCount == 0) {
+            return new address[](0);
         }
         
         // Sort by total stake (simple bubble sort for small arrays)
-        for (uint256 i = 0; i < activeCount; i++) {
-            for (uint256 j = i + 1; j < activeCount; j++) {
+        for (uint256 i = 0; i < candidateCount; i++) {
+            for (uint256 j = i + 1; j < candidateCount; j++) {
                 if (totalStakes[i] < totalStakes[j]) {
                     // Swap stakes
                     uint256 tempStake = totalStakes[i];
@@ -612,18 +651,18 @@ contract Staking is Params {
                     totalStakes[j] = tempStake;
                     
                     // Swap validators
-                    address tempValidator = activeValidators[i];
-                    activeValidators[i] = activeValidators[j];
-                    activeValidators[j] = tempValidator;
+                    address tempValidator = candidateValidators[i];
+                    candidateValidators[i] = candidateValidators[j];
+                    candidateValidators[j] = tempValidator;
                 }
             }
         }
         
         // Return top validators (up to MAX_VALIDATORS)
-        uint256 returnLength = activeCount < MAX_VALIDATORS ? activeCount : MAX_VALIDATORS;
+        uint256 returnLength = candidateCount < MAX_VALIDATORS ? candidateCount : MAX_VALIDATORS;
         address[] memory topValidators = new address[](returnLength);
         for (uint256 i = 0; i < returnLength; i++) {
-            topValidators[i] = activeValidators[i];
+            topValidators[i] = candidateValidators[i];
         }
         
         return topValidators;
@@ -633,24 +672,26 @@ contract Staking is Params {
      * @dev Update rewards for a delegator
      * @param delegator Delegator address
      * @param validator Validator address
+     * @notice This function is internal and called from nonReentrant functions
+     * @notice Uses CEI pattern: calculates pending, updates state, then transfers
      */
     function _updateRewards(address delegator, address validator) internal {
         Delegation storage delegation = delegations[delegator][validator];
         if (delegation.amount > 0) {
             uint256 pending = delegation.amount
-                .mul(rewardPerShare[validator])
-                .div(1e18)
-                .sub(delegation.rewardDebt);
+                * rewardPerShare[validator]
+                / 1e18
+                - delegation.rewardDebt;
                 
             if (pending > 0) {
-                // Transfer first, then update state to avoid state inconsistency on failure
+                // Effects: update state before external call to prevent reentrancy
+                delegation.rewardDebt = delegation.amount
+                    * rewardPerShare[validator]
+                    / 1e18;
+                
+                // Interactions: external call after state update
                 (bool success, ) = payable(delegator).call{value: pending}("");
                 require(success, "Transfer failed");
-                
-                // Update reward debt after successful transfer to prevent reentrancy
-                delegation.rewardDebt = delegation.amount
-                    .mul(rewardPerShare[validator])
-                    .div(1e18);
                     
                 emit RewardsClaimed(delegator, validator, pending);
             }
@@ -673,13 +714,14 @@ contract Staking is Params {
      * @return isActive Whether validator is active (actually participating in consensus, in currentValidatorSet)
      * @return isJailed Whether validator is currently jailed
      * @notice isActive means validator is in currentValidatorSet and can actually produce blocks
+     * @notice Jailed validators can still be active in the current epoch until the next epoch transition
      */
     function getValidatorStatus(address validator) external view returns (bool isActive, bool isJailed) {
         ValidatorStake storage stake = validatorStakes[validator];
         isJailed = stake.isJailed;
         // isActive means validator is actually in currentValidatorSet (participating in consensus)
-        // Not just meeting conditions, but actually active in the current epoch
-        isActive = validatorsContract.isActiveValidator(validator) && !isJailed;
+        // Jailed validators remain active in currentValidatorSet until next epoch, so we don't check jailed status
+        isActive = validatorsContract.isActiveValidator(validator);
     }
 
     /**
@@ -709,6 +751,15 @@ contract Staking is Params {
     }
 
     /**
+     * @dev Get count of all registered validators
+     * @notice Returns the total number of validators that have registered (including inactive ones)
+     * @return Count of all registered validators
+     */
+    function getValidatorCount() external view returns (uint256) {
+        return allValidators.length;
+    }
+
+    /**
      * @dev Get delegation information
      * @param delegator Delegator address
      * @param validator Validator address
@@ -728,9 +779,9 @@ contract Staking is Params {
         
         if (delegation.amount > 0) {
             pending = delegation.amount
-                .mul(rewardPerShare[validator])
-                .div(1e18)
-                .sub(delegation.rewardDebt);
+                * rewardPerShare[validator]
+                / 1e18
+                - delegation.rewardDebt;
         }
         
         return (
@@ -759,34 +810,5 @@ contract Staking is Params {
      */
     function getUnbondingEntries(address delegator, address validator) external view returns (UnbondingEntry[] memory) {
         return unbondingDelegations[delegator][validator];
-    }
-
-    /**
-     * @dev Get total number of validators
-     * @return Total validator count
-     */
-    function getValidatorCount() external view returns (uint256) {
-        return allValidators.length;
-    }
-
-    /**
-     * @dev Get number of active validators (meeting minimum stake and not jailed)
-     * @return Active validator count
-     */
-    /**
-     * @dev Get count of active validators (in currentValidatorSet and not jailed)
-     * @return Count of validators actually participating in consensus
-     * @notice This delegates to Validators contract which counts validators in currentValidatorSet
-     */
-    function getActiveValidatorCount() public view returns (uint256) {
-        return validatorsContract.getActiveValidatorCount();
-    }
-
-    /**
-     * @dev Check if system has minimum required validators
-     * @return Whether system meets minimum validator requirement
-     */
-    function hasMinimumValidators() external view returns (bool) {
-        return getActiveValidatorCount() >= MIN_VALIDATORS;
     }
 }

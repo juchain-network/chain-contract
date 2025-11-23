@@ -888,7 +888,8 @@
 
 **期望效果**:
 - ✅ `currentValidatorSet` 更新
-- ✅ `highestValidatorsSet` 同步更新
+- ✅ `currentValidatorSet` 更新
+- ✅ `highestValidatorsSet` 通过其他方法管理（如 `tryAddValidatorToHighestSet`）
 - ✅ 新注册的验证者（如果质押足够）进入集合
 - ✅ 被 jail 的验证者被排除
 - ✅ 验证者按总质押排序
@@ -1272,16 +1273,33 @@
 
 **前置条件**:
 - ✅ 了解重入攻击机制
+- ✅ 验证者账户有奖励可提取
 
 **操作步骤**:
 
-1. **检查关键函数**
+1. **检查合约级保护**
+   - `Validators` 和 `Staking` 合约继承 `ReentrancyGuard`
+   - 关键函数使用 `nonReentrant` 修饰符
+
+2. **测试函数级保护**
+   - 尝试在 `withdrawProfits()` 中重入（应该失败）
+   - 尝试在 `withdrawValidatorStake()` 中重入（应该失败）
+   - 尝试在 `claimRewards()` 中重入（应该失败）
+
+3. **检查区块级保护**
    - `distributeBlockReward()` 使用 `operationsDone` 标志
-   - `updateValidatorSetByStake()` 使用 `operationsDone` 标志
+   - `updateActiveValidatorSet()` 使用 `operationsDone` 标志
+
+4. **验证 CEI 模式**
+   - 检查关键函数是否遵循 Checks-Effects-Interactions 模式
+   - 状态更新在外部调用之前
 
 **期望效果**:
-- ✅ 同一块内同一操作只能执行一次
-- ✅ 重入攻击被防护
+- ✅ 合约级保护：`nonReentrant` 修饰符防止重入
+- ✅ 函数级保护：重入调用会被 `ReentrancyGuard` 拒绝
+- ✅ 区块级保护：同一块内同一操作只能执行一次
+- ✅ CEI 模式：状态更新在外部调用之前，确保一致性
+- ✅ 重入攻击被完全防护
 
 **实际结果**:
 ```
@@ -1364,9 +1382,11 @@
 
 ### 安全检查
 - [ ] 最小验证者数量保护
-- [ ] 重入攻击防护
+- [ ] 重入攻击防护（ReentrancyGuard + nonReentrant）
 - [ ] 边界情况处理
 - [ ] 状态一致性
+- [ ] 配置参数验证（防止除零等错误）
+- [ ] CEI 模式验证（Checks-Effects-Interactions）
 
 ### 性能检查
 - [ ] 交易确认时间
@@ -1402,7 +1422,12 @@
 
 ---
 
-**文档版本**: v1.0.0  
+**文档版本**: v1.1.0  
 **创建日期**: 2025-01-21  
 **最后更新**: 2025-01-21
+
+**更新内容（v1.1.0）：**
+- 更新重入攻击防护测试场景：添加 ReentrancyGuard 和 nonReentrant 测试
+- 更新安全机制说明：完善 CEI 模式验证
+- 更新配置参数测试：移除增发相关测试（cid 5 和 6 已移除）
 

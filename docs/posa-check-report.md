@@ -9,7 +9,7 @@
 2. Proposal.voteProposal() → 投票通过
 3. 等待 7 天（isProposalValidForStaking 检查）
 4. Staking.registerValidator() → 质押注册
-5. 等待 Epoch → updateValidatorSetByStake() → 更新验证者集合
+5. 等待 Epoch → 共识层调用 Staking.getTopValidators() → Validators.updateActiveValidatorSet() → 更新验证者集合
 6. 开始出块
 
 **检查结果：** ✅ 正确
@@ -42,7 +42,7 @@
 1. Prepare() → getTopValidators() [parent state] → 写入 header.Extra
 2. Finalize() → punishOutOfTurnValidator() [可能 jail 验证者]
 3. Finalize() → handleEpochTransition()
-   - updateValidators() → updateValidatorSetByStake() [current state]
+   - updateValidators() → Staking.getTopValidators() [current state] → Validators.updateActiveValidatorSet() [current state]
    - 返回过滤后的验证者列表（不包含被 jail 的验证者）✅
 4. snapshot.apply() → getTopValidatorsFunc() [parent state]
    - 使用 getTopValidators() 批量获取，已过滤被 jail 的验证者 ✅
@@ -71,7 +71,7 @@
 
 **检查点：**
 - `highestValidatorsSet`: 在 removeValidator() 时立即更新 ✅
-- `currentValidatorSet`: 在 updateValidatorSetByStake() 时更新（epoch）✅
+- `currentValidatorSet`: 在 updateActiveValidatorSet() 时更新（epoch）✅
 - `snap.Validators`: 在 snapshot.apply() 时更新（epoch，已过滤被 jail 的）✅
 
 **潜在问题：**
@@ -135,7 +135,8 @@ function getActiveValidatorCount() public view returns (uint256) {
 
 **Epoch 块处理：**
 - getTopValidators() [parent state]: 1 次
-- updateValidatorSetByStake() [current state]: 1 次
+- getTopValidators() [current state]: 1 次（用于更新验证者集合）
+- updateActiveValidatorSet() [current state]: 1 次
 - snapshot.apply() → getTopValidatorsFunc() [parent state]: 1 次
 
 **检查结果：** ✅ 合理
@@ -169,7 +170,7 @@ function getActiveValidatorCount() public view returns (uint256) {
 - `emergencyExit()` 有保护：检查退出后剩余验证者数量 >= MIN_VALIDATORS (3)
 - `emergencyExit()` 如果验证者在 currentValidatorSet 中，会先 jail 确保平滑退出
 - `emergencyExit()` 会从 allValidators 数组中移除验证者
-- `getTopValidators()` 和 `updateValidatorSetByStake()` 不检查最小值
+- `getTopValidators()` 和 `updateActiveValidatorSet()` 不检查最小值
 - 共识层不检查最小值
 
 **分析：**
@@ -277,13 +278,22 @@ if err != nil {
 
 ---
 
-### 5.3 重入攻击 ✅
+### 5.3 重入攻击 ✅ 已增强
 
 **检查：**
-- operationsDone[block.number] 防止重入 ✅
-- 立即设置标志 ✅
+- **合约级保护**：`Validators` 和 `Staking` 合约继承 `ReentrancyGuard` ✅
+- **函数级保护**：关键函数使用 `nonReentrant` 修饰符 ✅
+  - `Validators.withdrawProfits()` - 提取收益 ✅
+  - `Staking.withdrawValidatorStake()` - 提取质押 ✅
+  - `Staking.emergencyExit()` - 紧急退出 ✅
+  - `Staking.claimRewards()` - 领取奖励 ✅
+- **区块级保护**：`operationsDone[block.number]` 防止区块级重入 ✅
+- **CEI 模式**：所有关键函数遵循 Checks-Effects-Interactions 模式 ✅
+  - 先执行检查（Checks）
+  - 再更新状态（Effects）
+  - 最后执行外部调用（Interactions）
 
-**检查结果：** ✅ 安全
+**检查结果：** ✅ 安全（已增强）
 
 ---
 
@@ -366,16 +376,17 @@ if err != nil {
 - ✅ 即使最后一个验证者被 jail，也不会从 `highestValidatorsSet` 中移除
 - ✅ 但该验证者会被标记为 jailed，在 `getTopValidators()` 中会被过滤
 - ⚠️ 如果最后一个验证者被 jail，`getTopValidators()` 可能返回空列表
-- ⚠️ `updateValidatorSetByStake()` 会 require(topValidators.length > 0)，可能导致 epoch 块失败
+- ⚠️ 共识层应该检查验证者列表不为空后再调用 `updateActiveValidatorSet()`，否则会导致 epoch 块失败
 
 **进一步分析：**
 - 如果最后一个验证者被 jail：
   1. `removeValidator()` 不会从 `highestValidatorsSet` 中移除它（因为 `length == 1`）✅
   2. 但 `getTopValidators()` 会过滤掉它（因为 `isJailed = true`），返回空列表
-  3. `updateValidatorSetByStake()` 会 require(topValidators.length > 0)，导致失败
+  3. 共识层应该检查验证者列表不为空后再调用 `updateActiveValidatorSet()`
+  4. `updateActiveValidatorSet()` 会 require(newSet.length > 0)，如果传入空列表会导致失败
 
 **潜在问题：**
-- 如果最后一个验证者被 jail，`updateValidatorSetByStake()` 会失败
+- 如果最后一个验证者被 jail，共识层传入空列表会导致 `updateActiveValidatorSet()` 失败
 - 但这是合理的，因为如果最后一个验证者被 jail，链应该停止（安全优先）
 
 **实际场景：**
@@ -399,7 +410,7 @@ if err != nil {
 
 ---
 
-## 七、代码优化
+## 七、代码优化和安全增强
 
 ### 7.1 移除冗余调用 ✅
 
@@ -410,6 +421,70 @@ if err != nil {
 **修复：**
 - 移除了冗余的 `getTopValidators()` 调用
 - `updateValidatorsByStake()` 内部已经会调用 `staking.getTopValidators()`，不需要额外调用
+
+**检查结果：** ✅ 已优化
+
+---
+
+### 7.2 SafeMath 移除 ✅
+
+**优化内容：**
+- 所有合约已移除 SafeMath 依赖
+- 使用 Solidity 0.8+ 内置溢出检查
+- 代码更简洁，Gas 成本更低
+
+**影响范围：**
+- `Validators.sol`: 5 处替换
+- `Staking.sol`: 30+ 处替换
+- 所有 `.add()` → `+`
+- 所有 `.sub()` → `-`
+- 所有 `.mul()` → `*`
+- 所有 `.div()` → `/`
+
+**检查结果：** ✅ 已优化
+
+---
+
+### 7.3 配置参数验证 ✅
+
+**优化内容：**
+- `Proposal.updateConfig()` 添加了所有参数的范围验证
+- 防止配置错误（如 `decreaseRate = 0` 导致除零）
+
+**验证规则：**
+- `cid = 0` (proposalLastingPeriod): 1小时 - 30天
+- `cid = 1` (punishThreshold): 必须 > 0
+- `cid = 2` (removeThreshold): 必须 > 0
+- `cid = 3` (decreaseRate): 必须 > 0（防止除零）
+- `cid = 4` (withdrawProfitPeriod): 必须 > 0
+
+**检查结果：** ✅ 已增强
+
+---
+
+### 7.4 增发功能移除 ✅
+
+**优化内容：**
+- 移除了 `increasePeriod` 和 `receiverAddr` 配置
+- 系统不再支持代币增发/通胀
+- 简化了配置管理逻辑
+
+**移除内容：**
+- `Proposal.increasePeriod` 属性
+- `Proposal.receiverAddr` 属性
+- `updateConfig()` 中对 cid 5 和 6 的处理
+
+**检查结果：** ✅ 已移除
+
+---
+
+### 7.5 状态管理优化 ✅
+
+**优化内容：**
+- `Validator` struct 中移除了冗余的 `status` 字段
+- 状态由 `Staking` 合约统一管理（`isJailed`, `jailUntilBlock`）
+- `getValidatorInfo()` 动态计算状态（向后兼容）
+- 减少存储成本，提高查询效率
 
 **检查结果：** ✅ 已优化
 
@@ -428,11 +503,16 @@ if err != nil {
 7. ✅ emergencyExit() 逻辑完善 → 检查退出后剩余验证者数量，如果验证者在 currentValidatorSet 中会先 jail
 8. ✅ withdrawValidatorStake() 逻辑完善 → 不允许部分退出导致验证者变为非活跃
 9. ✅ allValidators 数组清理 → emergencyExit() 时从数组中移除验证者
+10. ✅ 重入攻击防护增强 → 添加 ReentrancyGuard 和 nonReentrant 修饰符
+11. ✅ SafeMath 移除 → 使用 Solidity 0.8+ 内置运算符
+12. ✅ 配置参数验证 → 添加所有参数的范围验证，防止除零等错误
+13. ✅ 增发功能移除 → 移除 increasePeriod 和 receiverAddr，系统不再支持代币增发
+14. ✅ 状态管理优化 → 移除 Validator struct 中冗余的 status 字段
 
 ### 8.2 需要关注的问题 ⚠️
 
 1. ✅ 所有验证者都被 Jail → **不存在**（合约中有保护机制，至少保留 1 个验证者）
-2. ⚠️ 最后一个验证者被 Jail 时 `updateValidatorSetByStake()` 可能失败 → 可接受（安全优先）
+2. ⚠️ 最后一个验证者被 Jail 时 `updateActiveValidatorSet()` 可能失败 → 可接受（安全优先）
 3. ✅ Fallback 逻辑 → **已修复**（区分失败原因，只在状态不可用时 fallback）
 
 ### 8.3 整体评估
@@ -470,12 +550,15 @@ if err != nil {
 
 - ✅ Jail 后立即无法出块
 - ✅ Epoch 块验证允许 Jail 导致的不一致
-- ✅ 重入攻击防护
+- ✅ 重入攻击防护（ReentrancyGuard + nonReentrant + CEI 模式）
+- ✅ 配置参数验证（防止除零等错误）
+- ✅ 溢出保护（Solidity 0.8+ 内置检查）
+- ✅ 状态一致性（单一数据源管理）
 
 ### 8.5 边界情况 ⚠️
 
 - ✅ 所有验证者都被 Jail → **不存在**（合约中有保护机制，至少保留 1 个验证者）
-- ⚠️ 最后一个验证者被 Jail 时 `updateValidatorSetByStake()` 可能失败 → 可接受（安全优先）
+- ⚠️ 最后一个验证者被 Jail 时 `updateActiveValidatorSet()` 可能失败 → 可接受（安全优先）
 - ⚠️ Fallback 逻辑（安全措施，可接受）
 
 ---
@@ -486,20 +569,88 @@ if err != nil {
 
 **关键修复：**
 1. ✅ Jail 后立即无法出块（snapshot.apply 中过滤）
-2. ✅ Epoch 块被 jail 的验证者立即排除（updateValidatorSetByStake 返回过滤后的列表）
+2. ✅ Epoch 块被 jail 的验证者立即排除（共识层调用 getTopValidators 获取过滤后的列表，然后调用 updateActiveValidatorSet 更新）
 3. ✅ 性能优化（批量获取 vs 逐个检查）
 4. ✅ getActiveValidators() 返回实时数据（POSA 模式）
 5. ✅ emergencyExit() 逻辑完善（检查退出后剩余验证者数量，如果验证者在 currentValidatorSet 中会先 jail）
 6. ✅ withdrawValidatorStake() 逻辑完善（不允许部分退出导致验证者变为非活跃）
 7. ✅ allValidators 数组清理（emergencyExit() 时从数组中移除验证者）
+8. ✅ 重入攻击防护增强（ReentrancyGuard + nonReentrant + CEI 模式）
+9. ✅ SafeMath 移除（使用 Solidity 0.8+ 内置运算符，Gas 优化）
+10. ✅ 配置参数验证（防止除零等配置错误）
+11. ✅ 增发功能移除（系统不再支持代币增发）
+12. ✅ 状态管理优化（移除冗余字段，统一管理）
 
 **剩余问题：**
 - ✅ 所有验证者都被 Jail → **不存在**（合约中有保护机制）
-- ⚠️ 最后一个验证者被 Jail 时 `updateValidatorSetByStake()` 可能失败 → 可接受（安全优先）
+- ⚠️ 最后一个验证者被 Jail 时 `updateActiveValidatorSet()` 可能失败 → 可接受（安全优先）
 - ⚠️ Fallback 逻辑不过滤被 Jail 的验证者（安全措施，可接受）
 
 **建议：**
 - 当前实现已经非常完善
 - 可以考虑添加紧急恢复机制（但需要额外的治理流程）
 - 建议进行全面的集成测试，特别是边界情况
+
+---
+
+## 十、技术改进总结
+
+### 10.1 安全增强 ✅
+
+**重入攻击防护增强：**
+- ✅ `Validators` 和 `Staking` 合约继承 `ReentrancyGuard`
+- ✅ 关键函数使用 `nonReentrant` 修饰符
+- ✅ 遵循 CEI 模式（Checks-Effects-Interactions）
+- ✅ 区块级保护：`operationsDone[block.number]` 标志
+
+**配置参数验证：**
+- ✅ 所有配置参数都有范围验证
+- ✅ 防止除零错误（`decreaseRate > 0`）
+- ✅ 防止无效配置（提案有效期范围、阈值验证等）
+
+### 10.2 性能优化 ✅
+
+**SafeMath 移除：**
+- ✅ 所有合约使用 Solidity 0.8+ 内置运算符
+- ✅ 代码更简洁，Gas 成本更低
+- ✅ 影响范围：`Validators.sol` 和 `Staking.sol` 中所有算术运算
+
+### 10.3 功能简化 ✅
+
+**增发功能移除：**
+- ✅ 移除了 `increasePeriod` 和 `receiverAddr` 配置
+- ✅ 系统不再支持代币增发/通胀
+- ✅ 简化了配置管理逻辑
+
+**状态管理优化：**
+- ✅ `Validator` struct 中移除了冗余的 `status` 字段
+- ✅ 状态由 `Staking` 合约统一管理
+- ✅ `getValidatorInfo()` 动态计算状态（向后兼容）
+- ✅ 减少存储成本，提高查询效率
+
+### 10.4 代码质量 ✅
+
+**整体评估：**
+- ✅ 安全性：已增强（重入保护、参数验证）
+- ✅ 性能：已优化（SafeMath 移除、批量获取）
+- ✅ 可维护性：已提升（代码简化、状态统一管理）
+- ✅ 健壮性：已增强（配置验证、边界检查）
+
+---
+
+**文档版本**: v1.2.0  
+**最后更新**: 2025-01-21  
+**维护者**: POSA 开发团队
+
+**更新内容（v1.2.0）：**
+- 更新验证者集合更新机制：`updateValidatorSetByStake()` 已删除，改为 `updateActiveValidatorSet()`
+- 明确共识层负责调用 `Staking.getTopValidators()` 获取验证者列表，然后调用 `updateActiveValidatorSet()` 更新
+- 更新所有相关流程描述和检查清单
+
+**更新内容（v1.1.0）：**
+- 更新重入攻击防护说明：添加 ReentrancyGuard 和 nonReentrant 详细说明
+- 添加代码优化章节：SafeMath 移除、配置参数验证、增发功能移除、状态管理优化
+- 更新已修复问题列表：添加所有技术改进项
+- 更新安全性检查清单：添加新的安全增强项
+- 添加技术改进总结章节：全面总结所有技术改进
 

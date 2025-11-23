@@ -58,25 +58,29 @@ contract StakingTest is Test {
         assertEq(Staking(STAKING).MAX_VALIDATORS(), 21);
         assertEq(Staking(STAKING).MIN_VALIDATORS(), 3);
         assertEq(Staking(STAKING).getValidatorCount(), 0);
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 0);
-        assertFalse(Staking(STAKING).hasMinimumValidators());
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 0);
+        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
+        assertLt(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
     }
     
     // Helper function to set up validator with pass status
     function _setupValidatorPass(address validator) internal {
         // Set pass status directly (simulating proposal passed)
         // In real scenario, this would be done through Proposal contract voting
-        // Storage layout: Params has initialized (slot 0), Proposal has 7 uint256/address vars (slots 1-7)
-        // pass mapping is at slot 8, proposalPassedTime mapping is at slot 9
+        // Storage layout: 
+        // - Params: initialized (slot 0)
+        // - Proposal: proposalLastingPeriod (slot 1), punishThreshold (slot 2), removeThreshold (slot 3),
+        //             decreaseRate (slot 4), withdrawProfitPeriod (slot 5),
+        //             pass mapping (slot 6), proposalPassedTime mapping (slot 7)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(8))), // pass mapping slot
+            keccak256(abi.encode(validator, uint256(6))), // pass mapping slot
             bytes32(uint256(1))
         );
         // Set proposalPassedTime to current time (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(9))), // proposalPassedTime mapping slot
+            keccak256(abi.encode(validator, uint256(7))), // proposalPassedTime mapping slot
             bytes32(block.timestamp)
         );
     }
@@ -119,7 +123,7 @@ contract StakingTest is Test {
         // Update active validator set to make validator active
         _updateActiveValidatorSet();
         
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 1);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 1);
         
         (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, bool isJailed, uint256 jailUntilBlock) = 
             Staking(STAKING).getValidatorInfo(VALIDATOR1);
@@ -173,8 +177,9 @@ contract StakingTest is Test {
         // Update active validator set to make validators active
         _updateActiveValidatorSet();
         
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 3);
-        assertTrue(Staking(STAKING).hasMinimumValidators());
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
+        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
+        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
         
         // Now register a 4th validator
         _setupValidatorPass(VALIDATOR4);
@@ -184,18 +189,31 @@ contract StakingTest is Test {
         // Update active validator set again
         _updateActiveValidatorSet();
         
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 4);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
-        // Test that 4th validator can exit (leaving 3)
+        // Test that 4th validator must resign first before exiting
+        vm.prank(VALIDATOR4);
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
+        Staking(STAKING).emergencyExit();
+        
+        // Validator resigns first
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).resignValidator();
+        
+        // Update active validator set to exclude resigned validator
+        _updateActiveValidatorSet();
+        
+        // Now validator can exit
         vm.prank(VALIDATOR4);
         Staking(STAKING).emergencyExit();
         
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 3);
-        assertTrue(Staking(STAKING).hasMinimumValidators());
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
+        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
+        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
         
-        // Test that 3rd validator cannot exit (would leave 2)
+        // Test that 3rd validator must resign first before exiting
         vm.prank(VALIDATOR3);
-        vm.expectRevert("Cannot exit: would leave less than minimum validators");
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
         Staking(STAKING).emergencyExit();
     }
 
@@ -228,7 +246,7 @@ contract StakingTest is Test {
         
         (uint256 selfStake,,,, ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE * 2 - withdrawAmount);
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 3);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
     }
 
     function test_RevertWhen_PartialWithdrawalBelowMinimum() public {
@@ -353,13 +371,14 @@ contract StakingTest is Test {
         // Update active validator set to make validators active
         _updateActiveValidatorSet();
         
-        assertTrue(Staking(STAKING).hasMinimumValidators());
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 3);
+        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
+        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
         
-        // Test that no validator can exit
+        // Test that no validator can exit (they are in active set, must resign first)
         for (uint i = 0; i < 3; i++) {
             vm.prank(validatorAddrs[i]);
-            vm.expectRevert("Cannot exit: would leave less than minimum validators");
+            vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
             Staking(STAKING).emergencyExit();
         }
         
@@ -371,17 +390,24 @@ contract StakingTest is Test {
         // Update active validator set again
         _updateActiveValidatorSet();
         
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 4);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
-        // Now exactly one validator should be able to exit
+        // Validator must resign first before exiting
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).resignValidator();
+        
+        // Update active validator set to exclude resigned validator
+        _updateActiveValidatorSet();
+        
+        // Now validator can exit
         vm.prank(VALIDATOR4);
         Staking(STAKING).emergencyExit();
         
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 3);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
         
-        // Back to minimum - no one can exit again
+        // Back to minimum - no one can exit again (they are in active set, must resign first)
         vm.prank(VALIDATOR1);
-        vm.expectRevert("Cannot exit: would leave less than minimum validators");
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
         Staking(STAKING).emergencyExit();
     }
 
@@ -404,22 +430,23 @@ contract StakingTest is Test {
         // Update active validator set to make validators active
         _updateActiveValidatorSet();
         
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 4);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
         // Jail one validator (simulating punishment contract call)
         vm.prank(PUNISH); // Punish contract
         Staking(STAKING).jailValidator(VALIDATOR4, 1000);
         
-        // Active count should decrease (jailed validators are excluded from active count)
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 3);
+        // Active count should remain 4 (jailed validators are still in currentValidatorSet until next epoch)
+        // They can still vote, but won't receive rewards
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
         (,,, bool isJailed, uint256 jailUntilBlock) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertTrue(isJailed);
         assertEq(jailUntilBlock, block.number + 1000);
         
-        // Now no validator should be able to exit (would leave less than 3 active)
+        // Now no validator should be able to exit (they are in active set, must resign first)
         vm.prank(VALIDATOR1);
-        vm.expectRevert("Cannot exit: would leave less than minimum validators");
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
         Staking(STAKING).emergencyExit();
     }
 
@@ -679,6 +706,13 @@ contract StakingTest is Test {
         // Update active validator set to make validators active
         _updateActiveValidatorSet();
         
+        // Validator must resign first before exiting
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).resignValidator();
+        
+        // Update active validator set to exclude resigned validator
+        _updateActiveValidatorSet();
+        
         // Emergency exit
         uint256 balanceBefore = VALIDATOR4.balance;
         vm.startPrank(VALIDATOR4);
@@ -694,7 +728,7 @@ contract StakingTest is Test {
         // After exit, validator is removed from active set, so count decreases
         // But we need to update the set to reflect the change
         _updateActiveValidatorSet();
-        assertEq(Staking(STAKING).getActiveValidatorCount(), 3);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
     }
 
     function test_RevertWhen_EmergencyExitMinValidators() public {
@@ -711,10 +745,10 @@ contract StakingTest is Test {
         // Update active validator set to make validators active
         _updateActiveValidatorSet();
         
-        // Try emergency exit when at minimum
+        // Try emergency exit when at minimum (validator is in active set, must resign first)
         address lastValidator = address(uint160(1002));
         vm.startPrank(lastValidator);
-        vm.expectRevert("Cannot exit: would leave less than minimum validators");
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
         Staking(STAKING).emergencyExit();
         vm.stopPrank();
     }

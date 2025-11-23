@@ -224,11 +224,12 @@ congress-cli monitor punishments --from-block 100000
 
 ### 🚨 需要关注的问题
 
-1. **SafeMath 兼容性**
+1. **SafeMath 兼容性** ✅ 已修复
 
    ```solidity
-   // Solidity ^0.8.20 已内置溢出检查，SafeMath 不再必要
-   using SafeMath for uint256; // ❌ 不必要的依赖
+   // ✅ 已移除 SafeMath 依赖，使用 Solidity ^0.8.20 内置溢出检查
+   // SafeMath 库和测试文件已删除
+   // 所有合约使用原生运算符: +, -, *, /
    ```
 
 2. **硬编码地址风险**
@@ -280,9 +281,9 @@ congress-cli monitor punishments --from-block 100000
 ### 1. 立即修复 (Critical)
 
 ```solidity
-// ✅ 移除SafeMath，使用内置检查
-// 删除: using SafeMath for uint256;
-// 替换: validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming + per;
+// ✅ 已移除SafeMath，使用内置检查
+// SafeMath 库已删除，所有合约使用 Solidity 0.8+ 原生运算符
+// 示例: validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming + per;
 
 // ✅ 添加重入保护
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -379,7 +380,7 @@ struct EconomicParams {
 
 ### 阶段1 (紧急修复 - 1-2周)
 
-1. 移除SafeMath依赖
+1. 移除SafeMath依赖 ✅ 已完成（库文件和测试已删除）
 2. 添加重入保护
 3. 修复硬编码地址
 4. 添加提案ID碰撞保护

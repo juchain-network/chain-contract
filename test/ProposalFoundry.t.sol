@@ -132,24 +132,23 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testConfigUpdateAll() public {
         Proposal p = Proposal(PROPOSAL);
-        uint256[7] memory cids = [uint256(0),1,2,3,4,5,6];
-        uint256[6] memory vals = [uint256(100),200,300,400,500,600];
-        address recv = makeAddr("recv");
+        // 注意: cid 5 (increasePeriod) 和 cid 6 (receiverAddr) 已移除，系统不再支持代币增发
+        uint256[5] memory cids = [uint256(0),1,2,3,4];
+        // cid 0 (proposalLastingPeriod) 需要 >= 1 hours && <= 30 days，使用 3600 秒（1小时）
+        uint256[5] memory vals = [uint256(3600),200,300,400,500];
         for (uint i = 0; i < cids.length; i++) {
             vm.warp(4_000_000 + i);
-            bytes32 id = keccak256(abi.encodePacked(address(this), cids[i], i==6?uint256(uint160(recv)):vals[i], block.timestamp));
-            p.createUpdateConfigProposal(cids[i], i==6?uint256(uint160(recv)):vals[i]);
+            bytes32 id = keccak256(abi.encodePacked(address(this), cids[i], vals[i], block.timestamp));
+            p.createUpdateConfigProposal(cids[i], vals[i]);
             vm.prank(v1); p.voteProposal(id, true);
             vm.prank(v2); p.voteProposal(id, true);
             vm.prank(v3); p.voteProposal(id, true);
 
-            if (cids[i]==0) require(p.proposalLastingPeriod()==vals[0], "cid0");
+            if (cids[i]==0) require(p.proposalLastingPeriod()==3600, "cid0");
             else if (cids[i]==1) require(p.punishThreshold()==vals[1], "cid1");
             else if (cids[i]==2) require(p.removeThreshold()==vals[2], "cid2");
             else if (cids[i]==3) require(p.decreaseRate()==vals[3], "cid3");
             else if (cids[i]==4) require(p.withdrawProfitPeriod()==vals[4], "cid4");
-            else if (cids[i]==5) require(p.increasePeriod()==vals[5], "cid5");
-            else if (cids[i]==6) require(p.receiverAddr()==recv, "cid6");
         }
     }
 }
