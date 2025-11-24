@@ -706,14 +706,14 @@ func queryTopValidators(cmd *cobra.Command, args []string) {
 	}
 	defer client.Close()
 
-	// Create call
-	parsedABI, err := abi.JSON(strings.NewReader(stakingABI))
+	// Create call - use Validators contract for unified interface
+	parsedABI, err := abi.JSON(strings.NewReader(validatorsABI))
 	if err != nil {
 		PrintError("Failed to parse ABI", err)
 		return
 	}
 
-	// Note: Staking.getTopValidators() has no parameters, returns all top validators
+	// Note: Validators.getTopValidators() has no parameters, returns all top validators
 	data, err := parsedABI.Pack("getTopValidators")
 	if err != nil {
 		PrintError("Failed to pack call data", err)
@@ -725,8 +725,8 @@ func queryTopValidators(cmd *cobra.Command, args []string) {
 		To:   &common.Address{},
 		Data: data,
 	}
-	stakingAddr := common.HexToAddress(StakingContractAddr)
-	msg.To = &stakingAddr
+	validatorsAddr := common.HexToAddress(ValidatorContractAddr)
+	msg.To = &validatorsAddr
 
 	result, err := client.CallContract(context.Background(), msg, nil)
 	if err != nil {
