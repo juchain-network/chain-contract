@@ -88,8 +88,8 @@ contract StakingTest is Test {
     
     // Helper function to update active validator set (simulating epoch update)
     function _updateActiveValidatorSet() internal {
-        // Get top validators from Staking
-        address[] memory topValidators = Staking(STAKING).getTopValidators();
+        // Get top validators from Validators contract (unified interface)
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
         
         if (topValidators.length == 0) {
             return; // No validators to update
@@ -324,7 +324,7 @@ contract StakingTest is Test {
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE * 3}(COMMISSION_RATE);
         
-        address[] memory topValidators = Staking(STAKING).getTopValidators();
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
         
         assertEq(topValidators.length, 3);
         // Should be ordered by stake (highest first)
@@ -348,7 +348,7 @@ contract StakingTest is Test {
         vm.prank(DELEGATOR1);
         Staking(STAKING).delegate{value: MIN_STAKE}(VALIDATOR1);
         
-        address[] memory topValidators = Staking(STAKING).getTopValidators();
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
         
         assertEq(topValidators.length, 2);
         // VALIDATOR1 should be first (20,000 total vs 10,000)

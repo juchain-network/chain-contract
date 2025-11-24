@@ -11,8 +11,6 @@ interface IValidators {
     function tryAddValidatorToHighestSet(address validator) external;
     function tryActive(address validator) external returns (bool);
     function isActiveValidator(address who) external view returns (bool);
-    function getActiveValidatorCount() external view returns (uint256);
-    function getTopValidators() external view returns (address[] memory);
     function removeFromHighestSet(address validator) external;
 }
 
@@ -212,8 +210,9 @@ contract Staking is Params, ReentrancyGuard {
         allValidators.push(msg.sender);
         totalStaked = totalStaked + msg.value;
 
-        // Add to Validators highest validators set
-        validatorsContract.tryAddValidatorToHighestSet(msg.sender);
+        // Activate validator (register = activate)
+        // tryActive will add to highestValidatorsSet and emit LogActive event
+        validatorsContract.tryActive(msg.sender);
 
         emit ValidatorRegistered(msg.sender, msg.value, commissionRate);
     }
@@ -594,12 +593,13 @@ contract Staking is Params, ReentrancyGuard {
         // Must have passed proposal (reproposal required) - no automatic restoration
         require(proposalContract.pass(validator), "Must pass reproposal first");
         
+        // Activate validator first (must succeed before unjailing)
+        // This ensures validator is added to highestValidatorsSet before state change
+        require(validatorsContract.tryActive(validator), "Failed to activate validator");
+        
         validatorStakes[validator].isJailed = false;
         validatorStakes[validator].jailUntilBlock = 0;
         emit ValidatorUnjailed(validator);
-        
-        // Try to reactivate validator (pass should already be true from reproposal)
-        try validatorsContract.tryActive(validator) {} catch {}
     }
 
     /**
@@ -632,28 +632,23 @@ contract Staking is Params, ReentrancyGuard {
 
     /**
      * @dev Get top validators by total stake
-     * @notice First gets validators from Validators contract (highestValidatorsSet),
-     *         then sorts them by total stake (selfStake + totalDelegated)
+     * @notice Sorts the provided validators by total stake (selfStake + totalDelegated)
+     * @param validators Array of validator addresses to sort
      * @return Top validators list (up to MAX_VALIDATORS), sorted by total stake
      */
-    function getTopValidators() external view returns (address[] memory) {
-        // First, get validators from Validators contract (highestValidatorsSet)
-        address[] memory validatorsFromContract = validatorsContract.getTopValidators();
-        
-        if (validatorsFromContract.length == 0) {
+    function getTopValidators(address[] memory validators) external view returns (address[] memory) {
+        if (validators.length == 0) {
             return new address[](0);
         }
         
         // Create arrays for validators and their total stakes
-        address[] memory candidateValidators = new address[](validatorsFromContract.length);
-        uint256[] memory totalStakes = new uint256[](validatorsFromContract.length);
+        address[] memory candidateValidators = new address[](validators.length);
+        uint256[] memory totalStakes = new uint256[](validators.length);
         uint256 candidateCount = 0;
         
         // Collect validators and their total stakes for sorting
-        // Note: validatorsContract.getTopValidators() should only return validators
-        // that meet all requirements
-        for (uint256 i = 0; i < validatorsFromContract.length; i++) {
-            address validator = validatorsFromContract[i];
+        for (uint256 i = 0; i < validators.length; i++) {
+            address validator = validators[i];
             ValidatorStake storage stake = validatorStakes[validator];
             
             candidateValidators[candidateCount] = validator;

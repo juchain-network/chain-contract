@@ -146,9 +146,10 @@ contract Validators is Params, ReentrancyGuard {
      * @dev Activate a validator (called by Proposal or Staking contract)
      * @param validator Validator address to activate
      * @notice This function is called when:
-     *   - Proposal passes (by Proposal contract)
-     *   - Validator is unjailed (by Staking contract)
-     * @notice Validator should already be unjailed before calling this function
+     *   - Validator registers (by Staking contract) - register = activate
+     *   - Validator is unjailed (by Staking contract) - called before unjailing state change
+     * @notice This function does NOT check jailed status, only checks if validator is in currentValidatorSet
+     * @notice Can be called even if validator is still jailed (e.g., in unjailValidator before state change)
      */
     function tryActive(address validator) external onlyInitialized returns (bool) {
         require(
@@ -434,11 +435,24 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     /**
-     * @dev Get top validators (POA mode - returns cached highestValidatorsSet)
-     * @return Top validators list from cached set
+     * @dev Get highest validators set (returns cached highestValidatorsSet)
+     * @return Highest validators list from cached set
+     */
+    function getHighestValidators() public view returns (address[] memory) {
+        return highestValidatorsSet;
+    }
+
+    /**
+     * @dev Get top validators (unified interface for consensus)
+     * @notice Calls Staking.getTopValidators() with highestValidatorsSet for sorting by stake
+     * @return Top validators list, sorted by stake in POSA
      */
     function getTopValidators() public view returns (address[] memory) {
-        return highestValidatorsSet;
+        // Get highest validators set
+        address[] memory highestValidators = highestValidatorsSet;
+        
+        // Call Staking contract to sort by stake
+        return staking.getTopValidators(highestValidators);
     }
 
     function validateDescription(

@@ -122,6 +122,17 @@ const stakingABI = `[
 		"type": "function"
 	},
 	{
+		"inputs": [{"internalType": "address[]", "name": "validators", "type": "address[]"}],
+		"name": "getTopValidators",
+		"outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]`
+
+// Validators contract ABI for getTopValidators
+const validatorsABI = `[
+	{
 		"inputs": [],
 		"name": "getTopValidators",
 		"outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
