@@ -203,7 +203,8 @@ contract Validators is Params, ReentrancyGuard {
         return true;
     }
 
-    // distributeBlockReward distributes block reward to all active validators
+    // distributeBlockReward distributes block reward to the block producer
+    // If the block producer is jailed, the reward is distributed to other active validators
     function distributeBlockReward() external payable onlyMiner onlyInitialized {
         // Check if block reward has already been distributed for this block
         if (operationsDone[block.number][uint8(Operations.Distribute)] == true) {
@@ -228,8 +229,14 @@ contract Validators is Params, ReentrancyGuard {
             return;
         }
 
-        // Jailed validator can't get profits.
-        addProfitsToActiveValidators(hb, address(0));
+        // Check if the block producer is jailed
+        if (staking.isValidatorJailed(val)) {
+            // If jailed, distribute reward to other active validators (excluding the jailed producer)
+            addProfitsToActiveValidators(hb, val);
+        } else {
+            // If not jailed, reward goes directly to the block producer
+            validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming + hb;
+        }
 
         emit LogDistributeBlockReward(val, hb, block.timestamp);
     }
