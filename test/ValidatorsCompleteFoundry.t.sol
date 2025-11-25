@@ -179,18 +179,21 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     // 区块奖励分发测试
     function testDistributeBlockReward() public {
         // 对应 "miner can distribute to validator contract, the profits should be right updated"
+        // New logic: reward goes directly to the block producer (miner = v1)
         uint256 fee = 0.3 ether;
-        uint256 expectPerFee = 0.1 ether;
         
         vm.prank(miner);
         Validators(VALIDATORS).distributeBlockReward{value: fee}();
         
-        // 检查每个验证者获得的奖励
-        for (uint i = 0; i < 3; i++) {
-            address val = i == 0 ? v1 : (i == 1 ? v2 : v3);
-            (, , uint256 aacIncoming,,) = Validators(VALIDATORS).getValidatorInfo(val);
-            require(aacIncoming == expectPerFee, "should get expected fee");
-        }
+        // 检查出块矿工（v1）获得全部奖励
+        (, , uint256 v1Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v1);
+        require(v1Incoming == fee, "block producer should get full reward");
+        
+        // 检查其他验证者没有获得奖励
+        (, , uint256 v2Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v2);
+        (, , uint256 v3Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v3);
+        require(v2Incoming == 0, "v2 should get no reward");
+        require(v3Incoming == 0, "v3 should get no reward");
     }
 
     function testUpdateWithdrawProfitPeriod() public {
@@ -210,7 +213,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // 对应 "validator can withdraw profits"
         uint256 fee = 0.3 ether;
         
-        // 分发奖励
+        // 分发奖励（miner = v1 是出块矿工，获得全部奖励）
         vm.prank(miner);
         Validators(VALIDATORS).distributeBlockReward{value: fee}();
         
@@ -230,7 +233,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         vm.prank(miner);
         Validators(VALIDATORS).createOrEditValidator(payable(feeAddr), "", "", "", "", "");
         
-        // 再次分发
+        // 再次分发（miner = v1 仍然是出块矿工）
         vm.prank(miner);
         Validators(VALIDATORS).distributeBlockReward{value: 0.5 ether}();
         

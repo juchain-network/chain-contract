@@ -30,7 +30,7 @@ contract ValidatorsFoundryTest is BaseSetup {
     
 
     function testDistributeBlockRewardEqually() public {
-        // send 1 ether from coinbase
+        // send 1 ether from coinbase (v1 is the miner)
         vm.startPrank(miner);
         (bool ok, ) = address(Validators(VALIDATORS)).call{value: 1 ether}(
             abi.encodeWithSelector(Validators.distributeBlockReward.selector)
@@ -43,12 +43,10 @@ contract ValidatorsFoundryTest is BaseSetup {
         ( , , uint256 a2,,) = Validators(VALIDATORS).getValidatorInfo(v2);
         ( , , uint256 a3,,) = Validators(VALIDATORS).getValidatorInfo(v3);
 
-    // 1 ether / 3 with integer division, remainder to last non-jailed
-    uint256 per = uint256(1 ether) / uint256(3);
-    uint256 rem = uint256(1 ether) - per * 2;
-    require(a1 == per, "v1 share");
-    require(a2 == per, "v2 share");
-    require(a3 == rem, "v3 share with remainder");
+        // New logic: reward goes directly to the block producer (v1)
+        require(a1 == 1 ether, "v1 (block producer) should get full reward");
+        require(a2 == 0, "v2 should get no reward");
+        require(a3 == 0, "v3 should get no reward");
     }
 
     function testWithdrawProfitsAfterPeriod() public {
@@ -62,7 +60,7 @@ contract ValidatorsFoundryTest is BaseSetup {
         vm.prank(v2); p.voteProposal(id, true);
         vm.prank(v3); p.voteProposal(id, true);
 
-        // distribute some reward
+        // distribute some reward (v1 is the miner, so v1 gets the reward)
         vm.startPrank(miner);
         (bool ok, ) = address(Validators(VALIDATORS)).call{value: 9 ether}(
             abi.encodeWithSelector(Validators.distributeBlockReward.selector)
