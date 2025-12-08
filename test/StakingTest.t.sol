@@ -9,10 +9,10 @@ import {Punish} from "../contracts/Punish.sol";
 
 contract StakingTest is Test {
     // System contract addresses (fixed addresses for testing)
-    address constant VALIDATORS = 0x000000000000000000000000000000000000f000;
-    address constant PUNISH = 0x000000000000000000000000000000000000F001;
-    address constant PROPOSAL = 0x000000000000000000000000000000000000F002;
-    address constant STAKING = 0x000000000000000000000000000000000000F003;
+    address constant VALIDATORS = 0x000000000000000000000000000000000000F010;
+    address constant PUNISH = 0x000000000000000000000000000000000000F011;
+    address constant PROPOSAL = 0x000000000000000000000000000000000000F012;
+    address constant STAKING = 0x000000000000000000000000000000000000F013;
     
     // Test addresses
     address constant VALIDATOR1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
