@@ -9,10 +9,10 @@ import {Proposal} from "../contracts/Proposal.sol";
 import {Staking} from "../contracts/Staking.sol";
 
 abstract contract BaseSetup is Test {
-    address constant VALIDATORS = 0x000000000000000000000000000000000000f000;
-    address constant PUNISH = 0x000000000000000000000000000000000000F001;
-    address constant PROPOSAL = 0x000000000000000000000000000000000000F002;
-    address constant STAKING = 0x000000000000000000000000000000000000F003;
+    address constant VALIDATORS = 0x000000000000000000000000000000000000F010;
+    address constant PUNISH = 0x000000000000000000000000000000000000F011;
+    address constant PROPOSAL = 0x000000000000000000000000000000000000F012;
+    address constant STAKING = 0x000000000000000000000000000000000000F013;
 
     // Deploy runtime code of contracts to fixed addresses and initialize them
     function deploySystem(address[] memory initVals) internal {
