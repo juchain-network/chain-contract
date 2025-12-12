@@ -379,6 +379,35 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     /**
+     * @dev Get active validators list with their total stake amounts
+     * @notice Returns validators from currentValidatorSet along with their total stake (selfStake + totalDelegated)
+     * @notice currentValidatorSet is only updated at epoch blocks, so jailed validators
+     *         remain in the set until the next epoch transition
+     * @notice This aligns with consensus behavior where jailed validators can still
+     *         produce blocks in the current epoch
+     * @return validators Array of validators in currentValidatorSet
+     * @return totalStakes Array of total stake amounts for each validator (selfStake + totalDelegated)
+     */
+    function getActiveValidatorsWithStakes() public view returns (address[] memory validators, uint256[] memory totalStakes) {
+        uint256 length = currentValidatorSet.length;
+        validators = new address[](length);
+        totalStakes = new uint256[](length);
+        
+        for (uint256 i = 0; i < length; i++) {
+            address validator = currentValidatorSet[i];
+            validators[i] = validator;
+            
+            // Get validator info from Staking contract
+            (uint256 selfStake, uint256 totalDelegated, , , , , , ) = staking.getValidatorInfo(validator);
+            
+            // Calculate total stake (selfStake + totalDelegated)
+            totalStakes[i] = selfStake + totalDelegated;
+        }
+        
+        return (validators, totalStakes);
+    }
+
+    /**
      * @dev Get count of active validators
      * @notice Returns count of validators in currentValidatorSet
      * @notice More efficient than getActiveValidators().length as it doesn't create an array
