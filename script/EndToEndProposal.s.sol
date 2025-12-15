@@ -6,7 +6,7 @@ import {Test} from "lib/forge-std/src/Test.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
 
-// 端到端脚本：创建提案 + 多个验证者投票 + 检查结果
+// End-to-end script: Create proposal + multiple validator voting + check results
 contract EndToEndProposalScript is Script, Test {
     
     // Fixed system addresses (consistent with deployment)
@@ -20,16 +20,16 @@ contract EndToEndProposalScript is Script, Test {
     event ProposalResult(bytes32 indexed id, bool passed, address[] topValidators);
     
     function run() external {
-        // 示例：端到端提案流程演示
+        // Example: End-to-end proposal workflow demonstration
         address testTarget = 0xa0Ee7A142d267C1f36714E4a8F75612F20a79720;
         
-        // 创建一个模拟的投票者数组（空数组，因为权限限制）
+        // Create a simulated voter array (empty array due to permission restrictions)
         address[] memory voters = new address[](0);
         
-        // 直接调用内部函数执行添加验证者流程
+        // Directly call internal function to execute validator addition process
         bool success = _runProposalFlow(
             testTarget,
-            true, // 添加验证者
+            true, // Add validator
             "End-to-end test: Adding validator",
             voters
         );
@@ -68,20 +68,20 @@ contract EndToEndProposalScript is Script, Test {
         uint256 newValue,
         address[] memory voters
     ) external returns (bool success) {
-        // 冻结时间戳以确保确定性 ID
+        // Freeze timestamp to ensure deterministic ID
         uint256 timestamp = block.timestamp;
         bytes32 id = keccak256(abi.encodePacked(msg.sender, configId, newValue, timestamp));
         
-        // 创建配置更新提案
+        // Create configuration update proposal
         Proposal(PROPOSAL).createUpdateConfigProposal(configId, newValue);
         
-        // 验证者投票
+        // Validator voting
         uint256 yesVotes = 0;
         for (uint i = 0; i < voters.length; i++) {
-            // 检查是否为活跃验证者
+            // Check if active validator
             if (Validators(VALIDATORS).isActiveValidator(voters[i])) {
-                // 这里简化处理，假设都投赞成票
-                // 在实际使用中，可以传入投票选择数组
+                // Here simplified handling, assuming all votes are yes
+                // In actual use, a vote selection array can be passed in
                 vm.prank(voters[i]);
                 Proposal(PROPOSAL).voteProposal(id, true);
                 yesVotes++;
@@ -90,7 +90,7 @@ contract EndToEndProposalScript is Script, Test {
             }
         }
         
-        // 检查是否通过 (需要超过半数)
+        // Check if passed (majority required)
         uint256 requiredVotes = Validators(VALIDATORS).getActiveValidators().length / 2 + 1;
         success = yesVotes >= requiredVotes;
         
@@ -106,21 +106,21 @@ contract EndToEndProposalScript is Script, Test {
         string memory details,
         address[] memory voters
     ) internal returns (bool success) {
-        // 创建提案并获取真实的ID（通过事件）
+        // Create proposal and get real ID (via events)
         Proposal(PROPOSAL).createProposal(target, isAdd, details);
         
-        // 注意：在实际环境中，我们需要从事件日志中获取真实的提案ID
-        // 这里为了演示，我们使用一个简化的ID计算
-        // 真实的ID应该从 LogCreateProposal 事件中获取
+        // Note: In actual environments, we need to get the real proposal ID from event logs
+        // Here for demonstration, we use a simplified ID calculation
+        // The real ID should be obtained from LogCreateProposal events
         bytes32 id = keccak256(abi.encodePacked(msg.sender, target, isAdd, details, block.timestamp));
         emit ProposalCreated(id, msg.sender, target, isAdd);
         
-        // 验证者投票
+        // Validator voting
         uint256 yesVotes = 0;
         for (uint i = 0; i < voters.length; i++) {
-            // 检查是否为活跃验证者
+            // Check if active validator
             if (Validators(VALIDATORS).isActiveValidator(voters[i])) {
-                // 这里简化处理，假设都投赞成票
+                // Here simplified handling, assuming all votes are yes
                 vm.prank(voters[i]);
                 Proposal(PROPOSAL).voteProposal(id, true);
                 yesVotes++;
@@ -129,11 +129,11 @@ contract EndToEndProposalScript is Script, Test {
             }
         }
         
-        // 检查是否通过
+        // Check if it passes (majority required)
         uint256 requiredVotes = Validators(VALIDATORS).getActiveValidators().length / 2 + 1;
         success = yesVotes >= requiredVotes;
         
-        // 验证最终状态
+        // Verify final status
         if (success) {
             if (isAdd) {
                 require(Validators(VALIDATORS).isTopValidator(target), "Validator should be added");
@@ -150,12 +150,12 @@ contract EndToEndProposalScript is Script, Test {
         return success;
     }
     
-    // 便利函数：获取当前活跃验证者列表用于投票
+    // Convenience function: Get current active validator list for voting
     function getActiveValidators() external view returns (address[] memory) {
         return Validators(VALIDATORS).getActiveValidators();
     }
     
-    // 便利函数：获取当前顶级验证者列表
+    // Convenience function: Get current top validator list
     function getTopValidators() external view returns (address[] memory) {
         return Validators(VALIDATORS).getTopValidators();
     }

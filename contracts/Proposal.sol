@@ -13,13 +13,19 @@ contract Proposal is Params {
     uint256 public decreaseRate;
     // Validator have to wait withdrawProfitPeriod blocks to withdraw his profits
     uint256 public withdrawProfitPeriod;
-    // period time to increase aac
-    uint256 public increasePeriod;
-    // address to receive acc
-    address public receiverAddr;
+    // Block reward per block (in wei)
+    uint256 public blockReward;
+    // Unbonding period in blocks (time before delegators can withdraw undelegated funds)
+    uint256 public unbondingPeriod;
+    // Validator unjail period in blocks (time before jailed validator can unjail)
+    uint256 public validatorUnjailPeriod;
 
     // record
     mapping(address => bool) public pass;
+    // Record when proposal passed (for 7-day staking requirement)
+    mapping(address => uint256) public proposalPassedTime;
+    // Period for validator to stake after proposal passed (7 days)
+    uint256 public constant STAKING_DEADLINE_PERIOD = 7 days;
 
     struct ProposalInfo {
         // who propose this proposal
@@ -91,6 +97,10 @@ contract Proposal is Params {
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
             pass[vals[i]] = true;
+            // Set proposalPassedTime for genesis validators (no 7-day limit for genesis)
+            // This ensures consistency with normal proposal flow, even though genesis validators
+            // don't need to pass isProposalValidForStaking() check (they use initializeWithValidators)
+            proposalPassedTime[vals[i]] = block.timestamp;
         }
 
         proposalLastingPeriod = 7 days;
@@ -98,89 +108,13 @@ contract Proposal is Params {
         removeThreshold = 48;
         decreaseRate = 24;
         withdrawProfitPeriod = 86400;
+        // Default block reward: 0.833 ether per block (72,000 JU/day ÷ 86,400 blocks/day)
+        blockReward = 833_000_000_000_000_000; // 833 * 10^15 wei = 0.833 ether
+        // Default unbonding period: 7 days in blocks (604800 blocks = 7 days * 24 hours * 3600 seconds / 1 second per block)
+        unbondingPeriod = 604800;
+        // Default validator unjail period: 24 hours in blocks (86400 blocks = 24 hours * 3600 seconds / 1 second per block)
+        validatorUnjailPeriod = 86400;
         initialized = true;
-        increasePeriod = 60*60*24*365; // Issuance period: 1 minute * 60 * 24*365
-        receiverAddr = 0x9014B4DB9D30CeD67DB9d6B096f5DCDbA28cE639;
-    }
-
-    /**
-     * @dev Efficiently compute hash for validator proposal
-     * @param proposer Address of the proposer
-     * @param dst Target validator address
-     * @param flag Add/remove flag
-     * @param details Proposal details
-     * @param blockTimestamp Block timestamp
-     * @return id The computed hash
-     */
-    function _hashValidatorProposal(
-        address proposer,
-        address dst,
-        bool flag,
-        string calldata details,
-        uint256 blockTimestamp
-    ) private pure returns (bytes32 id) {
-        assembly {
-            let ptr := mload(0x40)
-            let detailsLen := details.length
-            
-            // Pack data tightly: proposer(20) + dst(20) + flag(1) + details + timestamp(32)
-            let totalLen := add(0x49, detailsLen)  // 20 + 20 + 1 + detailsLen + 32
-            
-            // Store proposer (20 bytes)
-            mstore(ptr, shl(96, proposer))
-            
-            // Store dst (20 bytes) 
-            mstore(add(ptr, 0x14), shl(96, dst))
-            
-            // Store flag (1 byte)
-            mstore8(add(ptr, 0x28), flag)
-            
-            // Copy details from calldata
-            calldatacopy(add(ptr, 0x29), details.offset, detailsLen)
-            
-            // Store timestamp (32 bytes)
-            mstore(add(ptr, add(0x29, detailsLen)), blockTimestamp)
-            
-            // Compute hash
-            id := keccak256(ptr, totalLen)
-        }
-    }
-
-    /**
-     * @dev Efficiently compute hash for config proposal
-     * @param proposer Address of the proposer
-     * @param cid Configuration ID
-     * @param newValue New configuration value
-     * @param blockTimestamp Block timestamp
-     * @return id The computed hash
-     */
-    function _hashConfigProposal(
-        address proposer,
-        uint256 cid,
-        uint256 newValue,
-        uint256 blockTimestamp
-    ) private pure returns (bytes32 id) {
-        assembly {
-            let ptr := mload(0x40)
-            
-            // Pack data tightly: proposer(20) + cid(32) + newValue(32) + timestamp(32)
-            // Total: 116 bytes
-            
-            // Store proposer (20 bytes)
-            mstore(ptr, shl(96, proposer))
-            
-            // Store cid (32 bytes)
-            mstore(add(ptr, 0x14), cid)
-            
-            // Store newValue (32 bytes)
-            mstore(add(ptr, 0x34), newValue)
-            
-            // Store timestamp (32 bytes)
-            mstore(add(ptr, 0x54), blockTimestamp)
-            
-            // Compute hash
-            id := keccak256(ptr, 0x74)  // 116 bytes = 0x74
-        }
     }
 
     function createProposal(
@@ -188,14 +122,14 @@ contract Proposal is Params {
         bool flag,
         string calldata details
     ) external returns (bool) {
-        // can't add a already dst or remove a not exist dst
+        // can't add an already exist dst or remove a not exist dst
         require(
             (!pass[dst] && flag) || (pass[dst] && !flag),
-            'Cant"t add a already exist dst or Cant"t remove a not passed dst'
+            "Can't add an already exist dst or Can't remove a not passed dst"
         );
 
-        // generate proposal id using optimized hash function
-        bytes32 id = _hashValidatorProposal(msg.sender, dst, flag, details, block.timestamp);
+        // generate proposal id
+        bytes32 id = keccak256(abi.encodePacked(msg.sender, dst, flag, details, block.timestamp));
         require(bytes(details).length <= 3000, 'Details too long');
         require(proposals[id].createTime == 0, 'Proposal already exists');
 
@@ -213,8 +147,7 @@ contract Proposal is Params {
     }
 
     function createUpdateConfigProposal(uint256 cid, uint256 newValue) external returns (bool) {
-        // generate proposal id using optimized hash function
-        bytes32 id = _hashConfigProposal(msg.sender, cid, newValue, block.timestamp);
+        bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, block.timestamp));
 
         ProposalInfo memory proposal;
         proposal.proposer = msg.sender;
@@ -249,18 +182,19 @@ contract Proposal is Params {
             // do nothing if proposal already has result.
             return true;
         }
-
-        if (results[id].agree >= validators.getActiveValidators().length / 2 + 1) {
+        if (results[id].agree >= validators.getActiveValidatorCount() / 2 + 1) {
             results[id].resultExist = true;
 
             if (proposals[id].proposalType == 1) {
                 if (proposals[id].flag) {
                     // add to validators
                     pass[proposals[id].dst] = true;
-                    // try to active validator if it isn't the first time
-                    validators.tryActive(proposals[id].dst);
+                    // Record proposal passed time for 7-day staking requirement
+                    proposalPassedTime[proposals[id].dst] = block.timestamp;
+                    // Validator needs to stake first, then will be activated at next epoch
                 } else {
                     pass[proposals[id].dst] = false;
+                    proposalPassedTime[proposals[id].dst] = 0; // Clear passed time
                     validators.tryRemoveValidator(proposals[id].dst);
                 }
             } else if (proposals[id].proposalType == 2) {
@@ -272,37 +206,85 @@ contract Proposal is Params {
             return true;
         }
 
-        if (results[id].reject >= validators.getActiveValidators().length / 2 + 1) {
+        if (results[id].reject >= validators.getActiveValidatorCount() / 2 + 1) {
             results[id].resultExist = true;
             emit LogRejectProposal(id, block.timestamp);
         }
-
+        
         return true;
     }
 
+    /**
+     * @dev Update system configuration
+     * @param cid Configuration ID:
+     *   - 0: proposalLastingPeriod (1 hour - 30 days)
+     *   - 1: punishThreshold (must > 0)
+     *   - 2: removeThreshold (must > 0)
+     *   - 3: decreaseRate (must > 0, prevents division by zero)
+     *   - 4: withdrawProfitPeriod (must > 0)
+     *   - 5: blockReward (must > 0, in wei)
+     * @param value New configuration value
+     */
     function updateConfig(uint256 cid, uint256 value) private {
         if (cid == 0) {
+            require(value >= 1 hours && value <= 30 days, "Invalid proposal period");
             proposalLastingPeriod = value;
         } else if (cid == 1) {
+            require(value > 0, "Punish threshold must be positive");
             punishThreshold = value;
         } else if (cid == 2) {
+            require(value > 0, "Remove threshold must be positive");
             removeThreshold = value;
         } else if (cid == 3) {
+            require(value > 0, "Decrease rate must be positive");
             decreaseRate = value;
         } else if (cid == 4) {
+            require(value > 0, "Withdraw profit period must be positive");
             withdrawProfitPeriod = value;
         } else if (cid == 5) {
-            increasePeriod = value;
+            require(value > 0, "Block reward must be positive");
+            blockReward = value;
         } else if (cid == 6) {
-            receiverAddr = address(uint160(value));
+            require(value > 0, "Unbonding period must be positive");
+            unbondingPeriod = value;
+        } else if (cid == 7) {
+            require(value > 0, "Validator unjail period must be positive");
+            validatorUnjailPeriod = value;
         }
     }
 
+    /**
+     * @dev Set validator as unpassed
+     * @param val Validator address
+     * @notice This function is called when validator is removed due to punishment
+     * @notice Validator must pass a reproposal to regain validator status
+     */
     function setUnpassed(address val) external onlyValidatorsContract returns (bool) {
         // set validator unpass
         pass[val] = false;
-
+        proposalPassedTime[val] = 0; // Clear passed time
+        
         emit LogSetUnpassed(val, block.timestamp);
         return true;
+    }
+
+    /**
+     * @dev Check if proposal passed time is still valid (within 7 days) for NEW registration
+     * @notice This function is ONLY used to check if a NEW validator can register within 7 days
+     * @notice Once a validator is registered (has selfStake >= MIN_VALIDATOR_STAKE), 
+     *         this check is no longer applied. Validators are removed by setUnpassed() when punished.
+     * @param validator Validator address
+     * @return Whether the proposal is still valid for new staking registration
+     */
+    function isProposalValidForStaking(address validator) external view returns (bool) {
+        if (!pass[validator]) {
+            return false;
+        }
+        uint256 passedTime = proposalPassedTime[validator];
+        if (passedTime == 0) {
+            return false; // No proposal passed time recorded
+        }
+        // Check if within 7 days - only applies to NEW registrations
+        return block.timestamp <= passedTime + STAKING_DEADLINE_PERIOD;
     }
 }

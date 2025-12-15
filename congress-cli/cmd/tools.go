@@ -207,8 +207,8 @@ func waitEthTxFinished(client *ethclient.Client, txhash common.Hash) (error, *bi
 	}
 }
 
-// Create proposal ID
-// flag true add candidate, false remove candidate
+// Build proposal ID
+// flag true to add candidate, false to remove candidate
 func BuildProposalId(from, dest string, flag bool, details string, blockNum uint64, client *ethclient.Client) (string, error) {
 	sender := common.HexToAddress(from) // Proposer
 	dst := common.HexToAddress(dest)    // Candidate
@@ -221,7 +221,7 @@ func BuildProposalId(from, dest string, flag bool, details string, blockNum uint
 		return "", err
 	}
 
-	// // 计算提案ID（与Solidity keccak256(abi.encodePacked(...)) 等效）
+	// // Calculate proposal ID (equivalent to Solidity keccak256(abi.encodePacked(...)))
 	// id := crypto.Keccak256(
 	// 	sender.Bytes(),
 	// 	dst.Bytes(),
@@ -277,7 +277,7 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 
 	// Define query filter
 	filterOpts := &bind.FilterOpts{
-		Start:   blockHeight,  // Start block number
+		Start:   blockHeight,  // Starting block number
 		End:     &blockHeight, // End block number (nil means latest block)
 		Context: context.Background(),
 	}
@@ -287,7 +287,7 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 		fmt.Printf("Failed to filter LogCreateProposal events: %v", err)
 		return err, ""
 	}
-	// Iterate logs
+	// Iterate through logs
 	var proposalId string
 	for logs.Next() {
 		event := logs.Event
@@ -312,7 +312,7 @@ func QueryProposalId(blockHeight uint64, proposer string, client *ethclient.Clie
 		fmt.Printf("Failed to filter LogCreateConfigProposal events: %v", err)
 		return err, ""
 	}
-	// Iterate logs
+	// Iterate through logs
 	proposalId = "0x"
 	for logs1.Next() {
 		event := logs1.Event

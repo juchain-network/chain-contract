@@ -5,14 +5,14 @@ import {BaseSetup} from "../test/BaseSetup.t.sol";
 import {Staking} from "../contracts/Staking.sol";
 import {Validators} from "../contracts/Validators.sol";
 
-// Staking 系统操作脚本
+// Staking system operation script
 contract StakingOperationsScript is BaseSetup {
     
     event StakingInfo(string info, uint256 value);
     event ValidatorInfo(string info, address validator, uint256 stake);
     
     function run() external {
-        // 在测试模式下运行，先部署系统
+        // Run in test mode, deploy the system first
         address[] memory initialValidators = new address[](3);
         initialValidators[0] = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
         initialValidators[1] = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
@@ -21,16 +21,16 @@ contract StakingOperationsScript is BaseSetup {
         
         emit StakingInfo("=== Staking System Operations ===", 0);
         
-        // 展示当前验证者状态
+        // Display current validator status
         showValidatorStatus();
         
-        // 演示验证者注册质押
+        // Demonstrate validator registration staking
         demonstrateValidatorRegistration();
         
-        // 演示委托功能
+        // Demonstrate delegation function
         demonstrateDelegation();
         
-        // 演示获取顶级验证者
+        // Demonstrate getting top validators
         demonstrateTopValidators();
         
         emit StakingInfo("=== Operations Complete ===", 0);
@@ -42,22 +42,25 @@ contract StakingOperationsScript is BaseSetup {
         Staking stakingContract = Staking(STAKING);
         Validators validatorsContract = Validators(VALIDATORS);
         
-        // 安全地检查当前验证者
+        // Safely check current validators
         address[] memory currentValidators = validatorsContract.getActiveValidators();
         emit StakingInfo("Current validators count", currentValidators.length);
         
-        // 仅在有验证者时才检查Staking状态
+        // Only check Staking status when there are validators
         if (currentValidators.length > 0) {
             for (uint i = 0; i < currentValidators.length && i < 5; i++) {
                 address validator = currentValidators[i];
                 
-                // 安全地获取验证者信息
+                // Safely get validator information
                 try stakingContract.getValidatorInfo(validator) returns (
                     uint256 selfStake,
                     uint256 totalDelegated,
                     uint256, /* commissionRate */
+                    uint256, /* accumulatedRewards */
                     bool, /* isJailed */
-                    uint256 /* jailUntilBlock */
+                    uint256, /* jailUntilBlock */
+                    uint256, /* totalClaimedRewards */
+                    uint256 /* lastClaimBlock */
                 ) {
                     emit ValidatorInfo("Validator", validator, selfStake + totalDelegated);
                 } catch {
@@ -68,7 +71,7 @@ contract StakingOperationsScript is BaseSetup {
             emit StakingInfo("No validators registered yet", 0);
         }
         
-        // 安全地检查Staking系统状态
+        // Safely check Staking system status
         try stakingContract.MIN_VALIDATORS() returns (uint256 minValidators) {
             emit StakingInfo("Minimum validators required", minValidators);
         } catch {
@@ -81,14 +84,14 @@ contract StakingOperationsScript is BaseSetup {
         
         Staking stakingContract = Staking(STAKING);
         
-        // 安全地获取最小质押要求
+        // Safely get minimum staking requirement
         try stakingContract.MIN_VALIDATOR_STAKE() returns (uint256 minStake) {
             emit StakingInfo("Minimum stake required", minStake);
         } catch {
             emit StakingInfo("Cannot get minimum stake", 0);
         }
         
-        // 这里只是展示接口，实际注册需要发送ETH
+        // This is just to demonstrate the interface, actual registration requires sending ETH
         emit StakingInfo("To register call: staking.registerValidator{value: minStake}(commissionRate)", 0);
     }
     
@@ -96,14 +99,15 @@ contract StakingOperationsScript is BaseSetup {
         emit StakingInfo("--- Delegation Demo ---", 0);
         
         Staking stakingContract = Staking(STAKING);
+        Validators validatorsContract = Validators(VALIDATORS);
         
-        // 安全地获取顶级验证者
-        try stakingContract.getTopValidators(5) returns (address[] memory topValidators) {
+        // Safely get top validators (through Validators contract unified interface)
+        try validatorsContract.getTopValidators() returns (address[] memory topValidators) {
             if (topValidators.length > 0) {
                 address validator = topValidators[0];
                 emit ValidatorInfo("Example delegation to validator", validator, 0);
                 
-                // 安全地显示委托信息
+                // Safely display delegation information
                 try stakingContract.getDelegationInfo(msg.sender, validator) returns (
                     uint256 delegatedAmount,
                     uint256 rewards,
@@ -129,9 +133,10 @@ contract StakingOperationsScript is BaseSetup {
         emit StakingInfo("--- Top Validators ---", 0);
         
         Staking stakingContract = Staking(STAKING);
+        Validators validatorsContract = Validators(VALIDATORS);
         
-        // 安全地获取顶级验证者
-        try stakingContract.getTopValidators(5) returns (address[] memory topValidators) {
+        // Safely get top validators (through Validators contract unified interface)
+        try validatorsContract.getTopValidators() returns (address[] memory topValidators) {
             emit StakingInfo("Total top validators", topValidators.length);
             
             for (uint i = 0; i < topValidators.length && i < 3; i++) {
@@ -139,8 +144,11 @@ contract StakingOperationsScript is BaseSetup {
                     uint256 selfStake,
                     uint256 totalDelegated,
                     uint256 commissionRate,
+                    uint256, /* accumulatedRewards */
                     bool isJailed,
-                    uint256 jailUntilBlock
+                    uint256 jailUntilBlock,
+                    uint256, /* totalClaimedRewards */
+                    uint256 /* lastClaimBlock */
                 ) {
                     emit ValidatorInfo("Validator info", topValidators[i], selfStake);
                     emit StakingInfo("Total delegated", totalDelegated);

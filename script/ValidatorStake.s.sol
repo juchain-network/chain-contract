@@ -6,28 +6,28 @@ import {Staking} from "../contracts/Staking.sol";
 
 /**
  * @title ValidatorStakeScript
- * @dev 验证者质押脚本 - 每个验证者独立运行
+ * @dev Validator staking script - each validator runs independently
  */
 contract ValidatorStakeScript is Script {
     
     function setUp() public {}
 
     /**
-     * @dev 验证者质押函数
-     * 每个验证者使用自己的私钥运行此脚本
+     * @dev Validator staking function
+     * Each validator runs this script with their own private key
      */
     function run() external {
-        // 从环境变量获取验证者私钥
+        // Get validator private key from environment variables
         uint256 validatorPrivateKey = vm.envOr("VALIDATOR_PRIVATE_KEY", uint256(0));
         require(validatorPrivateKey != 0, "VALIDATOR_PRIVATE_KEY not set");
         
-        // 从环境变量获取Staking合约地址
+        // Get Staking contract address from environment variables
         address stakingAddress = vm.envOr("STAKING_CONTRACT", address(0));
         require(stakingAddress != address(0), "STAKING_CONTRACT address not set");
         
         address validator = vm.addr(validatorPrivateKey);
         uint256 stakeAmount = 10000 ether; // 10,000 JU
-        uint256 commissionRate = vm.envOr("COMMISSION_RATE", uint256(500)); // 默认5%
+        uint256 commissionRate = vm.envOr("COMMISSION_RATE", uint256(500)); // Default 5%
         
         console.log("=== Validator Staking ===");
         console.log("Validator address:", validator);
@@ -35,12 +35,12 @@ contract ValidatorStakeScript is Script {
         console.log("Stake amount:", stakeAmount / 1 ether, "JU");
         console.log("Commission rate:", commissionRate, "/10000");
         
-        // 检查余额
+        // Check balance
         require(validator.balance >= stakeAmount, "Insufficient balance for staking");
         
         vm.startBroadcast(validatorPrivateKey);
         
-        // 注册并质押
+        // Register and stake
         Staking(stakingAddress).registerValidator{value: stakeAmount}(commissionRate);
         
         vm.stopBroadcast();
@@ -48,21 +48,21 @@ contract ValidatorStakeScript is Script {
         console.log("Successfully registered as validator!");
         console.log("Staked:", stakeAmount / 1 ether, "JU");
         
-        // 验证注册状态
+        // Verify registration status
         checkRegistrationStatus(stakingAddress, validator);
     }
     
     /**
-     * @dev 检查验证者注册状态
+     * @dev Check validator registration status
      */
     function checkRegistrationStatus(address stakingAddress, address validator) internal view {
         Staking staking = Staking(stakingAddress);
         
-        // 检查总质押数量
+        // Check total staked amount
         uint256 totalStaked = staking.totalStaked();
         console.log("Total network stake:", totalStaked / 1 ether, "JU");
         
-        // 检查验证者数量
+        // Check validator count
         uint256 validatorCount = staking.getValidatorCount();
         console.log("Total validators:", validatorCount);
         

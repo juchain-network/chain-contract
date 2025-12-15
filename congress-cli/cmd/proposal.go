@@ -304,15 +304,15 @@ func innerQueryProposal(proposalId string, rpc string) error {
 	// Display proposal information
 	fmt.Println("📋 Proposal Details:")
 	fmt.Printf("Proposal ID: %s\n", proposalId)
-	fmt.Printf("Proposer: %s (validator address)\n", proposal.Proposer.Hex())
+	fmt.Printf("Proposer: %s (Validator Address)\n", proposal.Proposer.Hex())
 
 	// Display different information based on proposal type
 	if proposal.ProposalType.Int64() == 1 { // Validator management proposal
 		if proposal.Flag {
-			fmt.Printf("Target Address: %s (validator to add)\n", proposal.Dst.Hex())
+			fmt.Printf("Target Address: %s (Validator to Add)\n", proposal.Dst.Hex())
 			fmt.Printf("Action: Add New Validator (Flag: true)\n")
 		} else {
-			fmt.Printf("Target Address: %s (validator to remove)\n", proposal.Dst.Hex())
+			fmt.Printf("Target Address: %s (Validator to Remove)\n", proposal.Dst.Hex())
 			fmt.Printf("Action: Remove Validator (Flag: false)\n")
 		}
 	} else if proposal.ProposalType.Int64() == 2 { // Configuration update proposal
@@ -356,6 +356,12 @@ func getConfigIDName(cid int64) string {
 		return "Decrease Rate"
 	case 4:
 		return "Withdraw Profit Period"
+	case 5:
+		return "Block Reward"
+	case 6:
+		return "Unbonding Period"
+	case 7:
+		return "Validator Unjail Period"
 	default:
 		return "Unknown Config"
 	}
@@ -464,27 +470,27 @@ func innerQueryProposals(rpc string) error {
 
 		// Display proposal information
 		fmt.Printf("ID: %s\n", proposalID)
-		fmt.Printf("Proposer: %s (validator address)\n", proposal.Proposer.Hex())
+		fmt.Printf("Proposer: %s (Validator Address)\n", proposal.Proposer.Hex())
 
 		// Display different information based on proposal type
 		if proposal.ProposalType.Int64() == 1 { // Validator management proposal
 			if proposal.Flag {
-				fmt.Printf("Target: %s (待添加验证者)\n", proposal.Dst.Hex())
-				fmt.Printf("Action: Add New Validator (添加验证者)\n")
+				fmt.Printf("Target: %s (Validator to Add)\n", proposal.Dst.Hex())
+				fmt.Printf("Action: Add New Validator\n")
 			} else {
-				fmt.Printf("Target: %s (待移除验证者)\n", proposal.Dst.Hex())
-				fmt.Printf("Action: Remove Validator (移除验证者)\n")
+				fmt.Printf("Target: %s (Validator to Remove)\n", proposal.Dst.Hex())
+				fmt.Printf("Action: Remove Validator\n")
 			}
 		} else if proposal.ProposalType.Int64() == 2 { // Configuration update proposal
 			fmt.Printf("Config ID: %s (%s)\n", proposal.Cid.String(), getConfigIDName(proposal.Cid.Int64()))
 			fmt.Printf("New Value: %s\n", proposal.NewValue.String())
-			fmt.Printf("Action: Update Configuration (更新配置)\n")
+			fmt.Printf("Action: Update Configuration\n")
 		}
 
 		fmt.Printf("Type: %s (%s)\n", proposal.ProposalType.String(), getProposalTypeName(proposal.ProposalType.Int64()))
 		fmt.Printf("Create Time: %s\n", timeToString(proposal.CreateTime.Int64()))
 
-		// 查询提案投票结果和状态
+		// Query proposal voting results and status
 		result, err := proposalContract.Results(nil, proposalIdBytes)
 		if err != nil {
 			fmt.Printf("⚠️  Status: Cannot query result (%v)\n", err)
@@ -507,7 +513,7 @@ func innerQueryProposals(rpc string) error {
 	return nil
 }
 
-// 时间转换辅助函数
+// Time conversion helper function
 func timeToString(timestamp int64) string {
 	if timestamp == 0 {
 		return "N/A"
@@ -515,21 +521,21 @@ func timeToString(timestamp int64) string {
 	return time.Unix(timestamp, 0).UTC().String()
 }
 
-// 获取提案状态的辅助函数
+// Helper function to get proposal status
 func getProposalStatus(agree uint16, reject uint16, resultExist bool) (string, string) {
 	if !resultExist {
 		if agree == 0 && reject == 0 {
-			return "⏳", "Pending (No votes yet / 等待投票)"
+			return "⏳", "Pending (No votes yet)"
 		} else {
-			return "⏳", "Pending (Voting in progress / 投票进行中)"
+			return "⏳", "Pending (Voting in progress)"
 		}
 	}
 
-	// resultExist = true 意味着提案已经有了最终结果
-	// 根据 Proposal.sol 逻辑：超过半数同意则通过，超过半数反对则失败
+	// resultExist = true means the proposal has a final result
+	// According to Proposal.sol logic: pass if more than half agree, fail if more than half reject
 	if agree > reject {
-		return "✅", "Passed (提案通过)"
+		return "✅", "Passed"
 	} else {
-		return "❌", "Rejected (提案被拒绝)"
+		return "❌", "Rejected"
 	}
 }

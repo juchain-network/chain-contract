@@ -18,11 +18,11 @@ const (
 
 // Configuration ID mapping
 var ConfigIDNames = map[int64]string{
-	0: "proposalLastingPeriod", // Proposal lasting period
+	0: "proposalLastingPeriod", // Proposal duration
 	1: "punishThreshold",       // Punishment threshold
 	2: "removeThreshold",       // Removal threshold
 	3: "decreaseRate",          // Decrease rate
-	4: "withdrawProfitPeriod",  // Withdraw profit period
+	4: "withdrawProfitPeriod",  // Profit withdrawal period
 }
 
 // Operation type constants
@@ -37,7 +37,7 @@ const (
 	VoteReject  = false
 )
 
-// File name template constants - General operations
+// Filename template constants - Generic operations
 const (
 	CreateProposalFile       = "createProposal.json"
 	CreateConfigProposalFile = "createUpdateConfigProposal.json"
@@ -45,7 +45,7 @@ const (
 	WithdrawProfitsFile      = "withdrawProfits.json"
 )
 
-// File name template constants - Staking operations
+// Filename template constants - Staking operations
 const (
 	RegisterValidatorFile = "registerValidator.json"
 	EditValidatorFile     = "editValidator.json"
@@ -122,7 +122,18 @@ const stakingABI = `[
 		"type": "function"
 	},
 	{
-		"inputs": [{"internalType": "uint256", "name": "limit", "type": "uint256"}],
+		"inputs": [{"internalType": "address[]", "name": "validators", "type": "address[]"}],
+		"name": "getTopValidators",
+		"outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]`
+
+// Validators contract ABI for getTopValidators
+const validatorsABI = `[
+	{
+		"inputs": [],
 		"name": "getTopValidators",
 		"outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
 		"stateMutability": "view",

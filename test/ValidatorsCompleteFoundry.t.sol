@@ -4,8 +4,9 @@ pragma solidity ^0.8.20;
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Validators} from "../contracts/Validators.sol";
 import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
-// 完整的验证者测试，对应 test/validators.js 的所有功能
+// Complete validator tests, corresponding to all functions in test/validators.js
 contract ValidatorsCompleteFoundryTest is BaseSetup {
 
     address v1; address v2; address v3;
@@ -27,7 +28,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     }
 
     function testCanOnlyInitOnce() public {
-        // 对应 "can only init once"
+        // Corresponds to "can only init once"
         bytes memory err;
         try Validators(VALIDATORS).initialize(new address[](0), address(0xCAFE), address(0xBEEF), address(0xDEAD)) { 
             revert("should revert"); 
@@ -37,9 +38,9 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         require(err.length > 0, "expected revert");
     }
 
-    // 创建/编辑验证者相关测试
+    // Create/edited validator related tests
     function testCreateValidatorInvalidFeeAddr() public {
-        // 对应 "can't create validator if fee addr == address(0)"
+        // Corresponds to "can't create validator if fee addr == address(0)"
         address validator = makeAddr("validator");
         vm.prank(validator);
         (bool ok, ) = address(Validators(VALIDATORS)).call(
@@ -52,7 +53,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     }
 
     function testCreateValidatorInvalidDescription() public {
-        // 对应 "can't create validator if describe info invalid"
+        // Corresponds to "can't create validator if describe info invalid"
         address validator = makeAddr("validator");
         string memory tooLongMoniker = _generateLongString(71); // > 70 limit
         vm.prank(validator);
@@ -66,7 +67,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     }
 
     function testCreateValidatorNotAuthorized() public {
-        // 对应 "can't create validator if not pass propose"
+        // Corresponds to "can't create validator if not pass propose"
         address validator = makeAddr("validator");
         vm.prank(validator);
         (bool ok, ) = address(Validators(VALIDATORS)).call(
@@ -79,91 +80,124 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     }
 
     function testCreateValidatorSuccess() public {
-        // 对应 "create validator"
+        // Corresponds to "create validator"
         address validator = makeAddr("validator");
         
-        // 先通过提案授权
+        // First authorize through proposal
         _passProposal(validator, true);
         
-        // 创建验证者
+        // Create validator (set validator info)
         vm.prank(validator);
         bool success = Validators(VALIDATORS).createOrEditValidator(payable(validator), "", "", "", "", "");
         require(success, "create validator should succeed");
         
-        // 检查状态
-        (, Validators.Status status,,,) = Validators(VALIDATORS).getValidatorInfo(validator);
-        require(uint256(status) == ACTIVE, "validator should be active");
+        // In POSA mode, validator must register (stake) after creation to become active
+        // Give validator enough ETH and register
+        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        vm.deal(validator, 20000 ether);
+        vm.prank(validator);
+        Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
+        
+        // Check if validator is registered (exists)
+        require(Validators(VALIDATORS).isValidatorExist(validator), "validator should exist after registration");
+        
+        // Check if validator is in highestValidatorsSet (automatically added after registration)
+        require(Validators(VALIDATORS).isTopValidator(validator), "validator should be in highestValidatorsSet after registration");
+        
+        // Note: In POSA mode, getValidatorStatus's isActive checks if validator is in currentValidatorSet
+        // Newly registered validators won't immediately enter currentValidatorSet, need to wait for next epoch update
+        // So here we check if validator exists and is not jailed
+        // Validator status should be NotExist (because not yet in currentValidatorSet) or Active (if already in currentValidatorSet)
+        // But at least validator should exist and not be jailed
+        require(!Validators(VALIDATORS).isValidatorJailed(validator), "validator should not be jailed");
+        
+        // Validator should be queryable for info (registered)
+        (address payable feeAddr, , , ,) = Validators(VALIDATORS).getValidatorInfo(validator);
+        require(feeAddr == validator, "validator info should be set");
     }
 
     function testEditValidatorInfo() public {
-        // 对应 "edit validator info"
+        // Corresponds to "edit validator info"
         address validator = makeAddr("validator");
         address feeAddr = makeAddr("feeAddr");
         
-        // 先授权并创建
+        // First authorize and create
         _passProposal(validator, true);
         vm.prank(validator);
         Validators(VALIDATORS).createOrEditValidator(payable(validator), "", "", "", "", "");
         
-        // 编辑 fee 地址
+        // Edit fee address
         vm.prank(validator);
         bool success = Validators(VALIDATORS).createOrEditValidator(payable(feeAddr), "", "", "", "", "");
         require(success, "edit should succeed");
         
-        // 检查 fee 地址已更新
+        // Check fee address is updated
         (address payable actualFeeAddr,,,,) = Validators(VALIDATORS).getValidatorInfo(validator);
         require(actualFeeAddr == feeAddr, "fee address should be updated");
     }
 
-    // 提案添加/移除验证者测试
+    // Proposal add/remove validator tests
     function testProposeAddNewValidator() public {
-        // 对应 "propose add a new val"
+        // Corresponds to "propose add a new val"
         address nval = makeAddr("newval");
         
-        // 初始不是验证者
+        // Initially not a validator
         require(!Validators(VALIDATORS).isTopValidator(nval), "should not be validator initially");
         
-        // 创建并投票通过提案
+        // Create and vote to pass proposal
         _passProposal(nval, true);
         
-        // 现在应该是验证者
-        require(Validators(VALIDATORS).isTopValidator(nval), "should be validator after proposal");
+        // In POSA mode, proposal passing only sets pass[nval] = true
+        // Validator also needs to register (stake) to become top validator
         require(Proposal(PROPOSAL).pass(nval), "should be marked as passed");
+        require(!Validators(VALIDATORS).isTopValidator(nval), "should not be top validator yet (not registered)");
+        
+        // Give new validator enough ETH and register
+        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        vm.deal(nval, 20000 ether);
+        vm.prank(nval);
+        Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
+        
+        // Now should be a validator
+        require(Validators(VALIDATORS).isTopValidator(nval), "should be validator after registration");
     }
 
     function testProposeRemoveValidator() public {
-        // 对应 "propose remove a val"
+        // Corresponds to "propose remove a val"
         
-        // v1 初始是验证者
+        // v1 is initially a validator
         require(Validators(VALIDATORS).isTopValidator(v1), "v1 should be validator initially");
         
-        // 创建并投票通过移除提案
+        // Create and vote to pass removal proposal
         _passProposal(v1, false);
         
-        // 现在应该不是验证者
+        // Should not be a validator now
         require(!Validators(VALIDATORS).isTopValidator(v1), "v1 should not be validator after removal");
         require(!Proposal(PROPOSAL).pass(v1), "v1 should not be marked as passed");
     }
 
-    // 区块奖励分发测试
+    // Block reward distribution tests
     function testDistributeBlockReward() public {
-        // 对应 "miner can distribute to validator contract, the profits should be right updated"
+        // Corresponds to "miner can distribute to validator contract, the profits should be right updated"
+        // New logic: reward goes directly to the block producer (miner = v1)
         uint256 fee = 0.3 ether;
-        uint256 expectPerFee = 0.1 ether;
         
         vm.prank(miner);
         Validators(VALIDATORS).distributeBlockReward{value: fee}();
         
-        // 检查每个验证者获得的奖励
-        for (uint i = 0; i < 3; i++) {
-            address val = i == 0 ? v1 : (i == 1 ? v2 : v3);
-            (, , uint256 aacIncoming,,) = Validators(VALIDATORS).getValidatorInfo(val);
-            require(aacIncoming == expectPerFee, "should get expected fee");
-        }
+        // Check block producer (v1) gets full reward
+        (, , uint256 v1Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v1);
+        require(v1Incoming == fee, "block producer should get full reward");
+        
+        // Check other validators get no reward
+        (, , uint256 v2Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v2);
+        (, , uint256 v3Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v3);
+        require(v2Incoming == 0, "v2 should get no reward");
+        require(v3Incoming == 0, "v3 should get no reward");
     }
 
     function testUpdateWithdrawProfitPeriod() public {
-        // 对应 "update withdraw profit wait block"
+        // Corresponds to "update withdraw profit wait block"
         vm.warp(5_000_000);
         bytes32 id = keccak256(abi.encodePacked(address(this), uint256(4), uint256(10), block.timestamp));
         Proposal(PROPOSAL).createUpdateConfigProposal(4, 10);
@@ -176,14 +210,14 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     }
 
     function testValidatorWithdrawProfits() public {
-        // 对应 "validator can withdraw profits"
+        // Corresponds to "validator can withdraw profits"
         uint256 fee = 0.3 ether;
         
-        // 分发奖励
+        // Distribute rewards (miner = v1 is block producer, gets full reward)
         vm.prank(miner);
         Validators(VALIDATORS).distributeBlockReward{value: fee}();
         
-        // 设置短的提取周期
+        // Set short withdrawal period
         _updateWithdrawPeriod(1);
         vm.roll(block.number + 2);
         
@@ -194,12 +228,12 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         require(balAfter > balBefore, "should receive profits");
         
-        // 测试不同的 fee 地址
+        // Test different fee address
         address feeAddr = makeAddr("feeAddr");
         vm.prank(miner);
         Validators(VALIDATORS).createOrEditValidator(payable(feeAddr), "", "", "", "", "");
         
-        // 再次分发
+        // Distribute again (miner = v1 is still block producer)
         vm.prank(miner);
         Validators(VALIDATORS).distributeBlockReward{value: 0.5 ether}();
         
@@ -214,7 +248,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     }
 
     function testCantWithdrawWithoutProfits() public {
-        // 对应 "Can't call withdrawProfits if you don't have any profits"
+        // Corresponds to "Can't call withdrawProfits if you don't have any profits"
         address feeAddr = makeAddr("feeAddr");
         _updateWithdrawPeriod(1);
         vm.roll(block.number + 2);
@@ -227,27 +261,27 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     }
 
     function testUpdateActiveValidatorSet() public {
-        // 对应 "update active validator set"
+        // Corresponds to "update active validator set"
         uint256 epoch = 30;
         address[] memory newSet = new address[](2);
         newSet[0] = v1;
         newSet[1] = v2;
         
-        // 模拟到达 epoch 边界 (block.number % epoch == 0)
+        // Simulate reaching epoch boundary (block.number % epoch == 0)
         uint256 targetBlock = ((block.number / epoch) + 1) * epoch;
         vm.roll(targetBlock);
         
         vm.prank(miner);
         Validators(VALIDATORS).updateActiveValidatorSet(newSet, epoch);
         
-        // 验证新的验证者集合
+        // Verify new validator set
         address[] memory activeSet = Validators(VALIDATORS).getActiveValidators();
         require(activeSet.length == 2, "should have 2 active validators");
         require(activeSet[0] == v1, "should contain v1");
         require(activeSet[1] == v2, "should contain v2");
     }
 
-    // 辅助函数
+    // Helper functions
     function _passProposal(address target, bool flag) internal {
         vm.warp(block.timestamp + 1000000);
         bytes32 id = keccak256(abi.encodePacked(address(this), target, flag, "", block.timestamp));

@@ -1,3 +1,15 @@
+/**
+ * Test Transfer Script
+ * 
+ * This is an example script for testing fund transfers to additional validators.
+ * 
+ * Note: The default local testnet configuration uses 3 validators (validator1-3).
+ * This script is used when adding additional validators via governance proposals.
+ * 
+ * Default RPC endpoint: http://localhost:8545 (validator1)
+ * You can modify the RPC endpoint to connect to other validators if needed.
+ */
+
 const { Web3 } = require('web3');
 const web3 = new Web3('http://localhost:8545');
 
@@ -6,7 +18,7 @@ async function transferFunds() {
     const toAddress = '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc';
     const amount = web3.utils.toWei('10000', 'ether');
     
-    console.log('🚀 Attempting to transfer 10000 ETH to validator6...');
+    console.log('🚀 Attempting to transfer 10000 ETH to validator 6...');
     console.log('From:', fromAddress);
     console.log('To:', toAddress);
     console.log('Amount:', web3.utils.fromWei(amount, 'ether'), 'ETH');
@@ -18,7 +30,7 @@ async function transferFunds() {
     try {
         // First check if account is unlocked
         const accounts = await web3.eth.getAccounts();
-        console.log('Available accounts count:', accounts.length);
+        console.log('Available accounts:', accounts.length);
         
         const txHash = await web3.eth.sendTransaction({
             from: fromAddress,
@@ -32,10 +44,10 @@ async function transferFunds() {
         console.log('Transaction hash:', typeof txHash === 'object' ? txHash.transactionHash : txHash);
         
         const newBalance = await web3.eth.getBalance(toAddress);
-        console.log('Validator6 new balance:', web3.utils.fromWei(newBalance, 'ether'), 'ETH');
+        console.log('Validator 6 new balance:', web3.utils.fromWei(newBalance, 'ether'), 'ETH');
         
     } catch (error) {
-        console.error('❌ Transfer failed details:');
+        console.error('❌ Transfer failed with details:');
         console.error('Error message:', error.message);
         console.error('Error code:', error.code);
         if (error.data) {

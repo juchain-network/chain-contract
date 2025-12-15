@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 contract ProposalFoundryTest is BaseSetup {
 
@@ -54,11 +55,13 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testCreateAndVoteAddProposalPass() public {
         Proposal p = Proposal(PROPOSAL);
+        address newValidator = address(0xBEEF);
+        
         // freeze timestamp to compute deterministic id
         vm.warp(1_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), address(0xBEEF), true, "", block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(address(this), newValidator, true, "", block.timestamp));
         // create by anyone (this contract)
-        (bool ok, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, address(0xBEEF), true, ""));
+        (bool ok, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, newValidator, true, ""));
         require(ok, "create failed");
 
         // validators vote
@@ -67,10 +70,20 @@ contract ProposalFoundryTest is BaseSetup {
         vm.prank(v3); p.voteProposal(id, true);
 
         // assert pass recorded
-        bool passed = p.pass(address(0xBEEF));
+        bool passed = p.pass(newValidator);
         require(passed, "should pass");
+        
+        // In POSA mode, validator must register (stake) to become top validator
+        // This is the design: proposal passing only grants permission, validator must actively register
+        // Give new validator enough ETH and register
+        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        vm.deal(newValidator, 20000 ether);
+        vm.prank(newValidator);
+        Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
+        
+        // registerValidator() internally calls tryAddValidatorToHighestSet(), so validator should now be top
         // also ensure validator became top
-        bool isTop = Validators(VALIDATORS).isTopValidator(address(0xBEEF));
+        bool isTop = Validators(VALIDATORS).isTopValidator(newValidator);
         require(isTop, "should be top validator");
     }
 
@@ -119,24 +132,25 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testConfigUpdateAll() public {
         Proposal p = Proposal(PROPOSAL);
-        uint256[7] memory cids = [uint256(0),1,2,3,4,5,6];
-        uint256[6] memory vals = [uint256(100),200,300,400,500,600];
-        address recv = makeAddr("recv");
+        uint256[8] memory cids = [uint256(0),1,2,3,4,5,6,7];
+
+        uint256[8] memory vals = [uint256(3600),200,300,400,500,833_000_000_000_000_000,604800,86400];
         for (uint i = 0; i < cids.length; i++) {
             vm.warp(4_000_000 + i);
-            bytes32 id = keccak256(abi.encodePacked(address(this), cids[i], i==6?uint256(uint160(recv)):vals[i], block.timestamp));
-            p.createUpdateConfigProposal(cids[i], i==6?uint256(uint160(recv)):vals[i]);
+            bytes32 id = keccak256(abi.encodePacked(address(this), cids[i], vals[i], block.timestamp));
+            p.createUpdateConfigProposal(cids[i], vals[i]);
             vm.prank(v1); p.voteProposal(id, true);
             vm.prank(v2); p.voteProposal(id, true);
             vm.prank(v3); p.voteProposal(id, true);
 
-            if (cids[i]==0) require(p.proposalLastingPeriod()==vals[0], "cid0");
+            if (cids[i]==0) require(p.proposalLastingPeriod()==3600, "cid0");
             else if (cids[i]==1) require(p.punishThreshold()==vals[1], "cid1");
             else if (cids[i]==2) require(p.removeThreshold()==vals[2], "cid2");
             else if (cids[i]==3) require(p.decreaseRate()==vals[3], "cid3");
             else if (cids[i]==4) require(p.withdrawProfitPeriod()==vals[4], "cid4");
-            else if (cids[i]==5) require(p.increasePeriod()==vals[5], "cid5");
-            else if (cids[i]==6) require(p.receiverAddr()==recv, "cid6");
+            else if (cids[i]==5) require(p.blockReward()==vals[5], "cid5");
+            else if (cids[i]==6) require(p.unbondingPeriod()==vals[6], "cid6");
+            else if (cids[i]==7) require(p.validatorUnjailPeriod()==vals[7], "cid7");
         }
     }
 }

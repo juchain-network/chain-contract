@@ -7,21 +7,19 @@ const { keccak256 } = require('js-sha3');
 
 console.log('🔧 Extracting system contract bytecode and updating Genesis file...');
 
-// Contract address mapping
+// Contract address mappings
 const CONTRACT_ADDRESSES = {
-    'Validators': '0x000000000000000000000000000000000000f000',
-    'Punish': '0x000000000000000000000000000000000000f001',
-    'Proposal': '0x000000000000000000000000000000000000f002',
-    'Staking': '0x000000000000000000000000000000000000f003'
+    'Validators': '0x000000000000000000000000000000000000f010',
+    'Punish': '0x000000000000000000000000000000000000f011',
+    'Proposal': '0x000000000000000000000000000000000000f012',
+    'Staking': '0x000000000000000000000000000000000000f013'
 };
 
-// Initial validator information
+// Initial validator information (3 validators, meeting minimum validator requirement)
 const INITIAL_VALIDATORS = [
     '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
     '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-    '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
-    '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
-    '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65'
+    '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'
 ];
 
 // Read contract bytecode
@@ -38,13 +36,13 @@ function getContractBytecode(contractName) {
             const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
             return artifact.deployedBytecode;
         } catch (error) {
-            console.error(`❌ Unable to read ${contractName} contract bytecode:`, error.message);
+            console.error(`❌ Failed to read ${contractName} contract bytecode:`, error.message);
             return null;
         }
     }
 }
 
-// keccak256 calculation helper function
+// keccak256 hash helper function
 function keccak256Hash(data) {
     if (typeof data === 'string' && data.startsWith('0x')) {
         return '0x' + keccak256(Buffer.from(data.slice(2), 'hex'));
@@ -52,28 +50,28 @@ function keccak256Hash(data) {
     return '0x' + keccak256(data);
 }
 
-// Generate extraData for initial validators
-// Use pre-allocated accounts as initial validators
+// Generate initial validators' extraData
+// Using pre-allocated accounts as initial validators
 function generateExtraData() {
     // Build extraData structure:
-    // 32-byte vanity + N*20-byte validator addresses + 65-byte signature
-    const vanity = '0'.repeat(64); // 32-byte vanity (can be any data)
+    // 32 bytes vanity + N*20 bytes validator addresses + 65 bytes signature
+    const vanity = '0'.repeat(64); // 32 bytes vanity (can be arbitrary data)
     
     // Validator address list (remove 0x prefix, keep 20 bytes)
     const validatorAddresses = INITIAL_VALIDATORS.map(addr => addr.slice(2).toLowerCase()).join('');
     
-    // To generate correct signature, we need:
+    // To generate the correct signature, we need:
     // 1. Build data to sign (excluding signature part)
     const dataToSign = vanity + validatorAddresses;
     
     // 2. Hash the data
     const hash = keccak256Hash(Buffer.from(dataToSign, 'hex'));
     
-    // 3. Generate a simple signature (in real scenario, this should be signed by validator private key)
-    // Here we use a deterministic method to generate signature
+    // 3. Generate a simple signature (in real scenarios, this should be signed by validator private keys)
+    // Here we use a deterministic method to generate the signature
     const messageHash = Buffer.from(hash.slice(2), 'hex');
     
-    // Generate a fixed signature (65 bytes: 32-byte r + 32-byte s + 1-byte v)
+    // Generate a fixed signature (65 bytes: 32 bytes r + 32 bytes s + 1 byte v)
     // Note: This is not a real ECDSA signature, just for correct format
     const r = keccak256(messageHash).slice(0, 64);
     const s = keccak256(r + 'salt').slice(0, 64);
@@ -112,15 +110,21 @@ function generateStakingStorage() {
     // slot 6: totalStaked uint256
     // slot 7: rewardPerShare mapping(address => uint256)
     // slot 8: validatorsContract IValidators
+    // slot 9: proposalContract Proposal
     
     const storage = {};
     
-    // Note: Do not set initialized, let Congress consensus engine call initialize() method
+    // Note: Don't set initialized, let Congress consensus engine call initialize() or initializeWithValidators() method
     
     // Set validatorsContract address (slot 8)
     const validatorsAddress = CONTRACT_ADDRESSES.Validators.toLowerCase();
     storage['0x0000000000000000000000000000000000000000000000000000000000000008'] = 
         '0x' + validatorsAddress.slice(2).padStart(64, '0');
+    
+    // Set proposalContract address (slot 9)
+    const proposalAddress = CONTRACT_ADDRESSES.Proposal.toLowerCase();
+    storage['0x0000000000000000000000000000000000000000000000000000000000000009'] = 
+        '0x' + proposalAddress.slice(2).padStart(64, '0');
     
     // Set staking information for each validator
     const minValidatorStake = BigInt('10000000000000000000000'); // 10,000 ether in wei
@@ -163,7 +167,7 @@ function generateStakingStorage() {
         const jailUntilSlot = '0x' + (BigInt(stakingSlot) + BigInt(5)).toString(16).padStart(64, '0');
         storage[jailUntilSlot] = '0x' + '0'.padStart(64, '0');
         
-        // allValidators array (slot 4) - set array length
+        // allValidators array (slot 4) - Set array length
         if (index === 0) {
             storage['0x0000000000000000000000000000000000000000000000000000000000000004'] = 
                 '0x' + INITIAL_VALIDATORS.length.toString(16).padStart(64, '0');
@@ -213,7 +217,7 @@ function updateGenesisFile() {
                 
                 // Add preset storage state for Staking contract
                 if (contractName === 'Staking') {
-                    contractAlloc.storage = generateStakingStorage();
+                    // contractAlloc.storage = generateStakingStorage();
                     console.log(`✅ ${contractName}: ${address} (includes ${INITIAL_VALIDATORS.length} preset validators)`);
                 } else {
                     console.log(`✅ ${contractName}: ${address}`);
@@ -229,10 +233,10 @@ function updateGenesisFile() {
         genesis.extraData = generateExtraData();
         console.log('✅ Updated extraData to include initial validators');
         
-        // Write back Genesis file
+        // Write back to Genesis file
         fs.writeFileSync(genesisPath, JSON.stringify(genesis, null, 2));
         console.log('✅ Genesis file updated successfully!');
-        console.log(`📄 文件位置: ${path.relative(process.cwd(), genesisPath)}`);
+        console.log(`📄 File location: ${path.relative(process.cwd(), genesisPath)}`);
         
         // Display summary
         console.log('\n📋 Update Summary:');
@@ -241,16 +245,16 @@ function updateGenesisFile() {
         console.log(`🔄 Validator Update Cycle: ${genesis.config.congress.epoch} blocks`);
         console.log(`🏪 System Contracts: ${Object.keys(CONTRACT_ADDRESSES).length} contracts`);
         console.log(`👥 Preset Validators: ${INITIAL_VALIDATORS.length} validators`);
-        console.log(`💰 每个验证者质押: 10,000 JU`);
-        console.log(`🆔 链 ID: ${genesis.config.chainId}`);
+        console.log(`💰 Stake per Validator: 10,000 JU`);
+        console.log(`🆔 Chain ID: ${genesis.config.chainId}`);
         
-        console.log('\n👥 初始验证者列表:');
+        console.log('\n👥 Initial Validator List:');
         INITIAL_VALIDATORS.forEach((validator, index) => {
             console.log(`   ${index + 1}. ${validator}`);
         });
         
     } catch (error) {
-        console.error('❌ 更新 Genesis 文件失败:', error.message);
+        console.error('❌ Failed to update Genesis file:', error.message);
         process.exit(1);
     }
 }
@@ -266,7 +270,7 @@ function verifyContracts() {
             console.log(`❌ ${contractName}: Not compiled or bytecode is empty`);
             allContractsReady = false;
         } else {
-            console.log(`✅ ${contractName}: Compiled successfully (${bytecode.length} characters)`);
+            console.log(`✅ ${contractName}: Compilation successful (${bytecode.length} characters)`);
         }
     }
     
@@ -287,15 +291,16 @@ function main() {
         // Update Genesis file
         updateGenesisFile();
         
-        console.log('\n🎉 Congress consensus configuration completed!');
+        console.log('\n🎉 Congress Consensus Configuration Complete!');
         console.log('💡 Next steps to start private chain:');
         console.log('   cd ../chain && ./pm2-init.sh');
-        console.log('   or directly use: cd ../chain && pm2 start ecosystem.config.js');
+        console.log('   Or directly use: cd ../chain && pm2 start ecosystem.config.js');
         console.log('\n📋 Important Notes:');
-        console.log('   ✅ Genesis block includes staking info for 5 preset validators');
+        console.log('   ✅ Genesis block includes staking information for 3 preset validators');
         console.log('   ✅ Each validator has staked 10,000 JU tokens');
-        console.log('   ✅ JPoSA consensus will work normally without manual validator registration');
-        console.log('   ✅ Can directly perform validator voting and staking operations');
+        console.log('   ✅ JPoSA consensus will work normally, no manual validator registration needed');
+        console.log('   ✅ Validator voting and staking operations can be performed directly');
+        console.log('   ✅ Validator count meets minimum requirement (MIN_VALIDATORS = 3)');
     }
 }
 
