@@ -1,5 +1,5 @@
 ##
-## Compile solidity and generate bin files, abi files, and corresponding go files. solc version 0.8.20
+##Compile solidity, generate bin files, abi files, and corresponding go files. solc version 0.8.20
 
 currentDir := `pwd`
 
@@ -10,13 +10,13 @@ ALLOW_PATH := $(currentDir)
 
 PACKAGE := generated
 
-# Project Information
+# Project information
 PROJECT_NAME := congress-cli
 VERSION := 1.2.1
 BUILD_DATE := $(shell date -u +'%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-# Build Flags
+# Build flags
 LDFLAGS := -X 'juchain.org/chain/congress-cli/cmd.Version=$(VERSION)' \
            -X 'juchain.org/chain/congress-cli/cmd.BuildDate=$(BUILD_DATE)' \
            -X 'juchain.org/chain/congress-cli/cmd.GitCommit=$(GIT_COMMIT)'
@@ -37,7 +37,7 @@ proposal: ## Generate Go bindings for Proposal contract
 	@rm $(SRC_CONTRACTJu)/combined.json
 	@echo "✅ Contract bindings generated successfully"
 
-build: ## Build project
+build: ## Compile project
 	@echo "Building $(PROJECT_NAME) v$(VERSION)..."
 	@go build -ldflags "$(LDFLAGS)" -o ${OUT}/$(PROJECT_NAME)
 	@echo "✅ Build completed: ${OUT}/$(PROJECT_NAME)"
@@ -47,7 +47,7 @@ build_linux: ## Build Linux version
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ${OUT}/$(PROJECT_NAME)-linux-amd64
 	@echo "✅ Linux build completed: ${OUT}/$(PROJECT_NAME)-linux-amd64"
 
-# For macOS with CGO dependencies, need to enable CGO, install cross-compiler first: brew install FiloSottile/musl-cross/musl-cross
+# For mac encountering cgo-dependent packages, enable cgo and install c cross-compiler first: brew install FiloSottile/musl-cross/musl-cross
 build_linux_cgo: ## Build Linux version with CGO
 	@echo "Building $(PROJECT_NAME) for Linux with CGO..."
 	@CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++ CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS) -linkmode external -extldflags -static" -o ${OUT}/$(PROJECT_NAME)-linux-static
@@ -58,7 +58,7 @@ test: ## Run tests
 	@go test -v ./cmd
 	@echo "✅ Tests completed"
 
-lint: ## Run code linter
+lint: ## Run code checks
 	@echo "Running linter..."
 	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
 	@export PATH=$$PATH:~/go/bin && golangci-lint run --timeout=5m || echo "⚠️  Linting completed with warnings"
@@ -89,7 +89,7 @@ clean: ## Clean build files
 	@rm -fr build/*
 	@echo "✅ Build files cleaned"
 
-all: fmt lint test build ## Run all checks and build
+all: fmt lint test build ## Run all checks and builds
 
 release: clean all build_linux ## Build release version
 	@echo "Creating release package..."
@@ -101,4 +101,3 @@ release: clean all build_linux ## Build release version
 
 asmExample: ## Generate assembly example
 	@solc --asm --bin -o tmp/ valset-bin=./tmp/valset-bin Valset.sol
-

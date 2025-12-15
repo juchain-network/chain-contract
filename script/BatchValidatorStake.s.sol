@@ -6,21 +6,21 @@ import {Staking} from "../contracts/Staking.sol";
 
 /**
  * @title BatchValidatorStakeScript
- * @dev 批量验证者质押脚本 - 适用于控制多个验证者私钥的情况
- * 警告：仅在您拥有所有验证者私钥的情况下使用
+ * @dev Batch validator staking script - suitable for situations where multiple validator private keys are controlled
+ * Warning: Only use when you own all validator private keys
  */
 contract BatchValidatorStakeScript is Script {
     
     function setUp() public {}
 
     /**
-     * @dev 批量验证者质押 - 需要预先设置验证者私钥
+     * @dev Batch validator staking - requires validator private keys to be pre-set
      */
     function run() external {
         address stakingAddress = vm.envOr("STAKING_CONTRACT", address(0));
         require(stakingAddress != address(0), "STAKING_CONTRACT address not set");
         
-        // 验证者私钥数组 - 在实际部署时从环境变量或安全存储中获取
+        // Validator private key array - obtained from environment variables or secure storage during actual deployment
         uint256[] memory validatorKeys = getValidatorPrivateKeys();
         
         uint256 stakeAmount = 10000 ether; // 10,000 JU
@@ -41,12 +41,12 @@ contract BatchValidatorStakeScript is Script {
             );
         }
         
-        // 最终状态检查
+        // Final status check
         checkFinalStatus(stakingAddress);
     }
     
     /**
-     * @dev 注册单个验证者
+     * @dev Register a single validator
      */
     function registerSingleValidator(
         address stakingAddress,
@@ -59,12 +59,12 @@ contract BatchValidatorStakeScript is Script {
         
         console.log("Registering validator", index, ":", validator);
         
-        // 检查余额（如果余额不足，需要先转账）
+        // Check balance (if balance is insufficient, funds need to be transferred first
         if (validator.balance < stakeAmount) {
             console.log("Warning: Validator", validator, "has insufficient balance");
             console.log("Required:", stakeAmount / 1 ether, "JU");
             console.log("Current:", validator.balance / 1 ether, "JU");
-            return; // 跳过此验证者
+            return; // Skip this validator
         }
         
         vm.startBroadcast(privateKey);
@@ -77,15 +77,15 @@ contract BatchValidatorStakeScript is Script {
     }
     
     /**
-     * @dev 获取验证者私钥 - 实际部署时需要安全的密钥管理
+     * @dev Get validator private keys - secure key management is needed for actual deployment
      */
     function getValidatorPrivateKeys() internal view returns (uint256[] memory) {
         uint256[] memory keys = new uint256[](5);
         
-        // 警告：这些是示例私钥，实际部署时必须使用真实的安全密钥
-        // 应该从环境变量、密钥管理服务或硬件钱包获取
+        // Warning: These are sample private keys, real secure keys must be used for actual deployment
+        // Should be obtained from environment variables, key management services, or hardware wallets
         if (block.chainid == 202599) {
-            // 测试网示例私钥 - 仅用于演示
+            // Testnet sample private keys - for demonstration only
             keys[0] = vm.envOr("VALIDATOR_1_KEY", uint256(0));
             keys[1] = vm.envOr("VALIDATOR_2_KEY", uint256(0));
             keys[2] = vm.envOr("VALIDATOR_3_KEY", uint256(0));
@@ -93,7 +93,7 @@ contract BatchValidatorStakeScript is Script {
             keys[4] = vm.envOr("VALIDATOR_5_KEY", uint256(0));
         }
         
-        // 验证所有私钥都已设置
+        // Verify all private keys are set
         for (uint i = 0; i < keys.length; i++) {
             require(keys[i] != 0, string(abi.encodePacked("VALIDATOR_", i + 1, "_KEY not set")));
         }
@@ -102,17 +102,22 @@ contract BatchValidatorStakeScript is Script {
     }
     
     /**
-     * @dev 检查最终状态
+     * @dev Check final status
      */
     function checkFinalStatus(address stakingAddress) internal view {
         Staking staking = Staking(stakingAddress);
         
         uint256 totalStaked = staking.totalStaked();
+        // Use getValidatorCount() to get the count of all registered validators
         uint256 validatorCount = staking.getValidatorCount();
         
         console.log("=== Final Status ===");
         console.log("Total staked:", totalStaked / 1 ether, "JU");
         console.log("Total validators:", validatorCount);
-        console.log("Average stake per validator:", (totalStaked / validatorCount) / 1 ether, "JU");
+        if (validatorCount > 0) {
+            console.log("Average stake per validator:", (totalStaked / validatorCount) / 1 ether, "JU");
+        } else {
+            console.log("No validators registered yet");
+        }
     }
 }

@@ -7,24 +7,24 @@ import {Proposal} from "../contracts/Proposal.sol";
 
 /**
  * @title DebugProposalScript
- * @dev 调试Proposal合约的脚本
+ * @dev Script to debug the Proposal contract
  */
 contract DebugProposalScript is BaseSetup {
     
     function run() public view {
         console.log("=== Debugging Proposal Contract ===");
         
-        // 检查基本状态
+        // Check basic status
         console.log("Proposal contract address:", PROPOSAL);
         
-        // 检查初始化状态
+        // Check initialization status
         try Proposal(PROPOSAL).initialized() returns (bool init) {
             console.log("Initialized:", init);
         } catch {
             console.log("Cannot check initialized status");
         }
         
-        // 检查proposalLastingPeriod
+        // Check proposalLastingPeriod
         try Proposal(PROPOSAL).proposalLastingPeriod() returns (uint256 period) {
             console.log("Proposal lasting period:", period);
         } catch Error(string memory reason) {
@@ -33,16 +33,9 @@ contract DebugProposalScript is BaseSetup {
             console.log("proposalLastingPeriod failed with unknown error");
         }
         
-        // 检查receiverAddr
-        try Proposal(PROPOSAL).receiverAddr() returns (address receiver) {
-            console.log("Receiver address:", receiver);
-        } catch Error(string memory reason) {
-            console.log("receiverAddr failed:", reason);
-        } catch {
-            console.log("receiverAddr failed with unknown error");
-        }
+        // Note: receiverAddr and increasePeriod have been removed, token inflation is no longer supported
         
-        // 检查punishThreshold
+        // Check punishThreshold
         try Proposal(PROPOSAL).punishThreshold() returns (uint256 threshold) {
             console.log("Punish threshold:", threshold);
         } catch Error(string memory reason) {
@@ -53,7 +46,7 @@ contract DebugProposalScript is BaseSetup {
     }
     
     function testCreateProposal() external {
-        // 在测试环境中，首先部署系统
+        // In test environment, first deploy the system
         address[] memory initVals = new address[](3);
         initVals[0] = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
         initVals[1] = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;

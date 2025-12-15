@@ -178,7 +178,8 @@ func listTopValidatorsCmd() *cobra.Command {
 		Run:   queryTopValidators,
 	}
 
-	cmd.Flags().Int("limit", 21, "Maximum number of validators to return")
+	// Note: limit flag is kept for compatibility but not used (Staking.getTopValidators has no limit parameter)
+	cmd.Flags().Int("limit", 21, "Maximum number of validators to display (not enforced, for display only)")
 
 	return cmd
 }
@@ -308,7 +309,7 @@ func innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, websi
 
 	// Use default values if not provided
 	if moniker == "" {
-		moniker = "validator6"
+		moniker = "validator"
 	}
 	if identity == "" {
 		identity = ""
@@ -320,7 +321,7 @@ func innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, websi
 		email = ""
 	}
 	if details == "" {
-		details = "Validator6 node"
+		details = "Validator node"
 	}
 
 	abiData, err := validatorsAbi.Pack("createOrEditValidator",
@@ -705,14 +706,15 @@ func queryTopValidators(cmd *cobra.Command, args []string) {
 	}
 	defer client.Close()
 
-	// Create call
-	parsedABI, err := abi.JSON(strings.NewReader(stakingABI))
+	// Create call - use Validators contract for unified interface
+	parsedABI, err := abi.JSON(strings.NewReader(validatorsABI))
 	if err != nil {
 		PrintError("Failed to parse ABI", err)
 		return
 	}
 
-	data, err := parsedABI.Pack("getTopValidators", big.NewInt(int64(limit)))
+	// Note: Validators.getTopValidators() has no parameters, returns all top validators
+	data, err := parsedABI.Pack("getTopValidators")
 	if err != nil {
 		PrintError("Failed to pack call data", err)
 		return
@@ -723,8 +725,8 @@ func queryTopValidators(cmd *cobra.Command, args []string) {
 		To:   &common.Address{},
 		Data: data,
 	}
-	stakingAddr := common.HexToAddress(StakingContractAddr)
-	msg.To = &stakingAddr
+	validatorsAddr := common.HexToAddress(ValidatorContractAddr)
+	msg.To = &validatorsAddr
 
 	result, err := client.CallContract(context.Background(), msg, nil)
 	if err != nil {
@@ -746,9 +748,21 @@ func queryTopValidators(cmd *cobra.Command, args []string) {
 
 	validators := unpacked[0].([]common.Address)
 
+	// Apply limit for display only (contract returns all validators)
+	displayCount := len(validators)
+	if limit > 0 && limit < displayCount {
+		displayCount = limit
+	}
+
 	PrintSuccess("Top Validators")
-	fmt.Printf("Count: %d\n", len(validators))
-	for i, validator := range validators {
-		fmt.Printf("%d. %s\n", i+1, validator.Hex())
+	fmt.Printf("Total Count: %d\n", len(validators))
+	if limit > 0 && limit < len(validators) {
+		fmt.Printf("Displaying first %d validators:\n", displayCount)
+	}
+	for i := 0; i < displayCount; i++ {
+		fmt.Printf("%d. %s\n", i+1, validators[i].Hex())
+	}
+	if limit > 0 && limit < len(validators) {
+		fmt.Printf("... and %d more validators\n", len(validators)-displayCount)
 	}
 }

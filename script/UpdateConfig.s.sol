@@ -6,9 +6,9 @@ import {Proposal} from "../contracts/Proposal.sol";
 
 contract UpdateConfigScript is BaseSetup {
     function run() external {
-        // 示例：更新配置参数
-        uint256 cid = 1; // 配置ID
-        uint256 newValue = 7200; // 新值
+        // Example: Update configuration parameters
+        uint256 cid = 1; // Configuration ID
+        uint256 newValue = 7200; // New value
         updateConfig(cid, newValue);
     }
     
