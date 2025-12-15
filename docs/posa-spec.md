@@ -45,7 +45,7 @@
                             │ 调用
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Validators 合约 (0xf000)                  │
+│                    Validators 合约 (0xf010)                  │
 │  - 管理验证者集合 (currentValidatorSet, highestValidatorsSet) │
 │  - 分配交易手续费奖励                                         │
 │  - 提供验证者查询接口                                         │
@@ -54,7 +54,7 @@
          │                    │                    │
     ┌────▼────┐         ┌────▼────┐         ┌────▼────┐
     │ Proposal│         │ Staking │         │ Punish  │
-    │ (0xf002)│         │ (0xf003)│         │ (0xf001)│
+    │ (0xf012)│         │ (0xf013)│         │ (0xf011)│
     └─────────┘         └─────────┘         └─────────┘
 ```
 
@@ -62,10 +62,10 @@
 
 | 合约名称 | 地址 | 功能描述 |
 |---------|------|----------|
-| Validators | `0x000000000000000000000000000000000000f000` | 验证者管理、奖励分配 |
-| Punish | `0x000000000000000000000000000000000000f001` | 惩罚机制 |
-| Proposal | `0x000000000000000000000000000000000000f002` | 提案治理 |
-| Staking | `0x000000000000000000000000000000000000f003` | 质押管理 |
+| Validators | `0x000000000000000000000000000000000000F010` | 验证者集合缓存、手续费分配 |
+| Punish | `0x000000000000000000000000000000000000F011` | 惩罚计数与阈值处理 |
+| Proposal | `0x000000000000000000000000000000000000F012` | 提案治理与参数配置 |
+| Staking | `0x000000000000000000000000000000000000F013` | 质押、委托、奖励与 jail 状态 |
 
 ---
 
@@ -101,13 +101,6 @@
    - `isProposalValidForStaking(address)`: 检查提案是否在7天有效期内（仅用于新注册验证者）
    - **重要**：7天有效期仅用于新注册，已注册验证者不受此限制
 
-4. **分级惩罚机制（方案C）**
-   - `violationCount[address]`: 记录验证者违规次数
-   - `setUnpassed(address)`: 验证者被移除时，增加违规计数
-   - `autoRestorePass(address)`: 3 次以下违规时自动恢复 pass 状态
-   - `getViolationCount(address)`: 查询验证者违规次数
-   - 投票通过后自动重置违规计数
-
 #### 关键数据结构
 
 ```solidity
@@ -115,14 +108,13 @@ mapping(address => bool) public pass;  // 地址是否通过提案
 mapping(address => uint256) public proposalPassedTime;  // 提案通过时间
 mapping(bytes32 => ProposalInfo) public proposals;  // 提案信息
 mapping(bytes32 => ResultInfo) public results;  // 投票结果
-mapping(address => uint256) public violationCount;  // 违规次数（方案C: 分级惩罚）
 ```
 
 #### 与其他合约的关系
 
 - **依赖 Validators**: 获取活动验证者列表用于投票统计
-- **被 Staking 依赖**: Staking 检查 `pass[address]` 和 `isProposalValidForStaking()` 判断是否允许新注册质押（仅用于新注册，已注册验证者不受7天有效期限制）
-- **被 Validators 调用**: `setUnpassed()` 在验证者被移除时清除提案状态
+- **被 Staking 依赖**: 注册时检查 `pass[address]` 和 `isProposalValidForStaking()`（仅新注册使用 7 天窗口）
+- **被 Validators 调用**: `setUnpassed()` 在验证者被移除或主动退出时清除授权
 
 ---
 
@@ -686,26 +678,12 @@ type Snapshot struct {
 └─────────────────────────────────────────────────────────────┘
 验证者调用: Staking.emergencyExit()
   ├─> 检查: 验证者已注册 (onlyValidValidator)
-  ├─> 检查验证者是否在 currentValidatorSet 中
-  │   └─> isInCurrentSet = validatorsContract.isActiveValidator(msg.sender)
-  ├─> 计算退出后剩余验证者数量
-  │   └─> remainingCount = (isInCurrentSet && !isJailed) ? currentActiveCount - 1 : currentActiveCount
-  ├─> 检查: remainingCount >= MIN_VALIDATORS (3)
-  │   └─> 如果不满足，交易失败
-  ├─> 如果验证者在 currentValidatorSet 中且未被 jailed:
-  │   ├─> 先 jail 验证者（1 个 epoch，86400 块）
-  │   │   ├─> isJailed = true
-  │   │   ├─> jailUntilBlock = block.number + 86400
-  │   │   └─> emit ValidatorJailed(...)
-  │   └─> 确保验证者立即停止出块，平滑退出
-  ├─> 更新: selfStake = 0
-  ├─> 更新: totalStaked -= withdrawAmount (withdrawAmount 是退出前的 selfStake 值)
-  ├─> 从 allValidators 数组中移除验证者
-  │   └─> _removeFromAllValidators(msg.sender)
-  │       └─> 使用 swap-and-pop 技术安全移除
+  ├─> 检查: 不在 currentValidatorSet（需先等待退出活动集合）
+  ├─> 更新: selfStake = 0，totalStaked -= withdrawAmount
+  ├─> 如果仍处于授权状态，Validators.removeFromHighestSet(msg.sender) 会被调用以移出候选并清除 pass
+  ├─> 从 allValidators 数组安全移除 (_removeFromAllValidators)
   ├─> emit ValidatorExited(...)
-  └─> 转账: payable(msg.sender).call{value: selfStake}("")
-      └─> 使用 call() 并检查返回值，确保转账成功
+  └─> 转账: payable(msg.sender).call{value: withdrawAmount}("")
 ```
 
 ### 6.6 委托流程
@@ -715,7 +693,7 @@ type Snapshot struct {
 │ 委托代币给验证者                                                │
 └─────────────────────────────────────────────────────────────┘
 用户调用: Staking.delegate(validator) {value: >= 1 ether}
-  ├─> 检查: validator 是活动验证者 (onlyActiveValidator)
+  ├─> 检查: validator 是有效且未被 jail 的验证者 (onlyActiveValidator)
   ├─> 检查: msg.value >= MIN_DELEGATION (1 ether)
   ├─> 检查: validator != msg.sender
   ├─> 更新奖励: _updateRewards(msg.sender, validator)
@@ -858,112 +836,21 @@ Punish.punish(validator)
   └─> 验证者无法出块（不在 snap.Validators 中）
 ```
 
-### 6.9 验证者重新加入流程（方案C: 分级惩罚机制）
-
-**方案C核心设计**：
-- **3 次以下违规**：可以 unjail，自动恢复 `pass` 状态，无需重新投票
-- **4 次及以上违规**：不能 unjail，必须先重新提案并通过投票
-- **改过机制**：投票通过后重置违规计数
+### 6.9 验证者重新加入流程（当前实现）
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ 等待监禁期结束                                                  │
-└─────────────────────────────────────────────────────────────┘
-等待: block.number >= jailUntilBlock
-  └─> 验证者可以调用 unjailValidator()
+1) 处罚并 jail 后，pass 被清除：Validators.removeValidator → Proposal.setUnpassed
+2) 重新提案并通过：Proposal.voteProposal 通过后 pass[validator] = true
+3) 等待监禁期结束：block.number >= jailUntilBlock
+4) 验证者自行调用 unjailValidator():
+   - 仅本人调用
+   - 需已通过提案（pass == true）
+   - 需自抵押仍满足 MIN_VALIDATOR_STAKE
+   - validators.tryActive(validator) 在状态切换前激活候选集合
+   - isJailed=false, jailUntilBlock=0
+5) 下一个 Epoch：共识层按质押排序更新活动集合，验证者重新进入 currentValidatorSet（如质押、授权均满足）
 
-┌─────────────────────────────────────────────────────────────┐
-│ 解除监禁（方案C: 分级惩罚）                                      │
-└─────────────────────────────────────────────────────────────┘
-验证者调用: Staking.unjailValidator(validator)
-  ├─> 检查: 调用者是验证者自己
-  ├─> 检查: 验证者被监禁
-  ├─> 检查: 监禁期已过
-  ├─> 方案C: 检查违规次数 (violationCount[validator])
-  │   └─> 如果 violationCount > 3: 直接 revert，不允许 unjail
-  │
-  ├─> 更新: isJailed = false
-  ├─> 更新: jailUntilBlock = 0
-  │
-  ├─> 方案C: 自动恢复 pass 状态（3 次以下违规）
-  │   └─> Proposal.autoRestorePass(validator)
-  │       ├─> 如果 violationCount <= 3:
-  │       │   ├─> pass[validator] = true (自动恢复)
-  │       │   └─> proposalPassedTime[validator] = block.timestamp
-  │       └─> 如果 violationCount > 3: 返回 false（不会执行到这里，因为前面已检查）
-  │
-  └─> Validators.tryActive(validator)
-      └─> 添加到 highestValidatorsSet（如果 pass == true）
-
-┌─────────────────────────────────────────────────────────────┐
-│ 重新提案（仅 4 次及以上违规需要）                                  │
-└─────────────────────────────────────────────────────────────┘
-如果 violationCount >= 4:
-  1. 创建提案: Proposal.createProposal(validator, true, details)
-  2. 验证者投票: Proposal.voteProposal(id, true)
-  3. 提案通过: 
-     ├─> pass[validator] = true
-     └─> 方案C: 重置违规计数
-         └─> violationCount[validator] = 0 (投票通过后重置)
-
-┌─────────────────────────────────────────────────────────────┐
-│ 解除监禁（投票通过后，如果验证者已注册质押）                          │
-└─────────────────────────────────────────────────────────────┘
-**重要场景**：如果验证者已注册质押（selfStake >= MIN_VALIDATOR_STAKE），投票通过后：
-  ├─> 状态: pass[validator] = true, violationCount = 0
-  ├─> 状态: isJailed = true（仍然被监禁，需要手动 unjail）
-  │
-  └─> 等待监禁期结束: block.number >= jailUntilBlock
-      └─> 调用: Staking.unjailValidator(validator)
-          ├─> 检查: violationCount <= 3 ✅（已重置为 0，通过）
-          ├─> 更新: isJailed = false
-          ├─> 更新: jailUntilBlock = 0
-          └─> 调用: Validators.tryActive(validator)
-              └─> 添加到 highestValidatorsSet（pass 已经是 true）
-
-**注意**：
-- 已注册质押的验证者不需要再次注册（registerValidator 会失败，因为 selfStake > 0）
-- 投票通过后，验证者仍然被监禁，必须等待监禁期结束并手动调用 unjailValidator()
-- 如果忘记调用 unjailValidator()，即使投票通过也无法恢复
-
-┌─────────────────────────────────────────────────────────────┐
-│ 重新质押（仅质押已提取时需要）                                     │
-└─────────────────────────────────────────────────────────────┘
-如果质押已提取 (selfStake < MIN_VALIDATOR_STAKE):
-  └─> Staking.registerValidator(commissionRate) {value: >= 10000 ether}
-      ├─> 检查: pass[validator] == true
-      ├─> 检查: isProposalValidForStaking(validator) == true（7天内必须注册，仅用于新注册）
-      └─> 检查: !isJailed || block.number >= jailUntilBlock
-      └─> 注意: 如果验证者仍然被监禁，需要先 unjail 或等待监禁期结束
-
-如果质押未提取 (selfStake >= MIN_VALIDATOR_STAKE):
-  └─> 无需重新质押
-  └─> 但需要等待监禁期结束并调用 unjailValidator()（如果还未 unjail）
-
-┌─────────────────────────────────────────────────────────────┐
-│ 清理惩罚记录                                                    │
-└─────────────────────────────────────────────────────────────┘
-重新质押时: Validators.addValidator()
-  └─> Punish.cleanPunishRecord(validator)
-      └─> missedBlocksCounter = 0
-      └─> 从 punishValidators 数组移除
-
-或者 unjail 时: Validators.tryActive(validator)
-  └─> Punish.cleanPunishRecord(validator)
-      └─> missedBlocksCounter = 0
-      └─> 从 punishValidators 数组移除
-
-┌─────────────────────────────────────────────────────────────┐
-│ 等待 Epoch 更新                                                 │
-└─────────────────────────────────────────────────────────────┘
-等待下一个 Epoch:
-  └─> 共识层调用: Staking.getTopValidators()
-      ├─> 检查: selfStake >= MIN_VALIDATOR_STAKE ✅（已注册质押）
-      ├─> 检查: !isJailed || block.number >= jailUntilBlock ✅（已 unjail）
-      ├─> 检查: pass[validator] == true ✅（投票通过）
-      └─> 返回验证者列表
-  └─> 共识层调用: Validators.updateActiveValidatorSet(newSet, epoch)
-      └─> 验证者重新进入验证者集合
+若之前已提取自抵押 (< MIN_VALIDATOR_STAKE)，需在重新提案通过后调用 registerValidator 重新质押（受 7 天窗口限制）。
 ```
 
 ### 6.10 Epoch 更新完整流程
@@ -995,8 +882,7 @@ Punish.punish(validator)
       │   ├─> Staking.getTopValidators() [使用 current state]
       │   │   └─> 返回已过滤的验证者列表（排除被 jail 的）
       │   └─> Validators.updateActiveValidatorSet(newSet, epoch)
-      │       ├─> 更新 currentValidatorSet
-      │       └─> 同步更新 highestValidatorsSet
+      │       └─> 更新 currentValidatorSet（不同步 highestValidatorsSet）
       │
       └─> decreaseMissedBlocksCounter()
           └─> Punish.decreaseMissedBlocksCounter(epoch)
@@ -1059,36 +945,18 @@ Punish.punish(validator)
 
 ### 7.2 Jail 机制
 
-**Jail 触发条件**：
-- 连续错过 `removeThreshold` (48) 个块
+**Jail 触发条件**：漏块计数达到 `removeThreshold` (48)。
 
 **Jail 效果**：
 - `isJailed = true`
-- `jailUntilBlock = block.number + 86400` (1 天)
-- 立即从验证者集合中排除（Epoch 块）
-- 无法出块（不在 `snap.Validators` 中）
+- `jailUntilBlock = block.number + validatorUnjailPeriod`（默认 86400）
+- 在下一个 Epoch 从验证者集合中排除；当前 Epoch 内虽在缓存集合，但奖励会被过滤
 - 无法质押、增加质押、更新佣金率
-- **方案C**: `violationCount[validator]++` (增加违规计数)
 
 **Unjail 条件**：
 - 等待监禁期结束：`block.number >= jailUntilBlock`
-- 验证者自己调用 `unjailValidator()`
-
-**Unjail 后的恢复机制（方案C: 分级惩罚）**：
-- **3 次以下违规** (`violationCount <= 3`)：
-  - 可以 unjail（检查通过）
-  - 自动恢复 `pass[validator] = true`
-  - 无需重新提案投票
-  - 可直接重新激活（如果质押足够）
-- **4 次及以上违规** (`violationCount >= 4`)：
-  - 不能 unjail（require 检查失败）
-  - 必须先重新提案并通过投票
-  - 投票通过后违规计数重置为 0
-  - 需要重新质押（如果质押已提取）
-
-**改过机制（方案C）**：
-- 投票通过后自动重置违规计数：`violationCount[validator] = 0`
-- 给予验证者改过机会，下次违规时重新开始计数
+- 需重新通过提案（pass == true）
+- 验证者本人调用 `unjailValidator()`，质押需仍达 `MIN_VALIDATOR_STAKE`
 
 ### 7.3 奖励分配机制
 
@@ -1168,13 +1036,11 @@ Punish.punish(validator)
 
 ### 7.7 保护机制
 
-**最小验证者数量保护**：
-- 提取质押时检查：`emergencyExit()` 检查退出后剩余验证者数量 >= `MIN_VALIDATORS` (3)
-- 防止所有验证者退出导致链停止
+**候选集合保护**：
+- `removeValidator()` / `removeFromHighestSet()` 要求 `highestValidatorsSet.length > 1`，避免清空候选集合
 
-**至少保留 1 个验证者**：
-- `removeValidator()` 检查：`highestValidatorsSet.length > 1`
-- 如果只有 1 个验证者，不会被移除
+**活动集合更新滞后**：
+- 当前 Epoch 内被 jail 的验证者仍在 `currentValidatorSet`，奖励分配会过滤，被正式剔除在下一 Epoch
 
 **重入攻击防护**：
 - `Validators` 和 `Staking` 合约继承 `ReentrancyGuard`
@@ -1344,10 +1210,10 @@ Epoch 块 N (N % 86400 == 0)
 
 | 合约名称 | 地址 | 说明 |
 |---------|------|------|
-| Validators | `0x000000000000000000000000000000000000f000` | 验证者管理合约 |
-| Punish | `0x000000000000000000000000000000000000f001` | 惩罚合约 |
-| Proposal | `0x000000000000000000000000000000000000f002` | 提案合约 |
-| Staking | `0x000000000000000000000000000000000000f003` | 质押合约 |
+| Validators | `0x000000000000000000000000000000000000F010` | 验证者管理合约 |
+| Punish | `0x000000000000000000000000000000000000F011` | 惩罚合约 |
+| Proposal | `0x000000000000000000000000000000000000F012` | 提案合约 |
+| Staking | `0x000000000000000000000000000000000000F013` | 质押合约 |
 
 ---
 
@@ -1476,24 +1342,12 @@ A:
 
 **Q: 验证者被 jail 后如何恢复？**
 
-A: **方案C: 分级惩罚机制**
-1. 等待监禁期结束（86400 块，约 24 小时）
-2. **3 次以下违规** (`violationCount <= 3`)：
-   - 可以调用 `unjailValidator()` 解除监禁状态
-   - 自动恢复 `pass` 状态，无需重新投票
-   - 如果质押足够，可直接等待下一个 Epoch 更新
-   - 如果质押不足，需要重新质押
-3. **4 次及以上违规** (`violationCount >= 4`)：
-   - 不能 unjail（require 检查失败）
-   - 必须先重新提案并通过投票
-   - 投票通过后违规计数重置为 0
-   - **重要**：如果验证者已注册质押（`selfStake >= MIN_VALIDATOR_STAKE`）：
-     - 投票通过后，验证者仍然被监禁（`isJailed = true`）
-     - 必须等待监禁期结束并手动调用 `unjailValidator()` 解除监禁
-     - 不需要再次注册（因为已注册质押）
-     - 不需要重新质押（质押仍然存在）
-   - 如果质押不足，需要重新质押
-4. 等待下一个 Epoch 更新
+A:
+1. 通过治理重新授权：重新提案并投票通过（pass 恢复为 true）。
+2. 等待监禁期结束（默认 86400 块）。
+3. 质押仍需满足 `MIN_VALIDATOR_STAKE`，否则先补足或重新注册。
+4. 验证者本人调用 `unjailValidator()`，成功后 isJailed=false。
+5. 等待下一个 Epoch，由共识层更新活动集合后恢复出块。
 
 ### 11.2 质押和委托
 
@@ -1554,26 +1408,16 @@ A:
 2. **质押要求**：验证者必须质押至少 10000 ether
 3. **7 天注册期限**：提案通过后必须在 7 天内完成注册质押（仅用于新注册，已注册验证者不受此限制）
 4. **Epoch 更新**：验证者集合仅在 Epoch 块更新
-5. **Jail 机制**：被 jail 的验证者立即无法出块
-6. **状态统一管理**：Jail 状态由 Staking 合约统一管理
-7. **分级惩罚机制（方案C）**：
-   - 3 次以下违规：可以 unjail，自动恢复 pass 状态，无需重新投票
-   - 4 次及以上违规：不能 unjail，必须先重新提案并通过投票
-   - 改过机制：投票通过后重置违规计数
+5. **Jail 机制**：被 jail 的验证者当前 Epoch 奖励被过滤，下一 Epoch 被剔除
+6. **状态统一管理**：Jail 状态由 Staking 合约统一管理，授权由 Proposal 管理
 
 ### 12.2 关键流程
 
 1. **验证者加入**：提案 → 投票 → 等待 7 天 → 质押 → Epoch 更新
-2. **验证者惩罚**：错过块 → 惩罚 → Jail → 移除 → `violationCount++` (方案C)
-3. **验证者退出**：`emergencyExit()` → 检查剩余验证者数量 >= 3 → 如果在 currentValidatorSet 中先 jail → 从 allValidators 移除
-4. **验证者恢复（方案C: 分级惩罚）**：
-   - **3 次以下违规**：等待监禁期 → unjail → 自动恢复 pass → 重新激活（如需要重新质押）→ Epoch 更新
-   - **4 次及以上违规**：
-     - 等待监禁期 → 重新提案 → 投票通过（重置违规计数）
-     - **已注册质押的验证者**：投票通过后仍需手动 unjail → Epoch 更新
-     - **质押已提取的验证者**：投票通过后需要重新质押 → Epoch 更新
-5. **改过机制（方案C）**：投票通过后 → 违规计数重置为 0
-6. **奖励分配**：交易手续费（所有活动验证者）+ 出块奖励（当前验证者和委托者）
+2. **验证者惩罚**：错过块 → Punish 计数 → 达阈值 jail+移除并清除授权 → 需重新提案 + 等待监禁期 + 调用 unjail
+3. **验证者退出**：`resignValidator()` 技术性 jail+取消授权 → 退出活动集合后 `emergencyExit()` 全额提取
+4. **验证者恢复**：重新提案通过、等待 jail 结束、本人调用 `unjailValidator()`；如质押不足需重新注册
+5. **奖励分配**：交易手续费（活动且未 jail 的验证者间分配，若出块者被 jail 则再分配）+ 出块奖励（当前验证者与委托者）
 
 ### 12.3 安全保证
 
@@ -1587,9 +1431,16 @@ A:
 
 ---
 
-**文档版本**：v1.4  
-**最后更新**：2025-01-21  
+**文档版本**：v1.5  
+**最后更新**：2025-12-15  
 **维护者**：POSA 开发团队
+
+**更新内容（v1.5）：**
+- 系统合约地址更新为 `F010/F011/F012/F013`
+- 清理分级惩罚（violationCount/autoRestorePass）描述，统一为“重提案 + 等待 jail 结束 + 自行 unjail”
+- 明确 `emergencyExit` 需先退出活动集合且无最小验证者数检查；resign 会移出候选并清除授权
+- Epoch 更新不再同步 highestValidatorsSet，活动集合仅由 `updateActiveValidatorSet` 覆盖
+- 奖励与惩罚说明：被 jail 出块者手续费再分配，当前 Epoch 仍在集合但奖励被过滤，下一 Epoch 剔除
 
 **更新内容（v1.4）：**
 - 更新验证者集合更新机制：`updateValidatorSetByStake()` 已删除，改为 `updateActiveValidatorSet()`
