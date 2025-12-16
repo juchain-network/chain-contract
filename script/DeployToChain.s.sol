@@ -9,33 +9,33 @@ import {Staking} from "../contracts/Staking.sol";
 
 /**
  * @title DeployToChainScript
- * @dev 真实链上部署脚本，支持多种网络部署
+ * @dev Real chain deployment script, supports deployment to multiple networks
  */
 contract DeployToChainScript is Script {
-    // 系统合约地址 - 使用 CREATE2 部署到确定性地址
+    // System contract addresses - deployed to deterministic addresses using CREATE2
     bytes32 constant SALT = keccak256("SYS_CONTRACT_V1");
     
-    // 事件
+    // Events
     event SystemDeployed(address validators, address proposal, address punish, address staking);
     event SystemInitialized(address[] validators);
     
     function setUp() public {}
 
     /**
-     * @dev 主部署函数 - 部署所有合约并初始化
+     * @dev Main deployment function - deploys all contracts and initializes them
      */
     function run() external {
-        // 支持多种私钥环境变量
+        // Support multiple private key environment variables
         uint256 deployerPrivateKey = vm.envOr("CHAIN_PRIVATE_KEY", vm.envOr("PRIVATE_KEY", uint256(0)));
         
-        // 如果没有提供私钥，使用默认的 anvil 私钥
+        // If no private key is provided, use the default anvil private key
         if (deployerPrivateKey == 0) {
             deployerPrivateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
             console.log("Warning: Using default anvil private key");
         }
         
-        // 设置交易参数 - 处理gas问题
-        vm.txGasPrice(1000000007); // 使用链的当前gas price
+        // Set transaction parameters - handle gas issues
+        vm.txGasPrice(1000000007); // use current gas price
         
         vm.startBroadcast(deployerPrivateKey);
         
@@ -44,13 +44,13 @@ contract DeployToChainScript is Script {
         console.log("Chain ID:", block.chainid);
         console.log("Gas Price:", tx.gasprice);
         
-        // 部署所有合约到确定性地址
+        // Deploy all contracts to deterministic addresses
         (address validators, address proposal, address punish, address staking) = deployAllContracts();
         
-        // 创建初始验证器数组
+        // Create initial validator array
         address[] memory initialValidators = createInitialValidators();
         
-        // 初始化合约
+        // Initialize contracts
         initializeContracts(validators, proposal, punish, staking, initialValidators);
         
         vm.stopBroadcast();
@@ -58,18 +58,18 @@ contract DeployToChainScript is Script {
         // Validators are now pre-registered during Staking initialization
         console.log("=== Validators pre-registered during Staking initialization ===");
         
-        // 发出部署完成事件
+        // Emit deployment completion event
         emit SystemDeployed(validators, proposal, punish, staking);
         
         console.log("=== Chain Deployment Complete ===");
         logDeploymentSummary(validators, proposal, punish, staking);
         
-        // 检查系统状态
+        // Check system status
         checkAndLogSystemStatus(validators, proposal, punish, staking);
     }
 
     /**
-     * @dev 部署所有合约 (使用普通部署而不是 CREATE2)
+     * @dev Deploy all contracts (using regular deployment instead of CREATE2)
      */
     function deployAllContracts() internal returns (
         address validators,
@@ -82,25 +82,25 @@ contract DeployToChainScript is Script {
         console.log("Deployer address:", msg.sender);
         console.log("Deployer balance:", msg.sender.balance);
         
-        // 部署 Validators
+        // Deploy Validators
         console.log("Deploying Validators...");
         Validators validatorsContract = new Validators();
         validators = address(validatorsContract);
         console.log("Validators deployed at:", validators);
 
-        // 部署 Proposal
+        // Deploy Proposal
         console.log("Deploying Proposal...");
         Proposal proposalContract = new Proposal();
         proposal = address(proposalContract);
         console.log("Proposal deployed at:", proposal);
 
-        // 部署 Punish
+        // Deploy Punish
         console.log("Deploying Punish...");
         Punish punishContract = new Punish();
         punish = address(punishContract);
         console.log("Punish deployed at:", punish);
 
-        // 部署 Staking
+        // Deploy Staking
         console.log("Deploying Staking...");
         Staking stakingContract = new Staking();
         staking = address(stakingContract);
@@ -110,7 +110,7 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 使用 CREATE2 部署合约
+     * @dev Deploy contracts using CREATE2
      */
     function deployWithCreate2(bytes memory bytecode, bytes32 salt) internal returns (address) {
         console.log("Deploying with CREATE2, bytecode length:", bytecode.length);
@@ -124,7 +124,7 @@ contract DeployToChainScript is Script {
         console.log("CREATE2 result:", deployed);
         require(deployed != address(0), "Failed to deploy contract with CREATE2");
         
-        // 验证部署
+        // Verify deployment
         uint256 size;
         assembly {
             size := extcodesize(deployed)
@@ -136,15 +136,15 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 创建初始验证器数组 - 根据链ID自动选择验证者地址
-     * 测试网验证者地址 (Chain ID: 202599):
+     * @dev Create initial validator array - automatically select validator addresses based on chain ID
+     * Testnet validator addresses (Chain ID: 202599):
      * 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b
      * 0x578c39eAf09a4e1aBF428c423970B59BB8baF42E
      * 0xC9eBc132a89AAb349D9232d8Ce70A2c2FEA0A096
      * 0x9e6A23508aa763C709d45F671D7a3A068025ABC0
      * 0x81f7A79A51eDBA249EfA812Eb2D5478F696f7558
      *
-     * 主网验证者地址 (Chain ID: 210000):
+     * Mainnet validator addresses (Chain ID: 210000):
      * 0x311B37f01c04B84d1f94645BfBd58D82fc03F709
      * 0xDe0e48c5337db3Ca7b3710c27E9728E68Bf220b3
      * 0xccAFA71c31bC11Ba24d526FD27BA57D743152807
@@ -154,12 +154,12 @@ contract DeployToChainScript is Script {
     function createInitialValidators() internal view returns (address[] memory) {
         address[] memory initialValidators = new address[](5);
 
-        // 检查是否是本地开发环境 (部署者是 anvil 默认账户)
+        // Check if it's a local development environment (deployer is anvil default account)
         address deployer = msg.sender;
         bool isLocalDev = (deployer == 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
 
         if (block.chainid == 202599 && !isLocalDev) {
-            // 真实测试网验证者地址
+            // Real testnet validator addresses
             console.log("Using testnet validators (Chain ID: 202599)");
             initialValidators[0] = 0x016103822e9a3425DfeaFDCd57c9F7fC2bA72a8b;
             initialValidators[1] = 0x578c39eAf09a4e1aBF428c423970B59BB8baF42E;
@@ -167,7 +167,7 @@ contract DeployToChainScript is Script {
             initialValidators[3] = 0x9e6A23508aa763C709d45F671D7a3A068025ABC0;
             initialValidators[4] = 0x81f7A79A51eDBA249EfA812Eb2D5478F696f7558;
         } else if (block.chainid == 210000) {
-            // 主网验证者地址
+            // Mainnet validator addresses
             console.log("Using mainnet validators (Chain ID: 210000)");
             initialValidators[0] = 0x311B37f01c04B84d1f94645BfBd58D82fc03F709;
             initialValidators[1] = 0xDe0e48c5337db3Ca7b3710c27E9728E68Bf220b3;
@@ -175,7 +175,7 @@ contract DeployToChainScript is Script {
             initialValidators[3] = 0xD5DA2b33C1f620a94bf2039B9Cb540853e7928D7;
             initialValidators[4] = 0x4D432df142823Ca25b21Bc3F9744ED21A275bDEA;
         } else {
-            // 本地开发环境验证者（anvil/hardhat 默认账户）
+            // Local development environment validators (anvil/hardhat default accounts)
             console.log("Using local development validators");
             console.log("Chain ID:", block.chainid);
             console.log("Deployer:", deployer);
@@ -190,7 +190,7 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 初始化所有合约 - 使用实际部署的合约地址
+     * @dev Initialize all contracts - using actually deployed contract addresses
      */
     function initializeContracts(
         address validators, 
@@ -207,26 +207,26 @@ contract DeployToChainScript is Script {
         console.log("  Punish:", punish);
         console.log("  Staking:", staking);
         
-        // 按依赖关系正确初始化合约
+        // Correctly initialize contracts according to dependency relationships
         
-        // 1. 初始化 Staking (传入 validators 地址和初始验证者，直接预注册)
-        console.log("Initializing Staking with pre-registered validators...");
-        uint256 defaultCommissionRate = 500; // 5% 佣金率
-        Staking(staking).initializeWithValidators(validators, initialValidators, defaultCommissionRate);
-        console.log("Staking initialized with", initialValidators.length, "pre-registered validators");
-        console.log("Default commission rate: 5%");
-
-        // 2. 初始化 Proposal (传入 validators 地址)
+        // 1. First initialize Proposal (Staking needs Proposal address)
         console.log("Initializing Proposal...");
         Proposal(proposal).initialize(initialValidators, validators);
         console.log("Proposal initialized successfully");
 
-        // 3. 初始化 Punish (传入 validators 和 proposal 地址)
+        // 2. Initialize Staking (pass in validators, proposal addresses and initial validators, directly pre-register)
+        console.log("Initializing Staking with pre-registered validators...");
+        uint256 defaultCommissionRate = 500; // 5% commission rate
+        Staking(staking).initializeWithValidators(validators, proposal, initialValidators, defaultCommissionRate);
+        console.log("Staking initialized with", initialValidators.length, "pre-registered validators");
+        console.log("Default commission rate: 5%"); // 5% commission rate
+
+        // 3. Initialize Punish (pass in validators, proposal and staking addresses)
         console.log("Initializing Punish...");
-        Punish(punish).initialize(validators, proposal);
+        Punish(punish).initialize(validators, proposal, staking);
         console.log("Punish initialized successfully");
 
-        // 4. 最后初始化 Validators (传入所有其他合约地址)
+        // 4. Finally initialize Validators (pass in all other contract addresses)
         console.log("Initializing Validators...");
         Validators(validators).initialize(initialValidators, proposal, punish, staking);
         console.log("Validators initialized successfully");
@@ -238,12 +238,12 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 自动注册验证者到 Staking 合约并质押 10000 JU
-     * 注意：这是测试环境的演示功能
+     * @dev Automatically register validators to Staking contract and stake 10000 JU
+     * Note: This is a demo function for test environment
      */
     function registerValidatorsToStaking(address staking, address[] memory validators) internal {
         uint256 stakeAmount = 10000 ether; // 10000 JU
-        uint256 commissionRate = 500; // 5% 佣金率 (500/10000 = 5%)
+        uint256 commissionRate = 500; // 5% commission rate (500/10000 = 5%)
         
         console.log("Registering validators to Staking contract");
         console.log("Validator count:", validators.length);
@@ -254,10 +254,10 @@ contract DeployToChainScript is Script {
             address validator = validators[i];
             console.log("Registering validator:", validator);
             
-            // 为验证者地址设置足够的余额
-            vm.deal(validator, stakeAmount + 10 ether); // 额外 ETH 用于 gas
+            // Set sufficient balance for validator address
+            vm.deal(validator, stakeAmount + 10 ether); // Extra ETH for gas
             
-            // 模拟验证者自己注册（测试环境）
+            // Simulate validator self-registration (test environment)
             vm.prank(validator);
             Staking(staking).registerValidator{value: stakeAmount}(commissionRate);
             
@@ -268,7 +268,7 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 检查并记录系统状态
+     * @dev Check and log system status
      */
     function checkAndLogSystemStatus(
         address validators,
@@ -278,36 +278,34 @@ contract DeployToChainScript is Script {
     ) internal view {
         console.log("=== System Status Check ===");
         
-        // 检查验证器状态
+        // Check active validators
         address[] memory active = Validators(validators).getActiveValidators();
         console.log("Active validators count:", active.length);
         for (uint i = 0; i < active.length && i < 5; i++) {
             console.log("Validator", i, ":", active[i]);
         }
         
-        // 检查提案配置
+        // Check proposal configuration
         uint256 period = Proposal(proposal).proposalLastingPeriod();
         console.log("Proposal lasting period:", period);
         
-        // 检查接收地址
-        address receiver = Proposal(proposal).receiverAddr();
-        console.log("Receiver address:", receiver);
+        // Note: receiverAddr and increasePeriod have been removed, token inflation is no longer supported
         
-        // 检查惩罚合约状态
+        // Check punishment contract status
         uint256 punishValidatorsLen = Punish(punish).getPunishValidatorsLen();
         console.log("Punish validators count:", punishValidatorsLen);
         
-        // 检查质押合约状态
+        // Check staking contract status
         uint256 totalStaked = Staking(staking).totalStaked();
         console.log("Total staked:", totalStaked);
         
-        // 检查质押合约中的验证器数量
+        // Check validator count in staking contract
         uint256 validatorCount = Staking(staking).getValidatorCount();
         console.log("Staking validator count:", validatorCount);
     }
 
     /**
-     * @dev 记录部署摘要
+     * @dev Log deployment summary
      */
     function logDeploymentSummary(
         address validators,
@@ -323,7 +321,7 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev 获取预计算的合约地址
+     * @dev Get precomputed contract address
      */
     function getComputedAddress(bytes memory bytecode, bytes32 salt) public view returns (address) {
         bytes32 hash = keccak256(

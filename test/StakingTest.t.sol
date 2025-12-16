@@ -3,9 +3,16 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Staking} from "../contracts/Staking.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Punish} from "../contracts/Punish.sol";
 
 contract StakingTest is Test {
-    Staking public staking;
+    // System contract addresses (fixed addresses for testing)
+    address constant VALIDATORS = 0x000000000000000000000000000000000000F010;
+    address constant PUNISH = 0x000000000000000000000000000000000000F011;
+    address constant PROPOSAL = 0x000000000000000000000000000000000000F012;
+    address constant STAKING = 0x000000000000000000000000000000000000F013;
     
     // Test addresses
     address constant VALIDATOR1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
@@ -22,10 +29,13 @@ contract StakingTest is Test {
     uint256 constant COMMISSION_RATE = 1000; // 10%
 
     function setUp() public {
-        staking = new Staking();
+        // Deploy contracts to fixed addresses (required for onlyStakingContract modifier)
+        vm.etch(VALIDATORS, type(Validators).runtimeCode);
+        vm.etch(PUNISH, type(Punish).runtimeCode);
+        vm.etch(PROPOSAL, type(Proposal).runtimeCode);
+        vm.etch(STAKING, type(Staking).runtimeCode);
         
-        // Set up system addresses in Params
-        // Note: In actual deployment, these would be set differently
+        // Set up test account balances
         vm.deal(VALIDATOR1, 100000 ether);
         vm.deal(VALIDATOR2, 100000 ether);
         vm.deal(VALIDATOR3, 100000 ether);
@@ -35,29 +45,89 @@ contract StakingTest is Test {
         vm.deal(DELEGATOR1, 100000 ether);
         vm.deal(DELEGATOR2, 100000 ether);
         
-        // Initialize the contract
-        staking.initialize(address(0xCAFE)); // 添加 validators 地址参数
+        // Initialize contracts in correct order
+        address[] memory initVals = new address[](0);
+        Proposal(PROPOSAL).initialize(initVals, VALIDATORS);
+        Staking(STAKING).initialize(VALIDATORS, PROPOSAL);
+        Punish(PUNISH).initialize(VALIDATORS, PROPOSAL, STAKING);
+        Validators(VALIDATORS).initialize(initVals, PROPOSAL, PUNISH, STAKING);
     }
 
     function testInitialization() public view {
-        assertEq(staking.MIN_VALIDATOR_STAKE(), MIN_STAKE);
-        assertEq(staking.MAX_VALIDATORS(), 21);
-        assertEq(staking.MIN_VALIDATORS(), 5);
-        assertEq(staking.getValidatorCount(), 0);
-        assertEq(staking.getActiveValidatorCount(), 0);
-        assertFalse(staking.hasMinimumValidators());
+        assertEq(Staking(STAKING).MIN_VALIDATOR_STAKE(), MIN_STAKE);
+        assertEq(Staking(STAKING).MAX_VALIDATORS(), 21);
+        assertEq(Staking(STAKING).MIN_VALIDATORS(), 3);
+        assertEq(Staking(STAKING).getValidatorCount(), 0);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 0);
+        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
+        assertLt(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
+    }
+    
+    // Helper function to set up validator with pass status
+    function _setupValidatorPass(address validator) internal {
+        // Set pass status directly (simulating proposal passed)
+        // In real scenario, this would be done through Proposal contract voting
+        // Storage layout: 
+        // - Params: initialized (slot 0)
+        // - Proposal: proposalLastingPeriod (slot 1), punishThreshold (slot 2), removeThreshold (slot 3),
+        //             decreaseRate (slot 4), withdrawProfitPeriod (slot 5), blockReward (slot 6),
+        //             unbondingPeriod (slot 7), validatorUnjailPeriod (slot 8),
+        //             pass mapping (slot 9), proposalPassedTime mapping (slot 10)
+        vm.store(
+            PROPOSAL,
+            keccak256(abi.encode(validator, uint256(9))), // pass mapping slot (updated: was 8, now 9 due to validatorUnjailPeriod)
+            bytes32(uint256(1))
+        );
+        // Set proposalPassedTime to current time (within 7 days)
+        vm.store(
+            PROPOSAL,
+            keccak256(abi.encode(validator, uint256(10))), // proposalPassedTime mapping slot (updated: was 9, now 10 due to validatorUnjailPeriod)
+            bytes32(block.timestamp)
+        );
+    }
+    
+    // Helper function to update active validator set (simulating epoch update)
+    function _updateActiveValidatorSet() internal {
+        // Get top validators from Validators contract (unified interface)
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
+        
+        if (topValidators.length == 0) {
+            return; // No validators to update
+        }
+        
+        // Update active validator set (requires miner and epoch boundary)
+        // Set coinbase to simulate miner
+        address miner = address(0x123);
+        vm.coinbase(miner);
+        
+        // Roll to epoch boundary (epoch is typically 30 blocks)
+        uint256 epoch = 30;
+        uint256 currentBlock = block.number;
+        uint256 nextEpoch = ((currentBlock / epoch) + 1) * epoch;
+        vm.roll(nextEpoch);
+        
+        // Update active validator set
+        vm.prank(miner);
+        Validators(VALIDATORS).updateActiveValidatorSet(topValidators, epoch);
     }
 
     function testValidatorRegistration() public {
+        // Set up validator pass status
+        _setupValidatorPass(VALIDATOR1);
+        
         // Test successful registration
         vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
-        assertEq(staking.getValidatorCount(), 1);
-        assertEq(staking.getActiveValidatorCount(), 1);
+        assertEq(Staking(STAKING).getValidatorCount(), 1);
         
-        (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, bool isJailed, uint256 jailUntilBlock) = 
-            staking.getValidatorInfo(VALIDATOR1);
+        // Update active validator set to make validator active
+        _updateActiveValidatorSet();
+        
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 1);
+        
+        (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, , bool isJailed, uint256 jailUntilBlock, , ) = 
+            Staking(STAKING).getValidatorInfo(VALIDATOR1);
             
         assertEq(selfStake, MIN_STAKE);
         assertEq(totalDelegated, 0);
@@ -67,160 +137,194 @@ contract StakingTest is Test {
     }
 
     function test_RevertWhen_InsufficientStake() public {
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         vm.expectRevert("Insufficient self-stake");
-        staking.registerValidator{value: MIN_STAKE - 1}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE - 1}(COMMISSION_RATE);
     }
 
     function test_RevertWhen_InvalidCommissionRate() public {
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         vm.expectRevert("Invalid commission rate");
-        staking.registerValidator{value: MIN_STAKE}(10001); // > 100%
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(10001); // > 100%
     }
 
     function test_RevertWhen_DoubleRegistration() public {
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         vm.prank(VALIDATOR1);
         vm.expectRevert("Already registered");
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
     }
 
     function testMinimumValidatorsRequirement() public {
-        // Register 5 validators (minimum required)
+        // Register 3 validators (minimum required)
+        _setupValidatorPass(VALIDATOR1);
+        _setupValidatorPass(VALIDATOR2);
+        _setupValidatorPass(VALIDATOR3);
+        
         vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         vm.prank(VALIDATOR2);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         vm.prank(VALIDATOR3);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
+        
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
+        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
+        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
+        
+        // Now register a 4th validator
+        _setupValidatorPass(VALIDATOR4);
         vm.prank(VALIDATOR4);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
-        vm.prank(VALIDATOR5);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        // Update active validator set again
+        _updateActiveValidatorSet();
         
-        assertEq(staking.getActiveValidatorCount(), 5);
-        assertTrue(staking.hasMinimumValidators());
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
-        // Now register a 6th validator
-        vm.prank(VALIDATOR6);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        // Test that 4th validator must resign first before exiting
+        vm.prank(VALIDATOR4);
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
+        Staking(STAKING).emergencyExit();
         
-        assertEq(staking.getActiveValidatorCount(), 6);
+        // Validator resigns first
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).resignValidator();
         
-        // Test that 6th validator can exit (leaving 5)
-        vm.prank(VALIDATOR6);
-        staking.emergencyExit();
+        // Update active validator set to exclude resigned validator
+        _updateActiveValidatorSet();
         
-        assertEq(staking.getActiveValidatorCount(), 5);
-        assertTrue(staking.hasMinimumValidators());
+        // Now validator can exit
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).emergencyExit();
         
-        // Test that 5th validator cannot exit (would leave 4)
-        vm.prank(VALIDATOR5);
-        vm.expectRevert("Cannot exit: minimum validators required");
-        staking.emergencyExit();
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
+        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
+        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
+        
+        // Test that 3rd validator must resign first before exiting
+        vm.prank(VALIDATOR3);
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
+        Staking(STAKING).emergencyExit();
     }
 
     function testPartialStakeWithdrawal() public {
         // Register validator with extra stake
-        vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
+        _setupValidatorPass(VALIDATOR1);
+        _setupValidatorPass(VALIDATOR2);
+        _setupValidatorPass(VALIDATOR3);
         
-        // Register 4 more validators to meet minimum
+        vm.prank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
+        
+        // Register 2 more validators to meet minimum
         vm.prank(VALIDATOR2);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.prank(VALIDATOR3);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR4);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR5);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
         
         // Test partial withdrawal (still leaves minimum stake)
         uint256 withdrawAmount = MIN_STAKE / 2;
         uint256 initialBalance = VALIDATOR1.balance;
         
         vm.prank(VALIDATOR1);
-        staking.withdrawValidatorStake(withdrawAmount);
+        Staking(STAKING).withdrawValidatorStake(withdrawAmount);
         
         assertEq(VALIDATOR1.balance, initialBalance + withdrawAmount);
         
-        (uint256 selfStake,,,, ) = staking.getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE * 2 - withdrawAmount);
-        assertEq(staking.getActiveValidatorCount(), 5);
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
     }
 
     function test_RevertWhen_PartialWithdrawalBelowMinimum() public {
         // Register multiple validators first to avoid minimum validator constraint
+        _setupValidatorPass(VALIDATOR1);
+        _setupValidatorPass(VALIDATOR2);
+        _setupValidatorPass(VALIDATOR3);
+        _setupValidatorPass(VALIDATOR4);
+        
         vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE + 1000}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE + 1000}(COMMISSION_RATE);
         vm.prank(VALIDATOR2);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.prank(VALIDATOR3);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.prank(VALIDATOR4);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR5);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR6);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Try to withdraw amount that would leave stake below minimum
         vm.prank(VALIDATOR1);
-        vm.expectRevert("Remaining stake below minimum");
-        staking.withdrawValidatorStake(1001);
+        vm.expectRevert("Remaining stake below minimum, use emergencyExit() to withdraw all");
+        Staking(STAKING).withdrawValidatorStake(1001);
     }
 
     function testDelegation() public {
         // Register validator
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Test delegation
         uint256 delegationAmount = 1000 ether;
         vm.prank(DELEGATOR1);
-        staking.delegate{value: delegationAmount}(VALIDATOR1);
+        Staking(STAKING).delegate{value: delegationAmount}(VALIDATOR1);
         
-        (uint256 selfStake, uint256 totalDelegated,,, ) = staking.getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, uint256 totalDelegated, , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE);
         assertEq(totalDelegated, delegationAmount);
         
-        (uint256 delegatedAmount,,,) = staking.getDelegationInfo(DELEGATOR1, VALIDATOR1);
+        (uint256 delegatedAmount,,,) = Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
         assertEq(delegatedAmount, delegationAmount);
     }
 
     function test_RevertWhen_DelegateToInactiveValidator() public {
         vm.prank(DELEGATOR1);
         vm.expectRevert("Not a valid validator");
-        staking.delegate{value: 1000 ether}(VALIDATOR1); // VALIDATOR1 not registered
+        Staking(STAKING).delegate{value: 1000 ether}(VALIDATOR1); // VALIDATOR1 not registered
     }
 
     function test_RevertWhen_DelegateInsufficientAmount() public {
+        // Set up validator pass status
+        _setupValidatorPass(VALIDATOR1);
+        
         vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         vm.prank(DELEGATOR1);
         vm.expectRevert("Insufficient delegation amount");
-        staking.delegate{value: 0.5 ether}(VALIDATOR1); // Below MIN_DELEGATION
+        Staking(STAKING).delegate{value: 0.5 ether}(VALIDATOR1); // Below MIN_DELEGATION
     }
 
     function testGetTopValidators() public {
         // Register validators with different stakes
+        _setupValidatorPass(VALIDATOR1);
+        _setupValidatorPass(VALIDATOR2);
+        _setupValidatorPass(VALIDATOR3);
+        
         vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         vm.prank(VALIDATOR2);
-        staking.registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
         
         vm.prank(VALIDATOR3);
-        staking.registerValidator{value: MIN_STAKE * 3}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE * 3}(COMMISSION_RATE);
         
-        address[] memory topValidators = staking.getTopValidators(10);
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
         
         assertEq(topValidators.length, 3);
         // Should be ordered by stake (highest first)
@@ -231,17 +335,20 @@ contract StakingTest is Test {
 
     function testGetTopValidatorsWithDelegations() public {
         // Register validators
+        _setupValidatorPass(VALIDATOR1);
+        _setupValidatorPass(VALIDATOR2);
+        
         vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         vm.prank(VALIDATOR2);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Add delegation to VALIDATOR1
         vm.prank(DELEGATOR1);
-        staking.delegate{value: MIN_STAKE}(VALIDATOR1);
+        Staking(STAKING).delegate{value: MIN_STAKE}(VALIDATOR1);
         
-        address[] memory topValidators = staking.getTopValidators(10);
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
         
         assertEq(topValidators.length, 2);
         // VALIDATOR1 should be first (20,000 total vs 10,000)
@@ -250,189 +357,220 @@ contract StakingTest is Test {
     }
 
     function testSystemInvariant_MinimumValidators() public {
-        // Setup: Register exactly 5 validators (minimum required)
-        address[5] memory validators = [VALIDATOR1, VALIDATOR2, VALIDATOR3, VALIDATOR4, VALIDATOR5];
+        // Setup: Register exactly 3 validators (minimum required)
+        address[3] memory validatorAddrs = [VALIDATOR1, VALIDATOR2, VALIDATOR3];
         
-        for (uint i = 0; i < 5; i++) {
-            vm.prank(validators[i]);
-            staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        _setupValidatorPass(VALIDATOR1);
+        _setupValidatorPass(VALIDATOR2);
+        _setupValidatorPass(VALIDATOR3);
+        
+        for (uint i = 0; i < 3; i++) {
+            vm.prank(validatorAddrs[i]);
+            Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         }
         
-        assertTrue(staking.hasMinimumValidators());
-        assertEq(staking.getActiveValidatorCount(), 5);
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
         
-        // Test that no validator can exit
-        for (uint i = 0; i < 5; i++) {
-            vm.prank(validators[i]);
-            vm.expectRevert("Cannot exit: minimum validators required");
-            staking.emergencyExit();
+        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
+        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
+        
+        // Test that no validator can exit (they are in active set, must resign first)
+        for (uint i = 0; i < 3; i++) {
+            vm.prank(validatorAddrs[i]);
+            vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
+            Staking(STAKING).emergencyExit();
         }
         
         // Add one more validator
-        vm.prank(VALIDATOR6);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        _setupValidatorPass(VALIDATOR4);
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
-        assertEq(staking.getActiveValidatorCount(), 6);
+        // Update active validator set again
+        _updateActiveValidatorSet();
         
-        // Now exactly one validator should be able to exit
-        vm.prank(VALIDATOR6);
-        staking.emergencyExit();
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
-        assertEq(staking.getActiveValidatorCount(), 5);
+        // Validator must resign first before exiting
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).resignValidator();
         
-        // Back to minimum - no one can exit again
+        // Update active validator set to exclude resigned validator
+        _updateActiveValidatorSet();
+        
+        // Now validator can exit
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).emergencyExit();
+        
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
+        
+        // Back to minimum - no one can exit again (they are in active set, must resign first)
         vm.prank(VALIDATOR1);
-        vm.expectRevert("Cannot exit: minimum validators required");
-        staking.emergencyExit();
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
+        Staking(STAKING).emergencyExit();
     }
 
     function testValidatorJailing() public {
-        // Register 6 validators
-        vm.prank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR2);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR3);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR4);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR5);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR6);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        // Register 4 validators
+        _setupValidatorPass(VALIDATOR1);
+        _setupValidatorPass(VALIDATOR2);
+        _setupValidatorPass(VALIDATOR3);
+        _setupValidatorPass(VALIDATOR4);
         
-        assertEq(staking.getActiveValidatorCount(), 6);
+        vm.prank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        vm.prank(VALIDATOR2);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        vm.prank(VALIDATOR3);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
+        
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
         // Jail one validator (simulating punishment contract call)
-        vm.prank(address(0x000000000000000000000000000000000000F001)); // Punish contract
-        staking.jailValidator(VALIDATOR6, 1000);
+        vm.prank(PUNISH); // Punish contract
+        Staking(STAKING).jailValidator(VALIDATOR4, 1000);
         
-        // Active count should decrease
-        assertEq(staking.getActiveValidatorCount(), 5);
+        // Active count should remain 4 (jailed validators are still in currentValidatorSet until next epoch)
+        // They can still vote, but won't receive rewards
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
-        (,,, bool isJailed, uint256 jailUntilBlock) = staking.getValidatorInfo(VALIDATOR6);
+        (, , , , bool isJailed, uint256 jailUntilBlock, , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertTrue(isJailed);
         assertEq(jailUntilBlock, block.number + 1000);
         
-        // Now no validator should be able to exit (would leave less than 5 active)
+        // Now no validator should be able to exit (they are in active set, must resign first)
         vm.prank(VALIDATOR1);
-        vm.expectRevert("Cannot exit: minimum validators required");
-        staking.emergencyExit();
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
+        Staking(STAKING).emergencyExit();
     }
 
     function testAddValidatorStake() public {
         // Register a validator first
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Add more stake
         uint256 additionalStake = 5000 ether;
-        staking.addValidatorStake{value: additionalStake}();
+        Staking(STAKING).addValidatorStake{value: additionalStake}();
         vm.stopPrank();
         
         // Check updated stake
-        (uint256 selfStake, , , ,) = staking.getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE + additionalStake);
-        assertEq(staking.totalStaked(), MIN_STAKE + additionalStake);
+        assertEq(Staking(STAKING).totalStaked(), MIN_STAKE + additionalStake);
     }
 
     function test_RevertWhen_AddZeroStake() public {
         // Register a validator first
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Try to add zero stake
         vm.expectRevert("Amount must be positive");
-        staking.addValidatorStake{value: 0}();
+        Staking(STAKING).addValidatorStake{value: 0}();
         vm.stopPrank();
     }
 
     function testUpdateCommissionRate() public {
         // Register a validator first
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Update commission rate
         uint256 newRate = 2000; // 20%
-        staking.updateCommissionRate(newRate);
+        Staking(STAKING).updateCommissionRate(newRate);
         vm.stopPrank();
         
         // Check updated rate
-        (, , uint256 commissionRate, ,) = staking.getValidatorInfo(VALIDATOR1);
+        (, , uint256 commissionRate, , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(commissionRate, newRate);
     }
 
     function test_RevertWhen_UpdateInvalidCommissionRate() public {
         // Register a validator first
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Try to set invalid commission rate
         vm.expectRevert("Invalid commission rate");
-        staking.updateCommissionRate(11000); // > 100%
+        Staking(STAKING).updateCommissionRate(11000); // > 100%
         vm.stopPrank();
     }
 
     function testUndelegate() public {
         // Register a validator
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.stopPrank();
         
         // Delegate tokens
         uint256 delegationAmount = 1000 ether;
         vm.startPrank(DELEGATOR1);
-        staking.delegate{value: delegationAmount}(VALIDATOR1);
+        Staking(STAKING).delegate{value: delegationAmount}(VALIDATOR1);
         
         // Undelegate
         uint256 undelegateAmount = 500 ether;
-        staking.undelegate(VALIDATOR1, undelegateAmount);
+        Staking(STAKING).undelegate(VALIDATOR1, undelegateAmount);
         vm.stopPrank();
         
         // Check delegation info
-        (uint256 amount, , ,) = staking.getDelegationInfo(DELEGATOR1, VALIDATOR1);
+        (uint256 amount, , ,) = Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
         assertEq(amount, delegationAmount - undelegateAmount);
         
         // Check validator's total delegated
-        (, uint256 totalDelegated, , ,) = staking.getValidatorInfo(VALIDATOR1);
+        (, uint256 totalDelegated, , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(totalDelegated, delegationAmount - undelegateAmount);
     }
 
     function test_RevertWhen_UndelegateInsufficientAmount() public {
         // Register a validator
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.stopPrank();
         
         // Delegate tokens
         uint256 delegationAmount = 1000 ether;
         vm.startPrank(DELEGATOR1);
-        staking.delegate{value: delegationAmount}(VALIDATOR1);
+        Staking(STAKING).delegate{value: delegationAmount}(VALIDATOR1);
         
         // Try to undelegate more than delegated
         vm.expectRevert("Insufficient delegation");
-        staking.undelegate(VALIDATOR1, 2000 ether);
+        Staking(STAKING).undelegate(VALIDATOR1, 2000 ether);
         vm.stopPrank();
     }
 
     function testWithdrawUnbondedBasic() public {
         // Register a validator
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.stopPrank();
         
         // Delegate tokens
         uint256 delegationAmount = 1000 ether;
         vm.startPrank(DELEGATOR1);
-        staking.delegate{value: delegationAmount}(VALIDATOR1);
+        Staking(STAKING).delegate{value: delegationAmount}(VALIDATOR1);
         
         // Undelegate
         uint256 undelegateAmount = 500 ether;
-        staking.undelegate(VALIDATOR1, undelegateAmount);
+        Staking(STAKING).undelegate(VALIDATOR1, undelegateAmount);
         
         // Try to withdraw before unbonding period completes (should fail)
         vm.expectRevert("No unbonded tokens available");
-        staking.withdrawUnbonded(VALIDATOR1, 1);
+        Staking(STAKING).withdrawUnbonded(VALIDATOR1, 1);
         vm.stopPrank();
         
         // This test verifies the basic unbonding mechanism
@@ -441,107 +579,120 @@ contract StakingTest is Test {
 
     function test_RevertWhen_NoUnbondedTokens() public {
         // Register a validator
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.stopPrank();
         
         // Try to withdraw without unbonding
         vm.startPrank(DELEGATOR1);
         vm.expectRevert("No unbonded tokens available");
-        staking.withdrawUnbonded(VALIDATOR1, 1);
+        Staking(STAKING).withdrawUnbonded(VALIDATOR1, 1);
         vm.stopPrank();
     }
 
     function testClaimRewards() public {
         // Register a validator
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Try to claim rewards (should not revert even if zero)
-        staking.claimRewards(VALIDATOR1);
+        Staking(STAKING).claimRewards(VALIDATOR1);
         vm.stopPrank();
     }
 
     function testUnjailValidator() public {
-        // Register 6 validators first
+        // Register 4 validators first
         registerMultipleValidators();
         
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
+        
         // Jail a validator
-        vm.prank(address(0x000000000000000000000000000000000000F001)); // Punish contract
-        staking.jailValidator(VALIDATOR6, 100);
+        vm.prank(PUNISH); // Punish contract
+        Staking(STAKING).jailValidator(VALIDATOR4, 100);
         
         // Verify jailed
-        (,,, bool isJailed,) = staking.getValidatorInfo(VALIDATOR6);
+        (, , , , bool isJailed, , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertTrue(isJailed);
         
         // Fast forward past jail period
         vm.roll(block.number + 101);
         
         // Unjail validator
-        vm.prank(VALIDATOR6);
-        staking.unjailValidator(VALIDATOR6);
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).unjailValidator(VALIDATOR4);
         
         // Verify unjailed
-        (,,, bool isJailedAfter, uint256 jailUntilBlock) = staking.getValidatorInfo(VALIDATOR6);
+        (, , , , bool isJailedAfter, uint256 jailUntilBlock, , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertFalse(isJailedAfter);
         assertEq(jailUntilBlock, 0);
     }
 
     function test_RevertWhen_UnjailNotJailed() public {
         // Register a validator
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Test unjailing a non-jailed validator (should revert)
         vm.expectRevert("Validator not jailed");
-        staking.unjailValidator(VALIDATOR1);
+        Staking(STAKING).unjailValidator(VALIDATOR1);
         vm.stopPrank();
     }
 
     function test_RevertWhen_NonValidatorUnjail() public {
-        // Register 6 validators first
+        // Register 4 validators first
         registerMultipleValidators();
         
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
+        
         // Jail a validator
-        vm.prank(address(0x000000000000000000000000000000000000F001)); // Punish contract
-        staking.jailValidator(VALIDATOR6, 100);
+        vm.prank(PUNISH); // Punish contract
+        Staking(STAKING).jailValidator(VALIDATOR4, 100);
         
         // Try to unjail from different address
         vm.startPrank(VALIDATOR2);
         vm.expectRevert("Only validator can unjail themselves");
-        staking.unjailValidator(VALIDATOR6);
+        Staking(STAKING).unjailValidator(VALIDATOR4);
         vm.stopPrank();
     }
 
     function test_RevertWhen_UnjailTooEarly() public {
-        // Register 6 validators first
+        // Register 4 validators first
         registerMultipleValidators();
         
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
+        
         // Jail a validator
-        vm.prank(address(0x000000000000000000000000000000000000F001)); // Punish contract
-        staking.jailValidator(VALIDATOR6, 100);
+        vm.prank(PUNISH); // Punish contract
+        Staking(STAKING).jailValidator(VALIDATOR4, 100);
         
         // Try to unjail before jail period is complete
-        vm.prank(VALIDATOR6);
+        vm.prank(VALIDATOR4);
         vm.expectRevert("Jail period not complete");
-        staking.unjailValidator(VALIDATOR6);
+        Staking(STAKING).unjailValidator(VALIDATOR4);
     }
 
     function testGetDelegationInfo() public {
         // Register a validator
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.stopPrank();
         
         // Delegate tokens
         uint256 delegationAmount = 1000 ether;
         vm.startPrank(DELEGATOR1);
-        staking.delegate{value: delegationAmount}(VALIDATOR1);
+        Staking(STAKING).delegate{value: delegationAmount}(VALIDATOR1);
         vm.stopPrank();
         
         // Check delegation info
         (uint256 amount, uint256 pendingRewards, uint256 unbondingAmount, uint256 unbondingBlock) = 
-            staking.getDelegationInfo(DELEGATOR1, VALIDATOR1);
+            Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
         
         assertEq(amount, delegationAmount);
         assertEq(pendingRewards, 0); // No rewards distributed yet
@@ -549,53 +700,71 @@ contract StakingTest is Test {
         assertEq(unbondingBlock, 0);
     }
 
-    function testEmergencyExitWithSixValidators() public {
-        // Register 6 validators to allow emergency exit
+    function testEmergencyExitWithFourValidators() public {
+        // Register 4 validators to allow emergency exit
         registerMultipleValidators();
         
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
+        
+        // Validator must resign first before exiting
+        vm.prank(VALIDATOR4);
+        Staking(STAKING).resignValidator();
+        
+        // Update active validator set to exclude resigned validator
+        _updateActiveValidatorSet();
+        
         // Emergency exit
-        uint256 balanceBefore = VALIDATOR6.balance;
-        vm.startPrank(VALIDATOR6);
-        staking.emergencyExit();
+        uint256 balanceBefore = VALIDATOR4.balance;
+        vm.startPrank(VALIDATOR4);
+        Staking(STAKING).emergencyExit();
         vm.stopPrank();
         
         // Check balance and validator state
-        uint256 balanceAfter = VALIDATOR6.balance;
+        uint256 balanceAfter = VALIDATOR4.balance;
         assertEq(balanceAfter - balanceBefore, MIN_STAKE);
         
-        (uint256 selfStake, , , ,) = staking.getValidatorInfo(VALIDATOR6);
+        (uint256 selfStake, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertEq(selfStake, 0);
-        assertEq(staking.getActiveValidatorCount(), 5);
+        // After exit, validator is removed from active set, so count decreases
+        // But we need to update the set to reflect the change
+        _updateActiveValidatorSet();
+        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
     }
 
     function test_RevertWhen_EmergencyExitMinValidators() public {
-        // Register exactly 5 validators (minimum)
-        for (uint i = 0; i < 5; i++) {
+        // Register exactly 3 validators (minimum)
+        for (uint i = 0; i < 3; i++) {
             address validator = address(uint160(i + 1000));
             vm.deal(validator, 100000 ether);
+            _setupValidatorPass(validator);
             vm.startPrank(validator);
-            staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+            Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
             vm.stopPrank();
         }
         
-        // Try emergency exit when at minimum
-        address lastValidator = address(uint160(1004));
+        // Update active validator set to make validators active
+        _updateActiveValidatorSet();
+        
+        // Try emergency exit when at minimum (validator is in active set, must resign first)
+        address lastValidator = address(uint160(1002));
         vm.startPrank(lastValidator);
-        vm.expectRevert("Cannot exit: minimum validators required");
-        staking.emergencyExit();
+        vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
+        Staking(STAKING).emergencyExit();
         vm.stopPrank();
     }
 
     function testDistributeRewardsFlow() public {
         // Register a validator
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.stopPrank();
         
         // Delegate tokens
         uint256 delegationAmount = 1000 ether;
         vm.startPrank(DELEGATOR1);
-        staking.delegate{value: delegationAmount}(VALIDATOR1);
+        Staking(STAKING).delegate{value: delegationAmount}(VALIDATOR1);
         vm.stopPrank();
         
         // Simulate reward distribution using coinbase (miner)
@@ -604,9 +773,10 @@ contract StakingTest is Test {
         vm.deal(miner, rewardAmount);
         
         // Set miner as coinbase for the block
-        vm.coinbase(miner);
-        vm.startPrank(miner);
-        staking.distributeRewards{value: rewardAmount}(VALIDATOR1);
+        // distributeRewards() now gets validator from msg.sender (block.coinbase)
+        vm.coinbase(VALIDATOR1);
+        vm.startPrank(VALIDATOR1);
+        Staking(STAKING).distributeRewards{value: rewardAmount}();
         vm.stopPrank();
         
         // Check that rewards were distributed (basic test)
@@ -615,11 +785,12 @@ contract StakingTest is Test {
 
     // Helper function to register multiple validators
     function registerMultipleValidators() internal {
-        address[6] memory validators = [VALIDATOR1, VALIDATOR2, VALIDATOR3, VALIDATOR4, VALIDATOR5, VALIDATOR6];
+        address[4] memory validatorAddrs = [VALIDATOR1, VALIDATOR2, VALIDATOR3, VALIDATOR4];
         
-        for (uint i = 0; i < validators.length; i++) {
-            vm.startPrank(validators[i]);
-            staking.registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        for (uint i = 0; i < validatorAddrs.length; i++) {
+            _setupValidatorPass(validatorAddrs[i]);
+            vm.startPrank(validatorAddrs[i]);
+            Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
             vm.stopPrank();
         }
     }
