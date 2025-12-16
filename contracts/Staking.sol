@@ -21,7 +21,7 @@ interface IValidators {
 contract Staking is Params, ReentrancyGuard {
 
     // Minimum staking amount to become a validator
-    uint256 public constant MIN_VALIDATOR_STAKE = 10000 ether; // 10,000 JU
+    uint256 public constant MIN_VALIDATOR_STAKE = 100000 ether; // 10,000 JU
     
     // Minimum delegation amount
     uint256 public constant MIN_DELEGATION = 1 ether; // 1 JU
@@ -243,23 +243,23 @@ contract Staking is Params, ReentrancyGuard {
     }
 
     /**
-     * @dev Start validator stake withdrawal (validator exit)
-     * @param amount Amount to withdraw from self-stake
-     * @notice If remaining stake would be less than MIN_VALIDATOR_STAKE, the withdrawal will fail
-     * @notice Use emergencyExit() to withdraw all stake (requires minimum validators requirement)
+     * @dev Decrease validator's self-stake
+     * @param amount Amount to reduce from self-stake
+     * @notice If remaining stake would be less than MIN_VALIDATOR_STAKE, the reduction will fail
+     * @notice Use withdrawAfterResignation() to withdraw all stake (requires minimum validators requirement)
      */
-    function withdrawValidatorStake(uint256 amount) external nonReentrant onlyValidValidator(msg.sender) {
+    function decreaseValidatorStake(uint256 amount) external nonReentrant onlyValidValidator(msg.sender) {
         require(amount > 0, "Amount must be positive");
         
         ValidatorStake storage stake = validatorStakes[msg.sender];
         require(stake.selfStake >= amount, "Insufficient self-stake");
         
-        // Calculate remaining stake after withdrawal
+        // Calculate remaining stake after reduction
         uint256 remainingStake = stake.selfStake - amount;
         
-        // If partial withdrawal, remaining stake must meet minimum requirement
-        // If complete withdrawal (remainingStake == 0), use emergencyExit() instead
-        require(remainingStake >= MIN_VALIDATOR_STAKE, "Remaining stake below minimum, use emergencyExit() to withdraw all");
+        // If partial reduction, remaining stake must meet minimum requirement
+        // If complete reduction (remainingStake == 0), use exitValidator() instead
+        require(remainingStake >= MIN_VALIDATOR_STAKE, "Remaining stake below minimum, use exitValidator() to withdraw all");
         
         // Effects: update state before external call
         stake.selfStake = remainingStake;
@@ -298,12 +298,12 @@ contract Staking is Params, ReentrancyGuard {
     }
 
     /**
-     * @dev Emergency exit - withdraw all stake and exit validator role
+     * @dev Exit validator - withdraw all stake and exit validator role
      * @notice Validators in currentValidatorSet (active in current epoch) cannot exit
      * @notice Validators must jail themselves first, then wait until next epoch to exit
      * @notice This ensures smooth exit without disrupting consensus
      */
-    function emergencyExit() external nonReentrant onlyValidValidator(msg.sender) {
+    function exitValidator() external nonReentrant onlyValidValidator(msg.sender) {
         ValidatorStake storage stake = validatorStakes[msg.sender];
         uint256 withdrawAmount = stake.selfStake;
         
@@ -337,9 +337,11 @@ contract Staking is Params, ReentrancyGuard {
         
         emit ValidatorExited(msg.sender, withdrawAmount);
         
-        // Interactions: external call after state update
-        (bool success, ) = payable(msg.sender).call{value: withdrawAmount}("");
-        require(success, "Transfer failed");
+        // Instead of transferring funds directly, add them to unbonding like undelegate
+        unbondingDelegations[msg.sender][msg.sender].push(UnbondingEntry({
+            amount: withdrawAmount,
+            completionBlock: block.number + proposalContract.unbondingPeriod()
+        }));
     }
 
     /**

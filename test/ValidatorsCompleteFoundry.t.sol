@@ -94,7 +94,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // In POSA mode, validator must register (stake) after creation to become active
         // Give validator enough ETH and register
         uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
-        vm.deal(validator, 20000 ether);
+        vm.deal(validator, minStake);
         vm.prank(validator);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
         
@@ -154,7 +154,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // Give new validator enough ETH and register
         uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
-        vm.deal(nval, 20000 ether);
+        vm.deal(nval, minStake);
         vm.prank(nval);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
         
