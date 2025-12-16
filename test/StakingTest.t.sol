@@ -25,7 +25,7 @@ contract StakingTest is Test {
     address constant DELEGATOR1 = 0x976EA74026E726554dB657fA54763abd0C3a0aa9;
     address constant DELEGATOR2 = 0x14dC79964da2C08b23698B3D3cc7Ca32193d9955;
     
-    uint256 constant MIN_STAKE = 10000 ether;
+    uint256 constant MIN_STAKE = 100000 ether;
     uint256 constant COMMISSION_RATE = 1000; // 10%
 
     function setUp() public {
@@ -155,6 +155,7 @@ contract StakingTest is Test {
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.deal(VALIDATOR1, MIN_STAKE);
         vm.prank(VALIDATOR1);
         vm.expectRevert("Already registered");
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
@@ -195,7 +196,7 @@ contract StakingTest is Test {
         // Test that 4th validator must resign first before exiting
         vm.prank(VALIDATOR4);
         vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
-        Staking(STAKING).emergencyExit();
+        Staking(STAKING).exitValidator();
         
         // Validator resigns first
         vm.prank(VALIDATOR4);
@@ -206,7 +207,7 @@ contract StakingTest is Test {
         
         // Now validator can exit
         vm.prank(VALIDATOR4);
-        Staking(STAKING).emergencyExit();
+        Staking(STAKING).exitValidator();
         
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
         // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
@@ -215,7 +216,7 @@ contract StakingTest is Test {
         // Test that 3rd validator must resign first before exiting
         vm.prank(VALIDATOR3);
         vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
-        Staking(STAKING).emergencyExit();
+        Staking(STAKING).exitValidator();
     }
 
     function testPartialStakeWithdrawal() public {
@@ -223,6 +224,8 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR1);
         _setupValidatorPass(VALIDATOR2);
         _setupValidatorPass(VALIDATOR3);
+        
+        vm.deal(VALIDATOR1, MIN_STAKE * 2);
         
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
@@ -241,7 +244,7 @@ contract StakingTest is Test {
         uint256 initialBalance = VALIDATOR1.balance;
         
         vm.prank(VALIDATOR1);
-        Staking(STAKING).withdrawValidatorStake(withdrawAmount);
+        Staking(STAKING).decreaseValidatorStake(withdrawAmount);
         
         assertEq(VALIDATOR1.balance, initialBalance + withdrawAmount);
         
@@ -257,6 +260,8 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR3);
         _setupValidatorPass(VALIDATOR4);
         
+        vm.deal(VALIDATOR1, MIN_STAKE + 1000);
+        
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE + 1000}(COMMISSION_RATE);
         vm.prank(VALIDATOR2);
@@ -268,8 +273,8 @@ contract StakingTest is Test {
         
         // Try to withdraw amount that would leave stake below minimum
         vm.prank(VALIDATOR1);
-        vm.expectRevert("Remaining stake below minimum, use emergencyExit() to withdraw all");
-        Staking(STAKING).withdrawValidatorStake(1001);
+        vm.expectRevert("Remaining stake below minimum, use exitValidator() to withdraw all");
+        Staking(STAKING).decreaseValidatorStake(1001);
     }
 
     function testDelegation() public {
@@ -314,6 +319,9 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR1);
         _setupValidatorPass(VALIDATOR2);
         _setupValidatorPass(VALIDATOR3);
+        
+        vm.deal(VALIDATOR2, MIN_STAKE * 2);
+        vm.deal(VALIDATOR3, MIN_STAKE * 3);
         
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
@@ -380,7 +388,7 @@ contract StakingTest is Test {
         for (uint i = 0; i < 3; i++) {
             vm.prank(validatorAddrs[i]);
             vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
-            Staking(STAKING).emergencyExit();
+            Staking(STAKING).exitValidator();
         }
         
         // Add one more validator
@@ -402,14 +410,14 @@ contract StakingTest is Test {
         
         // Now validator can exit
         vm.prank(VALIDATOR4);
-        Staking(STAKING).emergencyExit();
+        Staking(STAKING).exitValidator();
         
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
         
         // Back to minimum - no one can exit again (they are in active set, must resign first)
         vm.prank(VALIDATOR1);
         vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
-        Staking(STAKING).emergencyExit();
+        Staking(STAKING).exitValidator();
     }
 
     function testValidatorJailing() public {
@@ -448,7 +456,7 @@ contract StakingTest is Test {
         // Now no validator should be able to exit (they are in active set, must resign first)
         vm.prank(VALIDATOR1);
         vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
-        Staking(STAKING).emergencyExit();
+        Staking(STAKING).exitValidator();
     }
 
     function testAddValidatorStake() public {
@@ -459,6 +467,7 @@ contract StakingTest is Test {
         
         // Add more stake
         uint256 additionalStake = 5000 ether;
+        vm.deal(VALIDATOR1, additionalStake);
         Staking(STAKING).addValidatorStake{value: additionalStake}();
         vm.stopPrank();
         
@@ -715,17 +724,18 @@ contract StakingTest is Test {
         _updateActiveValidatorSet();
         
         // Emergency exit
-        uint256 balanceBefore = VALIDATOR4.balance;
         vm.startPrank(VALIDATOR4);
-        Staking(STAKING).emergencyExit();
+        Staking(STAKING).exitValidator();
         vm.stopPrank();
         
-        // Check balance and validator state
-        uint256 balanceAfter = VALIDATOR4.balance;
-        assertEq(balanceAfter - balanceBefore, MIN_STAKE);
-        
+        // Check that validator has no self-stake left
         (uint256 selfStake, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertEq(selfStake, 0);
+        
+        // Check that the amount is now in unbonding state
+        uint256 unbondingEntries = Staking(STAKING).getUnbondingEntriesCount(VALIDATOR4, VALIDATOR4);
+        assertEq(unbondingEntries, 1);
+        
         // After exit, validator is removed from active set, so count decreases
         // But we need to update the set to reflect the change
         _updateActiveValidatorSet();
@@ -750,7 +760,7 @@ contract StakingTest is Test {
         address lastValidator = address(uint160(1002));
         vm.startPrank(lastValidator);
         vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
-        Staking(STAKING).emergencyExit();
+        Staking(STAKING).exitValidator();
         vm.stopPrank();
     }
 
@@ -769,8 +779,7 @@ contract StakingTest is Test {
         
         // Simulate reward distribution using coinbase (miner)
         uint256 rewardAmount = 100 ether;
-        address miner = address(0x123);
-        vm.deal(miner, rewardAmount);
+        vm.deal(VALIDATOR1, rewardAmount);
         
         // Set miner as coinbase for the block
         // distributeRewards() now gets validator from msg.sender (block.coinbase)

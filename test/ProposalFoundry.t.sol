@@ -77,7 +77,7 @@ contract ProposalFoundryTest is BaseSetup {
         // This is the design: proposal passing only grants permission, validator must actively register
         // Give new validator enough ETH and register
         uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
-        vm.deal(newValidator, 20000 ether);
+        vm.deal(newValidator, minStake);
         vm.prank(newValidator);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
         
