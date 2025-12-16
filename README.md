@@ -1,37 +1,65 @@
 # Ju System Contracts
-
-> Congress POA 
-
-This repository contains the system contracts for the Ju blockchain's Congress Proof-of-Authority (POA) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and a comprehensive CLI tool for network administration.
+This repository contains the system contracts for the Ju blockchain's JPoSA (JPoSA) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and a comprehensive CLI tool for network administration.
 
 ## ✨ Features
 
-- 🏛️ **Congress POA Consensus**: Validator-based consensus with democratic governance
-- 🗳️ **Proposal System**: Create and vote on network changes
-- ⚖️ **Punishment Mechanism**: Automatic validator jailing for misbehavior  
-- 💰 **Reward Distribution**: Fair fee sharing among active validators
-- 🛠️ **CLI Management**: Complete command-line toolset for network operations
-- 🧪 **Comprehensive Testing**: 40+ test cases with full coverage
+- 🏛️ **Hybrid Consensus Mechanism**: Combines the advantages of PoS (Proof of Stake) and PoA (Proof of Authority) to achieve a balance between decentralization and high performance
+- 🗳️ **Democratic Governance System**: Proposal governance mechanism supporting protocol upgrades and parameter adjustments with validator participation in network governance decisions
+- ⚖️ **Dynamic Validator Set**: Automatically updates the validator list based on staking weight with a limited number of active validators and minimum staking requirement
+- 💰 **Economic Incentive Model**: Sustainable economic model with moderate annual issuance rate, fair reward distribution between validators and delegators, and delegation mechanism for ordinary users to participate
+- 🔒 **Multi-layer Security Protection**: Comprehensive security mechanisms including unbonding period, automatic validator jailing for misbehavior, and re-entry attack protection
 
 ## 🏗️ Project Structure
 
 ```
-sys-contract/
+chain-contract/
+├── congress-cli/        # Congress JPoSA management CLI tool
 ├── contracts/           # Solidity source code
-├── congress-cli/        # Congress POA management CLI tool
-├── forge-scripts/       # Foundry deployment scripts
-├── test/         # Foundry test suites
-├── legacy-scripts/      # Legacy Node.js scripts
+├── script/              # Foundry deployment scripts
+├── test/                # Foundry test suites
 ├── docs/               # Project documentation
-├── out/                # Compiled contract artifacts (Foundry)
-├── cache/              # Build cache
 ├── foundry.toml        # Foundry configuration
-├── package.json        # Node.js dependencies (minimal)
+├── foundry.lock        # Foundry dependency lock file
+├── package.json        # Node.js dependencies
 ├── generate-contracts.js # Contract template generator
 ├── init_genesis.js     # Genesis file initialization script
-├── genesis.json        # Blockchain genesis configuration
+├── check_system_status.js # System status checking utility
+├── extract-bytecode.js # Bytecode extraction utility
 └── README.md           # This file
 ```
+
+## 📚 Documentation
+- [**JPoSA Whitepaper**](docs/posa-whitepaper.md) - Whitepaper of JPoSA consensus mechanism
+- [**JPoSA Whitepaper (Chinese)**](docs/posa-whitepaper-zh.md) - Chinese version of JPoSA consensus mechanism whitepaper
+- [**JPoSA Technical Specification**](docs/posa-tech-spec.md) - Detailed technical specification of JPoSA consensus mechanism
+- [**Deployment Guide**](docs/deployment-guide.md) - Complete deployment and configuration guide
+- [**Congress CLI Guide**](docs/congress-cli-guide.md) - Complete guide for Congress JPoSA management
+
+
+
+## 📋 System Contracts
+
+### **Deployment Flow**
+
+1. Compile contracts: `forge build`
+2. Generate contracts: `npm run generate`
+3. Initialize genesis: `npm run init-genesis`
+4. Build CLI tools: `cd congress-cli && make build`
+5. Start chain: `cd ../chain/local-test && ./pm2-init.sh` or `pm2 start ecosystem.config.js`
+
+
+## 🌐 Network Information
+
+### RPC Endpoints
+
+- **Testnet**: `https://testnet-rpc.juchain.org` (Chain ID: 202599)
+- **Mainnet**: `https://rpc.juchain.org` (Chain ID: 210000)
+
+### Block Explorers
+
+- **Testnet Explorer**: https://testnet.juscan.io
+- **Mainnet Explorer**: https://juscan.io
+
 
 ## 🛠️ Development Tools
 
@@ -79,7 +107,7 @@ npm run init-genesis
 
 ### **Congress CLI Tools**
 
-Command-line utilities for Congress POA consensus management.
+Command-line utilities for Congress JPoSA consensus management.
 
 ```bash
 # Build CLI tools
@@ -119,7 +147,7 @@ forge test --match-contract Punish
 - **Punishment System**: Thresholds, jailing, missed blocks
 - **Reward Distribution**: Fee sharing, profit withdrawal
 
-## 🏛️ Congress POA Management
+## 🏛️ Congress JPoSA Management
 
 ### **Validator Operations**
 
@@ -143,6 +171,7 @@ forge test --match-contract Punish
 ./build/congress-cli send -f createProposal_signed.json
 ```
 
+
 ### **Voting Process**
 
 ```bash
@@ -152,51 +181,8 @@ forge test --match-contract Punish
 # Sign and send vote
 ./build/congress-cli sign -f voteProposal.json -k keyfile -p passwordfile
 ./build/congress-cli send -f voteProposal_signed.json
+```
 
-## 📋 System Contracts
-
-### **Contract Addresses** (Fixed)
-
-- **Validators**: `0x000000000000000000000000000000000000f000`
-- **Punish**: `0x000000000000000000000000000000000000f001`
-- **Proposal**: `0x000000000000000000000000000000000000f002`
-
-### **Deployment Flow**
-
-1. Compile contracts: `forge build`
-2. Generate contracts: `npm run generate`
-3. Initialize genesis: `npm run init-genesis`
-4. Build CLI tools: `cd congress-cli && make build`
-5. Start chain: `cd ../chain && ./pm2-init.sh` or `pm2 start ecosystem.config.js`
-
-## 📚 Documentation
-
-- **Congress CLI Guide**: `docs/congress-cli-guide.md` - Complete guide for Congress POA management
-- **Deployment Guide**: `docs/deployment-guide.md` - Complete deployment and configuration guide
-
-## 🌐 Network Information
-
-- **Testnet**: `https://testnet-rpc.juchain.org` (Chain ID: 202599)
-- **Mainnet**: `https://rpc.juchain.org` (Chain ID: 210000)
-
-## 🔧 Configuration
-
-### **Foundry** (`foundry.toml`)
-
-- Solidity version: 0.8.20
-- Source directory: `contracts/`
-- Test directory: `test/`
-- Output directory: `out/`
-
-### **Node.js** (`package.json`)
-
-Minimal dependencies for utility scripts:
-
-- `nunjucks`: Template engine for contract generation
-
-### **Congress CLI** (`congress-cli/`)
-
-Go-based command-line tools for Congress POA consensus management.
 
 ## 🚀 Quick Start
 
@@ -222,9 +208,3 @@ cd congress-cli && make build
 # 7. Test CLI tools
 ./build/congress-cli help
 ```
-
-## 📖 Further Reading
-
-- [Foundry Book](https://book.getfoundry.sh/)
-- [Congress CLI Documentation](docs/congress-cli-guide.md)
-- [Deployment Guide](docs/deployment-guide.md)
