@@ -108,8 +108,8 @@ contract Proposal is Params {
         removeThreshold = 48;
         decreaseRate = 24;
         withdrawProfitPeriod = 86400;
-        // Default block reward: 0.833 ether per block (72,000 JU/day ÷ 86,400 blocks/day)
-        blockReward = 833_000_000_000_000_000; // 833 * 10^15 wei = 0.833 ether
+        // Default block reward: 0.2 ether per block (17,280 JU/day ÷ 86,400 blocks/day)
+        blockReward = 200_000_000_000_000_000; // 0.2 ether = 2 * 10^17 wei
         // Default unbonding period: 7 days in blocks (604800 blocks = 7 days * 24 hours * 3600 seconds / 1 second per block)
         unbondingPeriod = 604800;
         // Default validator unjail period: 24 hours in blocks (86400 blocks = 24 hours * 3600 seconds / 1 second per block)
@@ -223,6 +223,8 @@ contract Proposal is Params {
      *   - 3: decreaseRate (must > 0, prevents division by zero)
      *   - 4: withdrawProfitPeriod (must > 0)
      *   - 5: blockReward (must > 0, in wei)
+     *   - 6: unbondingPeriod (must > 0)
+     *   - 7: validatorUnjailPeriod (must > 0)
      * @param value New configuration value
      */
     function updateConfig(uint256 cid, uint256 value) private {
