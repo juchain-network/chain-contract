@@ -1,6 +1,19 @@
+/**
+ * Transfer Funds Script
+ * 
+ * This is an example script for transferring funds to additional validators
+ * (validator6, validator7, etc.) when adding them to the network.
+ * 
+ * Note: The default local testnet configuration uses 3 validators (validator1-3).
+ * This script is used when adding additional validators via governance proposals.
+ * 
+ * Default RPC endpoint: http://localhost:8545 (validator1)
+ * You can modify the RPC endpoint to connect to other validators if needed.
+ */
+
 const { Web3 } = require('web3');
 
-// Connect to local private chain
+// Connect to local private chain (default connects to validator1)
 const web3 = new Web3('http://localhost:8545');
 
 // Transfer function
@@ -14,7 +27,7 @@ async function transferFunds() {
         // Sender (account with existing funds)
         const fromAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
         
-        // Receiver (validator6 and validator7)
+        // Recipients (validator6 and validator7)
         const validator6 = '0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc';
         const validator7 = '0x50c554ac9c134491818fa6f21d504f2ae5bd9c26';
         
@@ -59,10 +72,10 @@ async function transferFunds() {
     } catch (error) {
         console.error('❌ Transfer failed:', error.message);
         if (error.message.includes('insufficient funds')) {
-            console.log('💡 Suggestion: Ensure sender account has sufficient balance');
+            console.log('💡 Suggestion: Ensure the sender account has sufficient balance');
         }
         if (error.message.includes('connection')) {
-            console.log('💡 Suggestion: Ensure private chain is running (geth or anvil)');
+            console.log('💡 Suggestion: Ensure the private chain is running (geth or anvil)');
         }
     }
 }

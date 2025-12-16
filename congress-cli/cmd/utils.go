@@ -70,8 +70,8 @@ func ValidateOperation(operation string) error {
 
 // ValidateConfigID validates configuration ID
 func ValidateConfigID(cid int64) error {
-	if cid < 0 || cid > 4 {
-		return fmt.Errorf("invalid config ID: %d, must be 0-4", cid)
+	if cid < 0 || cid > 7 {
+		return fmt.Errorf("invalid config ID: %d, must be 0-7", cid)
 	}
 	return nil
 }
@@ -85,7 +85,7 @@ func ValidateProposalID(proposalID string) error {
 	// Allow 0x prefix
 	cleanID := strings.TrimPrefix(proposalID, "0x")
 
-	// Validate if it is a valid hexadecimal string
+	// Validate if it's a valid hexadecimal string
 	if !regexp.MustCompile(`^[0-9a-fA-F]+$`).MatchString(cleanID) {
 		return fmt.Errorf("invalid proposal ID format: %s", proposalID)
 	}
@@ -95,7 +95,7 @@ func ValidateProposalID(proposalID string) error {
 	return nil
 }
 
-// GetConfigIDName gets the name of configuration ID
+// GetConfigIDName gets the name of the configuration ID
 func GetConfigIDName(cid int64) string {
 	switch cid {
 	case 0:
@@ -108,6 +108,12 @@ func GetConfigIDName(cid int64) string {
 		return "decreaseRate"
 	case 4:
 		return "withdrawProfitPeriod"
+	case 5:
+		return "blockReward"
+	case 6:
+		return "unbondingPeriod"
+	case 7:
+		return "validatorUnjailPeriod"
 	default:
 		return "unknown"
 	}
@@ -123,7 +129,7 @@ func PrintSuccess(message string) {
 	fmt.Printf("✅ %s\n", message)
 }
 
-// PrintInfo prints information
+// PrintInfo prints information message
 func PrintInfo(message string) {
 	fmt.Printf("ℹ️  %s\n", message)
 }
@@ -133,7 +139,7 @@ func PrintWarning(message string) {
 	fmt.Printf("⚠️  %s\n", message)
 }
 
-// PrintError 打印错误信息
+// PrintError prints error message
 func PrintError(message string, err error) {
 	fmt.Printf("❌ %s: %v\n", message, err)
 }

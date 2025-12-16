@@ -13,7 +13,9 @@
     "generate:mock": "node generate-contracts.js --mock",
     "init-genesis": "node init_genesis.js",
     "forge:test": "forge test",
-    "forge:build": "forge build"
+    "forge:build": "forge build",
+    "extract-bytecode": "node extract-bytecode.js",
+    "build-and-extract": "npm run forge:build && npm run extract-bytecode"
   },
   "author": "",
   "license": "MIT"

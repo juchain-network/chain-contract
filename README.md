@@ -1,12 +1,12 @@
 # Ju System Contracts
 
-> JPoSA (JuChain Proof of Staked Authority) Consensus Contracts
+> Congress POA 
 
-This repository contains the system contracts for the Ju blockchain's JPoSA (Proof of Staked Authority) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and a comprehensive CLI tool for network administration.
+This repository contains the system contracts for the Ju blockchain's Congress Proof-of-Authority (POA) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and a comprehensive CLI tool for network administration.
 
 ## ✨ Features
 
-- 🏛️ **JPoSA Consensus**: Validator-based consensus with democratic governance and staking mechanisms
+- 🏛️ **Congress POA Consensus**: Validator-based consensus with democratic governance
 - 🗳️ **Proposal System**: Create and vote on network changes
 - ⚖️ **Punishment Mechanism**: Automatic validator jailing for misbehavior  
 - 💰 **Reward Distribution**: Fair fee sharing among active validators
@@ -18,7 +18,7 @@ This repository contains the system contracts for the Ju blockchain's JPoSA (Pro
 ```
 sys-contract/
 ├── contracts/           # Solidity source code
-├── congress-cli/        # JPoSA management CLI tool
+├── congress-cli/        # Congress POA management CLI tool
 ├── forge-scripts/       # Foundry deployment scripts
 ├── test/         # Foundry test suites
 ├── legacy-scripts/      # Legacy Node.js scripts
@@ -79,7 +79,7 @@ npm run init-genesis
 
 ### **Congress CLI Tools**
 
-Command-line utilities for JPoSA consensus management.
+Command-line utilities for Congress POA consensus management.
 
 ```bash
 # Build CLI tools
@@ -119,7 +119,7 @@ forge test --match-contract Punish
 - **Punishment System**: Thresholds, jailing, missed blocks
 - **Reward Distribution**: Fee sharing, profit withdrawal
 
-## 🏛️ JPoSA Management
+## 🏛️ Congress POA Management
 
 ### **Validator Operations**
 
@@ -171,7 +171,7 @@ forge test --match-contract Punish
 
 ## 📚 Documentation
 
-- **Congress CLI Guide**: `docs/congress-cli-guide.md` - Complete guide for JPoSA management
+- **Congress CLI Guide**: `docs/congress-cli-guide.md` - Complete guide for Congress POA management
 - **Deployment Guide**: `docs/deployment-guide.md` - Complete deployment and configuration guide
 
 ## 🌐 Network Information
@@ -196,7 +196,7 @@ Minimal dependencies for utility scripts:
 
 ### **Congress CLI** (`congress-cli/`)
 
-Go-based command-line tools for JPoSA consensus management.
+Go-based command-line tools for Congress POA consensus management.
 
 ## 🚀 Quick Start
 

@@ -6,7 +6,7 @@ import {Proposal} from "../contracts/Proposal.sol";
 
 contract RemoveNodeScript is BaseSetup {
     function run() external {
-        // 示例：移除一个验证者节点
+        // Example: Remove a validator node
         address toRemove = 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65;
         removeNode(toRemove);
     }
