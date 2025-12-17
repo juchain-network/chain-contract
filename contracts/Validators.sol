@@ -76,14 +76,6 @@ contract Validators is Params, ReentrancyGuard {
         _;
     }
 
-    modifier onlyNotUpdated() {
-        require(
-            operationsDone[block.number][uint8(Operations.UpdateValidators)] == false,
-            'Validators already updated'
-        );
-        _;
-    }
-
     function initialize(
         address[] calldata vals,
         address _proposal,
