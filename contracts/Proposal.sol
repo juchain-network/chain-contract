@@ -147,6 +147,9 @@ contract Proposal is Params {
     }
 
     function createUpdateConfigProposal(uint256 cid, uint256 newValue) external returns (bool) {
+        // Validate config parameters before creating proposal
+        validateConfig(cid, newValue);
+        
         bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, block.timestamp));
 
         ProposalInfo memory proposal;
@@ -215,7 +218,7 @@ contract Proposal is Params {
     }
 
     /**
-     * @dev Update system configuration
+     * @dev Validate configuration parameters
      * @param cid Configuration ID:
      *   - 0: proposalLastingPeriod (1 hour - 30 days)
      *   - 1: punishThreshold (must > 0)
@@ -227,32 +230,36 @@ contract Proposal is Params {
      *   - 7: validatorUnjailPeriod (must > 0)
      * @param value New configuration value
      */
-    function updateConfig(uint256 cid, uint256 value) private {
+    function validateConfig(uint256 cid, uint256 value) internal pure returns (bool) {
+        require(cid >= 0 && cid <= 7, "Invalid config ID");
+        
+        // Check specific rules
         if (cid == 0) {
             require(value >= 1 hours && value <= 30 days, "Invalid proposal period");
-            proposalLastingPeriod = value;
-        } else if (cid == 1) {
-            require(value > 0, "Punish threshold must be positive");
-            punishThreshold = value;
-        } else if (cid == 2) {
-            require(value > 0, "Remove threshold must be positive");
-            removeThreshold = value;
-        } else if (cid == 3) {
-            require(value > 0, "Decrease rate must be positive");
-            decreaseRate = value;
-        } else if (cid == 4) {
-            require(value > 0, "Withdraw profit period must be positive");
-            withdrawProfitPeriod = value;
-        } else if (cid == 5) {
-            require(value > 0, "Block reward must be positive");
-            blockReward = value;
-        } else if (cid == 6) {
-            require(value > 0, "Unbonding period must be positive");
-            unbondingPeriod = value;
-        } else if (cid == 7) {
-            require(value > 0, "Validator unjail period must be positive");
-            validatorUnjailPeriod = value;
+        } else {
+            // All other configs require positive values
+            require(value > 0, "Config value must be positive");
         }
+        return true;
+    }
+
+    /**
+     * @dev Update system configuration
+     * @param cid Configuration ID
+     * @param value New configuration value
+     */
+    function updateConfig(uint256 cid, uint256 value) private {
+        validateConfig(cid, value);
+        
+        // Since validateConfig already checks cid is between 0-7, no need for else checks
+        if (cid == 0) proposalLastingPeriod = value;
+        if (cid == 1) punishThreshold = value;
+        if (cid == 2) removeThreshold = value;
+        if (cid == 3) decreaseRate = value;
+        if (cid == 4) withdrawProfitPeriod = value;
+        if (cid == 5) blockReward = value;
+        if (cid == 6) unbondingPeriod = value;
+        if (cid == 7) validatorUnjailPeriod = value;
     }
 
     /**
@@ -283,9 +290,6 @@ contract Proposal is Params {
             return false;
         }
         uint256 passedTime = proposalPassedTime[validator];
-        if (passedTime == 0) {
-            return false; // No proposal passed time recorded
-        }
         // Check if within 7 days - only applies to NEW registrations
         return block.timestamp <= passedTime + STAKING_DEADLINE_PERIOD;
     }

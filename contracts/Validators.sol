@@ -205,11 +205,8 @@ contract Validators is Params, ReentrancyGuard {
 
     // distributeBlockReward distributes block reward to the block producer
     // If the block producer is jailed, the reward is distributed to other active validators
-    function distributeBlockReward() external payable onlyMiner onlyInitialized {
-        // Check if block reward has already been distributed for this block
-        if (operationsDone[block.number][uint8(Operations.Distribute)] == true) {
-            return; // Silently return to avoid consensus issues
-        }
+    function distributeBlockReward() external payable onlyMiner onlyInitialized onlyNotRewarded {
+        // Check is now handled by onlyNotRewarded modifier
         
         // Clean up previous block's data to save storage
         // This prevents storage accumulation while maintaining reentrancy protection
