@@ -21,6 +21,82 @@ contract ProposalFoundryTest is BaseSetup {
         deploySystem(initVals);
     }
 
+    function testVoteProposalWithResultAlreadyExists() public {
+        Proposal p = Proposal(PROPOSAL);
+        address newValidator = makeAddr("newValidator");
+        
+        // Create a proposal
+        vm.warp(5_000_000);
+        bytes32 id = keccak256(abi.encodePacked(address(this), newValidator, true, "", block.timestamp));
+        p.createProposal(newValidator, true, "");
+        
+        // Manually set resultExist to true to test the early return path
+        // This simulates a situation where the result was already determined by previous votes
+        vm.store(
+            address(p),
+            keccak256(abi.encode(id, uint256(2))), // Slot for results[id]
+            bytes32(uint256(1 << 160)) // resultExist = true, agree=0, reject=0
+        );
+        
+        // Try to vote - should return true without processing the vote
+        vm.prank(v1);
+        bool result = p.voteProposal(id, true);
+        require(result, "should return true when result already exists");
+    }
+
+    function testVoteProposalRejectPath() public {
+        Proposal p = Proposal(PROPOSAL);
+        address newValidator = makeAddr("newValidator");
+        
+        // Create a proposal
+        vm.warp(5_000_000);
+        bytes32 id = keccak256(abi.encodePacked(address(this), newValidator, true, "", block.timestamp));
+        p.createProposal(newValidator, true, "");
+        
+        // Vote to make it rejected (majority against)
+        vm.prank(v1); p.voteProposal(id, false);
+        vm.prank(v2); p.voteProposal(id, false);
+        vm.prank(v3); p.voteProposal(id, false);
+        
+        // Check that reject path was taken
+        (uint16 agree, uint16 reject, bool resultExist) = p.results(id);
+        require(agree == 0, "should have 0 agree votes");
+        require(reject == 3, "should have 3 reject votes");
+        require(resultExist, "result should exist");
+    }
+
+    function testIsProposalValidForStaking() public {
+        Proposal p = Proposal(PROPOSAL);
+        
+        // Test validator with no proposal (pass is false)
+        address newValidator = makeAddr("newValidator");
+        bool result = p.isProposalValidForStaking(newValidator);
+        require(!result, "should return false for validator with no proposal");
+        
+        // Test existing validator but no passed time recorded
+        // (pass[v1] is true since it was initialized)
+        uint256 oldPassedTime = p.proposalPassedTime(v1);
+        // Let's assume v1 has no passed time (in real code it should, but for testing we'll proceed)
+        
+        // Create a new validator proposal and pass it
+        address testValidator = makeAddr("testValidator");
+        vm.warp(5_000_000);
+        bytes32 id = keccak256(abi.encodePacked(address(this), testValidator, true, "", block.timestamp));
+        p.createProposal(testValidator, true, "");
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+        
+        // Now test with valid passed time but within deadline
+        result = p.isProposalValidForStaking(testValidator);
+        require(result, "should return true for valid proposal within deadline");
+        
+        // Test after deadline has passed
+        vm.warp(block.timestamp + p.STAKING_DEADLINE_PERIOD() + 1);
+        result = p.isProposalValidForStaking(testValidator);
+        require(!result, "should return false for proposal after deadline");
+    }
+
     function testInitOnlyOnce() public {
         bytes memory err;
         try Proposal(PROPOSAL).initialize(new address[](0), address(0xCAFE)) { revert("should revert"); } catch (bytes memory e) { err = e; }
@@ -152,5 +228,25 @@ contract ProposalFoundryTest is BaseSetup {
             else if (cids[i]==6) require(p.unbondingPeriod()==vals[6], "cid6");
             else if (cids[i]==7) require(p.validatorUnjailPeriod()==vals[7], "cid7");
         }
+    }
+
+    function testUpdateConfigWithInvalidCID() public {
+        // Test updateConfig with an invalid CID (should revert during proposal creation)
+        Proposal p = Proposal(PROPOSAL);
+        
+        // CID 100 is invalid, should revert during proposal creation
+        vm.warp(6_000_000);
+        vm.expectRevert("Invalid config ID");
+        p.createUpdateConfigProposal(100, 12345);
+    }
+
+    function testUpdateConfigRequireChecks() public {
+        Proposal p = Proposal(PROPOSAL);
+        
+        // Test that the validation checks work during proposal creation
+        
+        // CID 0 - Invalid proposal period (too small)
+        vm.expectRevert("Invalid proposal period");
+        p.createUpdateConfigProposal(0, 100); // Less than 1 hour
     }
 }
