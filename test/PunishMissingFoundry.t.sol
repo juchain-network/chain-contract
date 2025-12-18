@@ -91,6 +91,28 @@ contract PunishMissingFoundryTest is BaseSetup {
         require(punish.getPunishRecord(v1) == 0, "v1 punish record should remain cleaned");
     }
 
+    function testOnlyNotPunishedModifier() public {
+        // Test that onlyNotPunished modifier prevents multiple punish calls in the same block
+        Punish punish = Punish(PUNISH);
+        
+        // Set coinbase to VALIDATORS contract address
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
+        
+        // First punish call should succeed
+        punish.punish(v1);
+        
+        // Second punish call in the same block should revert
+        vm.expectRevert("Already punished");
+        punish.punish(v1);
+        
+        // Also test with different validator in same block
+        vm.expectRevert("Already punished");
+        punish.punish(v2);
+        
+        vm.stopPrank();
+    }
+    
     function testComplexPunishWorkflow() public {
         // Corresponds to complex punishment workflow test
         Punish punish = Punish(PUNISH);
@@ -212,5 +234,176 @@ contract PunishMissingFoundryTest is BaseSetup {
         success = Validators(VALIDATORS).tryActive(v1);
         require(success, "tryActive should succeed");
         require(punish.getPunishRecord(v1) == 0, "punish record should remain clean");
+    }
+
+    function testCleanPunishRecordWithIndexNotLast() public {
+        // Test cleanPunishRecord when validator is not at the end of punishValidators array
+        Punish punish = Punish(PUNISH);
+        
+        // Punish three validators to ensure they're in the array in v1, v2, v3 order
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
+        
+        // Punish v1 first
+        for (uint256 i = 0; i < 5; i++) {
+            vm.roll(block.number + 1);
+            punish.punish(v1);
+        }
+        
+        // Punish v2 second
+        for (uint256 i = 0; i < 5; i++) {
+            vm.roll(block.number + 1);
+            punish.punish(v2);
+        }
+        
+        // Punish v3 third
+        for (uint256 i = 0; i < 5; i++) {
+            vm.roll(block.number + 1);
+            punish.punish(v3);
+        }
+        vm.stopPrank();
+        
+        // Verify all three are in the array
+        require(punish.getPunishValidatorsLen() == 3, "should have 3 validators in punish array");
+        require(punish.getPunishRecord(v1) == 5, "v1 should have 5 punish records");
+        require(punish.getPunishRecord(v2) == 5, "v2 should have 5 punish records");
+        require(punish.getPunishRecord(v3) == 5, "v3 should have 5 punish records");
+        
+        // Now directly test cleanPunishRecord on v2 (which is not at the end of the array)
+        // This should test the branch where index != punishValidators.length - 1
+        vm.prank(VALIDATORS);
+        bool success = punish.cleanPunishRecord(v2);
+        require(success, "cleanPunishRecord should succeed");
+        
+        // Verify v2's record is cleaned
+        require(punish.getPunishRecord(v2) == 0, "v2's punish record should be cleaned");
+        
+        // Verify the array is correctly maintained
+        require(punish.getPunishValidatorsLen() == 2, "should have 2 validators left");
+        
+        // Verify v1 and v3 are still in the array with correct records
+        require(punish.getPunishRecord(v1) == 5, "v1's punish record should remain");
+        require(punish.getPunishRecord(v3) == 5, "v3's punish record should remain");
+    }
+
+    function testOnlyNotDecreasedModifier() public {
+        // Test that onlyNotDecreased modifier prevents multiple decrease calls in the same block
+        Punish punish = Punish(PUNISH);
+        uint256 epoch = 30; // Based on typical POSA configuration
+        
+        // Roll to a block that is multiple of epoch
+        uint256 targetBlock = epoch * 2;
+        vm.roll(targetBlock);
+        
+        // Set coinbase to VALIDATORS contract address (onlyMiner)
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
+        
+        // First call should succeed
+        punish.decreaseMissedBlocksCounter(epoch);
+        
+        // Second call in the same block should revert
+        vm.expectRevert("Already decreased");
+        punish.decreaseMissedBlocksCounter(epoch);
+        
+        vm.stopPrank();
+    }
+
+    function testDecreaseMissedBlocksCounterAtEpochBlock() public {
+        // Test decreaseMissedBlocksCounter at epoch block
+        Punish punish = Punish(PUNISH);
+        uint256 epoch = 30;
+        
+        // Roll to a block that is multiple of epoch
+        uint256 targetBlock = epoch * 2;
+        vm.roll(targetBlock);
+        
+        // Call should succeed at epoch block
+        vm.coinbase(VALIDATORS);
+        vm.prank(VALIDATORS);
+        punish.decreaseMissedBlocksCounter(epoch);
+    }
+
+    function testInitializeParameterValidation() public {
+        // Deploy a new Punish contract to test initialize
+        Punish punish = new Punish();
+        
+        // Test with zero address for validators
+        vm.expectRevert("Invalid validators address");
+        punish.initialize(address(0), PROPOSAL, STAKING);
+        
+        // Test with zero address for proposal
+        vm.expectRevert("Invalid proposal address");
+        punish.initialize(VALIDATORS, address(0), STAKING);
+        
+        // Test with both zero addresses
+        vm.expectRevert("Invalid validators address");
+        punish.initialize(address(0), address(0), STAKING);
+    }
+
+    function testDecreaseMissedBlocksCounterLogic() public {
+        Punish punish = Punish(PUNISH);
+        uint256 epoch = 30;
+        
+        // Punish validators to set up different missed block counts
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
+        
+        // Case 1: v1 has 3 missed blocks (greater than threshold 2)
+        vm.roll(block.number + 1);
+        punish.punish(v1);
+        vm.roll(block.number + 1);
+        punish.punish(v1);
+        vm.roll(block.number + 1);
+        punish.punish(v1);
+        
+        // Case 2: v2 has 2 missed blocks (equal to threshold 2)
+        vm.roll(block.number + 1);
+        punish.punish(v2);
+        vm.roll(block.number + 1);
+        punish.punish(v2);
+        
+        // Case 3: v3 has 1 missed block (less than threshold 2)
+        vm.roll(block.number + 1);
+        punish.punish(v3);
+        
+        vm.stopPrank();
+        
+        // Verify initial state
+        require(punish.getPunishRecord(v1) == 3, "v1 should have 3 missed blocks");
+        require(punish.getPunishRecord(v2) == 2, "v2 should have 2 missed blocks");
+        require(punish.getPunishRecord(v3) == 1, "v3 should have 1 missed block");
+        
+        // Roll to epoch block
+        uint256 epochBlock = epoch * 5;
+        vm.roll(epochBlock);
+        
+        // Call decreaseMissedBlocksCounter
+        vm.coinbase(VALIDATORS);
+        vm.prank(VALIDATORS);
+        punish.decreaseMissedBlocksCounter(epoch);
+        
+        // Verify results:
+        // v1: 3 - 2 = 1
+        // v2: 2 <= 2, reset to 0
+        // v3: 1 <= 2, reset to 0
+        require(punish.getPunishRecord(v1) == 1, "v1 should have 1 missed block after decrease");
+        require(punish.getPunishRecord(v2) == 0, "v2 should have 0 missed blocks after decrease");
+        require(punish.getPunishRecord(v3) == 0, "v3 should have 0 missed blocks after decrease");
+        
+        // Test with more blocks to cover the other branch
+        vm.roll(epochBlock + 1);
+        vm.coinbase(VALIDATORS);
+        vm.prank(VALIDATORS);
+        punish.punish(v1); // v1 now has 2 missed blocks
+        
+        // Call decrease again at next epoch
+        vm.roll(epochBlock + epoch);
+        vm.coinbase(VALIDATORS);
+        vm.prank(VALIDATORS);
+        punish.decreaseMissedBlocksCounter(epoch);
+        
+        // Now v1 has 2 missed blocks, should be reset to 0
+        require(punish.getPunishRecord(v1) == 0, "v1 should have 0 missed blocks after second decrease");
     }
 }

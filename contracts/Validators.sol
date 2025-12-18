@@ -3,10 +3,10 @@
 pragma solidity ^0.8.20;
 
 import {Params} from './Params.sol';
-import {Proposal} from './Proposal.sol';
-import {Punish} from './Punish.sol';
-import {Staking} from './Staking.sol';
-import {ReentrancyGuard} from './library/ReentrancyGuard.sol';
+import {IProposal} from './IProposal.sol';
+import {IPunish} from './IPunish.sol';
+import {IStaking} from './IStaking.sol';
+import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
 contract Validators is Params, ReentrancyGuard {
 
@@ -53,9 +53,9 @@ contract Validators is Params, ReentrancyGuard {
     uint256 public totalJailedHb;
     
     // System contracts
-    Proposal proposal;
-    Punish punish;
-    Staking staking;
+    IProposal proposal;
+    IPunish punish;
+    IStaking staking;
 
     enum Operations {Distribute, UpdateValidators}
     // Record the operations is done or not.
@@ -72,16 +72,12 @@ contract Validators is Params, ReentrancyGuard {
     event LogUpdateValidator(address[] newSet);
 
     modifier onlyNotRewarded() {
-        require(operationsDone[block.number][uint8(Operations.Distribute)] == false, 'Block is already rewarded');
+        _onlyNotRewarded();
         _;
     }
 
-    modifier onlyNotUpdated() {
-        require(
-            operationsDone[block.number][uint8(Operations.UpdateValidators)] == false,
-            'Validators already updated'
-        );
-        _;
+    function _onlyNotRewarded() internal view {
+        require(operationsDone[block.number][uint8(Operations.Distribute)] == false, 'Block is already rewarded');
     }
 
     function initialize(
@@ -94,9 +90,9 @@ contract Validators is Params, ReentrancyGuard {
         require(_punish != address(0), "Invalid punish address");
         require(_staking != address(0), "Invalid staking address");
         
-        proposal = Proposal(_proposal);
-        punish = Punish(_punish);
-        staking = Staking(_staking);
+        proposal = IProposal(_proposal);
+        punish = IPunish(_punish);
+        staking = IStaking(_staking);
 
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
@@ -136,7 +132,7 @@ contract Validators is Params, ReentrancyGuard {
             validatorInfo[validator].feeAddr = feeAddr;
         }
 
-        validatorInfo[validator].description = Description(moniker, identity, website, email, details);
+        validatorInfo[validator].description = Description({moniker: moniker, identity: identity, website: website, email: email, details: details});
 
         emit LogEditValidator(validator, feeAddr, block.timestamp);
         return true;
@@ -205,11 +201,8 @@ contract Validators is Params, ReentrancyGuard {
 
     // distributeBlockReward distributes block reward to the block producer
     // If the block producer is jailed, the reward is distributed to other active validators
-    function distributeBlockReward() external payable onlyMiner onlyInitialized {
-        // Check if block reward has already been distributed for this block
-        if (operationsDone[block.number][uint8(Operations.Distribute)] == true) {
-            return; // Silently return to avoid consensus issues
-        }
+    function distributeBlockReward() external payable onlyMiner onlyInitialized onlyNotRewarded {
+        // Check is now handled by onlyNotRewarded modifier
         
         // Clean up previous block's data to save storage
         // This prevents storage accumulation while maintaining reentrancy protection
@@ -269,11 +262,11 @@ contract Validators is Params, ReentrancyGuard {
         emit LogUpdateValidator(newSet);
     }
 
-    function removeValidator(address val) external onlyPunishContract {
+    function removeValidator(address val) external onlyPunishContract nonReentrant {
         removeValidatorInternal(val);
     }
 
-    function tryRemoveValidator(address val) external onlyProposalContract {
+    function tryRemoveValidator(address val) external onlyProposalContract nonReentrant {
         removeValidatorInternal(val);
     }
 
@@ -297,7 +290,7 @@ contract Validators is Params, ReentrancyGuard {
         }
     }
 
-    function removeValidatorIncoming(address val) external onlyPunishContract {
+    function removeValidatorIncoming(address val) external onlyPunishContract nonReentrant {
         tryRemoveValidatorIncoming(val);
     }
 

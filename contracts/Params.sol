@@ -20,56 +20,88 @@ contract Params {
 
     
     modifier onlyMiner() {
+        _onlyMiner();
+        _;
+    }
+
+    function _onlyMiner() internal view {
         require(
             msg.sender == block.coinbase,
             "Miner only"
         );
-        _;
     }
 
     
     modifier onlyNotInitialized() {
-        require(!initialized, "Already initialized");
+        _onlyNotInitialized();
         _;
     }
 
     modifier onlyInitialized() {
-        require(initialized, "Not init yet");
+        _onlyInitialized();
         _;
     }
 
     modifier onlyPunishContract() {
-        require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
+        _onlyPunishContract();
         _;
     }
 
+    function _onlyNotInitialized() internal view {
+        require(!initialized, "Already initialized");
+    }
+
+    function _onlyInitialized() internal view {
+        require(initialized, "Not init yet");
+    }
+
+    function _onlyPunishContract() internal view {
+        require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
+    }
+
     modifier onlyBlockEpoch(uint256 epoch) {
-        require(block.number % epoch == 0, "Block epoch only");
+        _onlyBlockEpoch(epoch);
         _;
     }
 
     modifier onlyValidatorsContract() {
-        require(
-            msg.sender == VALIDATOR_CONTRACT_ADDR,
-            "Validators contract only"
-        );
+        _onlyValidatorsContract();
         _;
     }
 
     modifier onlyProposalContract() {
-        require(
-            msg.sender == PROPOSAL_ADDR,
-            "Proposal contract only"
-        );
+        _onlyProposalContract();
         _;
     }
 
     modifier onlyStakingContract() {
+        _onlyStakingContract();
+        _;
+    }
+
+    function _onlyBlockEpoch(uint256 epoch) internal view {
+        require(block.number % epoch == 0, "Block epoch only");
+    }
+
+    function _onlyValidatorsContract() internal view {
+        require(
+            msg.sender == VALIDATOR_CONTRACT_ADDR,
+            "Validators contract only"
+        );
+    }
+
+    function _onlyProposalContract() internal view {
+        require(
+            msg.sender == PROPOSAL_ADDR,
+            "Proposal contract only"
+        );
+    }
+
+    function _onlyStakingContract() internal view {
         require(
             msg.sender == STAKING_CONTRACT_ADDR,
             "Staking contract only"
         );
-        _;
     }
 
     
