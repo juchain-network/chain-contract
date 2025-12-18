@@ -65,4 +65,16 @@ interface IProposal {
      * @return uint256 The validator unjail period in blocks.
      */
     function validatorUnjailPeriod() external view returns (uint256);
+
+    /**
+     * @dev Returns the minimum staking amount required to become a validator.
+     * @return uint256 The minimum validator stake amount in wei.
+     */
+    function minValidatorStake() external view returns (uint256);
+
+    /**
+     * @dev Returns the maximum number of validators allowed in the active set.
+     * @return uint256 The maximum number of validators.
+     */
+    function maxValidators() external view returns (uint256);
 }

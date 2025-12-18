@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {BaseSetup} from "../test/BaseSetup.t.sol";
 import {Staking} from "../contracts/Staking.sol";
 import {Validators} from "../contracts/Validators.sol";
+import {Proposal} from "../contracts/Proposal.sol";
 
 // Staking system operation script
 contract StakingOperationsScript is BaseSetup {
@@ -70,22 +71,15 @@ contract StakingOperationsScript is BaseSetup {
         } else {
             emit StakingInfo("No validators registered yet", 0);
         }
-        
-        // Safely check Staking system status
-        try stakingContract.MIN_VALIDATORS() returns (uint256 minValidators) {
-            emit StakingInfo("Minimum validators required", minValidators);
-        } catch {
-            emit StakingInfo("Cannot get minimum validators", 0);
-        }
     }
     
     function demonstrateValidatorRegistration() internal {
         emit StakingInfo("--- Validator Registration Demo ---", 0);
         
-        Staking stakingContract = Staking(STAKING);
+        Proposal proposalContract = Proposal(PROPOSAL);
         
         // Safely get minimum staking requirement
-        try stakingContract.MIN_VALIDATOR_STAKE() returns (uint256 minStake) {
+        try proposalContract.minValidatorStake() returns (uint256 minStake) {
             emit StakingInfo("Minimum stake required", minStake);
         } catch {
             emit StakingInfo("Cannot get minimum stake", 0);

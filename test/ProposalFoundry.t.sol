@@ -151,7 +151,7 @@ contract ProposalFoundryTest is BaseSetup {
         // In POSA mode, validator must register (stake) to become top validator
         // This is the design: proposal passing only grants permission, validator must actively register
         // Give new validator enough ETH and register
-        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         vm.deal(newValidator, minStake);
         vm.prank(newValidator);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
