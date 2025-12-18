@@ -27,68 +27,96 @@ contract Params {
 
     {% endif %}
 
-    {% if mock %}
     modifier onlyMiner() {
+        _onlyMiner();
+        _;
+    }
+
+    modifier onlyNotInitialized() {
+        _onlyNotInitialized();
+        _;
+    }
+
+    modifier onlyInitialized() {
+        _onlyInitialized();
+        _;
+    }
+
+    modifier onlyPunishContract() {
+        _onlyPunishContract();
+        _;
+    }
+
+    modifier onlyBlockEpoch(uint256 epoch) {
+        _onlyBlockEpoch(epoch);
+        _;
+    }
+
+    modifier onlyValidatorsContract() {
+        _onlyValidatorsContract();
+        _;
+    }
+
+    modifier onlyProposalContract() {
+        _onlyProposalContract();
+        _;
+    }
+
+    modifier onlyStakingContract() {
+        _onlyStakingContract();
+        _;
+    }
+
+    function _onlyMiner() internal view {
+        {% if mock %}
         require(
             // just for test
             msg.sender == miner,
             "Miner only"
         );
-        _;
-    }
-
-    {% else %}
-    modifier onlyMiner() {
+        {% else %}
         require(
             msg.sender == block.coinbase,
             "Miner only"
         );
-        _;
+        {% endif %}
     }
 
-    {% endif %}
-    modifier onlyNotInitialized() {
+    function _onlyNotInitialized() internal view {
         require(!initialized, "Already initialized");
-        _;
     }
 
-    modifier onlyInitialized() {
+    function _onlyInitialized() internal view {
         require(initialized, "Not init yet");
-        _;
     }
 
-    modifier onlyPunishContract() {
+    function _onlyPunishContract() internal view {
         require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
-        _;
     }
 
-    modifier onlyBlockEpoch(uint256 epoch) {
+    function _onlyBlockEpoch(uint256 epoch) internal view {
         require(block.number % epoch == 0, "Block epoch only");
-        _;
     }
 
-    modifier onlyValidatorsContract() {
+    function _onlyValidatorsContract() internal view {
         require(
             msg.sender == VALIDATOR_CONTRACT_ADDR,
             "Validators contract only"
         );
-        _;
     }
 
-    modifier onlyProposalContract() {
+    function _onlyProposalContract() internal view {
         require(
             msg.sender == PROPOSAL_ADDR,
             "Proposal contract only"
         );
-        _;
     }
 
-    modifier onlyStakingContract() {
+    function _onlyStakingContract() internal view {
         require(
             msg.sender == STAKING_CONTRACT_ADDR,
             "Staking contract only"
         );
-        _;
     }
 
     {% if mock %}
