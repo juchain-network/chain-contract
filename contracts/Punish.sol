@@ -3,20 +3,21 @@
 pragma solidity ^0.8.20;
 
 import {Params} from './Params.sol';
-import {Staking} from './Staking.sol';
-import {Validators} from './Validators.sol';
-import {Proposal} from './Proposal.sol';
+import {IStaking} from './IStaking.sol';
+import {IValidators} from './IValidators.sol';
+import {IProposal} from './IProposal.sol';
+import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
-contract Punish is Params {
+contract Punish is Params, ReentrancyGuard {
     struct PunishRecord {
         uint256 missedBlocksCounter;
         uint256 index;
         bool exist;
     }
 
-    Validators validators;
-    Proposal proposal;
-    Staking staking;
+    IValidators validators;
+    IProposal proposal;
+    IStaking staking;
 
     mapping(address => PunishRecord) punishRecords;
     address[] public punishValidators;
@@ -45,14 +46,14 @@ contract Punish is Params {
         require(_validators != address(0), "Invalid validators address");
         require(_proposal != address(0), "Invalid proposal address");
         
-        validators = Validators(_validators);
-        proposal = Proposal(_proposal);
-        staking = Staking(_staking);
+        validators = IValidators(_validators);
+        proposal = IProposal(_proposal);
+        staking = IStaking(_staking);
 
         initialized = true;
     }
 
-    function punish(address val) external onlyMiner onlyInitialized onlyNotPunished {
+    function punish(address val) external onlyMiner onlyInitialized onlyNotPunished nonReentrant {
         punished[block.number] = true;
         if (!punishRecords[val].exist) {
             punishRecords[val].index = punishValidators.length;
