@@ -75,7 +75,6 @@ contract ProposalFoundryTest is BaseSetup {
         
         // Test existing validator but no passed time recorded
         // (pass[v1] is true since it was initialized)
-        uint256 oldPassedTime = p.proposalPassedTime(v1);
         // Let's assume v1 has no passed time (in real code it should, but for testing we'll proceed)
         
         // Create a new validator proposal and pass it

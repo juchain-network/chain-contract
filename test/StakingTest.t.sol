@@ -908,6 +908,8 @@ contract StakingTest is Test {
     function test_RevertWhen_EmergencyExitMinValidators() public {
         // Register exactly 3 validators (minimum)
         for (uint i = 0; i < 3; i++) {
+            // casting to 'uint160' is safe because i ranges from 0-2, so i+1000 is well within uint160 limits
+            // forge-lint: disable-next-line(unsafe-typecast)
             address validator = address(uint160(i + 1000));
             vm.deal(validator, 100000 ether);
             _setupValidatorPass(validator);
@@ -1838,6 +1840,8 @@ contract StakingTest is Test {
         // Register exactly MAX_VALIDATORS (21) validators with different stakes
         address[] memory validators = new address[](21);
         for (uint i = 0; i < 21; i++) {
+            // casting to 'uint160' is safe because i ranges from 0-20, so 0x1000+i is well within uint160 limits
+            // forge-lint: disable-next-line(unsafe-typecast)
             address validator = address(uint160(0x1000 + i));
             validators[i] = validator;
             vm.deal(validator, MIN_STAKE);

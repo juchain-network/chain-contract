@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
-import {Validators} from "../contracts/Validators.sol";
 
 // Supplement missing Proposal test cases
 contract ProposalMissingFoundryTest is BaseSetup {
@@ -363,12 +362,12 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         
         // Test updating with an invalid config ID (e.g., 100)
-        uint256 invalidCID = 100;
+        uint256 invalidCid = 100;
         uint256 value = 86400;
         
         // Create config proposal - should revert immediately with invalid CID
         vm.expectRevert("Invalid config ID");
-        p.createUpdateConfigProposal(invalidCID, value);
+        p.createUpdateConfigProposal(invalidCid, value);
     }
 
     // Additional tests to cover missing branches

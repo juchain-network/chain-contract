@@ -45,10 +45,14 @@ contract ProposalWorkflow is BaseSetup {
         
         // Create configuration update proposal
         bool createResult = Proposal(PROPOSAL).createUpdateConfigProposal(configId, newValue);
+        // casting to 'uint160' is safe because configId is a small configuration ID (typically 1-100)
+        // forge-lint: disable-next-line(unsafe-typecast)
         emit WorkflowEvent("Config proposal creation", address(uint160(configId)), createResult);
         
         // Check current configuration
         uint256 currentLastingPeriod = Proposal(PROPOSAL).proposalLastingPeriod();
+        // casting to 'uint160' is safe because currentLastingPeriod is a time duration in seconds (well within uint160 limits)
+        // forge-lint: disable-next-line(unsafe-typecast)
         emit WorkflowEvent("Current lasting period", address(uint160(currentLastingPeriod)), true);
     }
 }

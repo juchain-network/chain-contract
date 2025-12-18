@@ -3,9 +3,6 @@ pragma solidity ^0.8.20;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Validators} from "../contracts/Validators.sol";
-import {Proposal} from "../contracts/Proposal.sol";
-import {Staking} from "../contracts/Staking.sol";
-import {Punish} from "../contracts/Punish.sol";
 
 contract ValidatorsAdditionalTest is BaseSetup {
     address v1; address v2; address v3;
@@ -32,7 +29,7 @@ contract ValidatorsAdditionalTest is BaseSetup {
     }
 
     // Test validateDescription function
-    function testValidateDescription() public {
+    function testValidateDescription() public pure {
         // Test valid description
         bool isValid = Validators(VALIDATORS).validateDescription(
             "Test Validator", // moniker - max 70 chars
@@ -62,6 +59,8 @@ contract ValidatorsAdditionalTest is BaseSetup {
         string memory longIdentity = new string(3001);
         bytes memory longIdentityBytes = bytes(longIdentity);
         for (uint i = 0; i < longIdentityBytes.length; i++) {
+            // casting to 'bytes1' is safe because "x" is a single character
+            // forge-lint: disable-next-line(unsafe-typecast)
             longIdentityBytes[i] = bytes1("x");
         }
         longIdentity = string(longIdentityBytes);
@@ -105,7 +104,7 @@ contract ValidatorsAdditionalTest is BaseSetup {
     }
 
     // Test getActiveValidators function
-    function testGetActiveValidators() public {
+    function testGetActiveValidators() public view {
         address[] memory activeValidators = Validators(VALIDATORS).getActiveValidators();
         assertEq(activeValidators.length, 3, "Should have 3 active validators");
         assertEq(activeValidators[0], v1, "First validator should be v1");
@@ -114,7 +113,7 @@ contract ValidatorsAdditionalTest is BaseSetup {
     }
 
     // Test getHighestValidators function
-    function testGetHighestValidators() public {
+    function testGetHighestValidators() public view {
         address[] memory highestValidators = Validators(VALIDATORS).getHighestValidators();
         assertEq(highestValidators.length, 3, "Should have 3 highest validators");
     }
@@ -164,7 +163,7 @@ contract ValidatorsAdditionalTest is BaseSetup {
     }
 
     // Test getActiveValidatorCount function
-    function testGetActiveValidatorCount() public {
+    function testGetActiveValidatorCount() public view {
         uint256 count = Validators(VALIDATORS).getActiveValidatorCount();
         assertEq(count, 3, "Should have 3 active validators");
     }
@@ -194,7 +193,7 @@ contract ValidatorsAdditionalTest is BaseSetup {
     }
 
     // Test getActiveValidatorsWithStakes function
-    function testGetActiveValidatorsWithStakes() public {
+    function testGetActiveValidatorsWithStakes() public view {
         (address[] memory validators, uint256[] memory stakes) = Validators(VALIDATORS).getActiveValidatorsWithStakes();
         assertEq(validators.length, 3, "Should have 3 validators");
         assertEq(stakes.length, 3, "Should have 3 stakes");

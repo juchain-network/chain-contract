@@ -29,13 +29,21 @@ contract Punish is Params, ReentrancyGuard {
     event LogPunishValidator(address indexed val, uint256 time);
 
     modifier onlyNotPunished() {
-        require(!punished[block.number], 'Already punished');
+        _onlyNotPunished();
         _;
     }
 
     modifier onlyNotDecreased() {
-        require(!decreased[block.number], 'Already decreased');
+        _onlyNotDecreased();
         _;
+    }
+
+    function _onlyNotPunished() internal view {
+        require(!punished[block.number], 'Already punished');
+    }
+
+    function _onlyNotDecreased() internal view {
+        require(!decreased[block.number], 'Already decreased');
     }
 
     function initialize(
