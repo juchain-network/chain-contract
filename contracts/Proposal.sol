@@ -3,7 +3,7 @@
 pragma solidity ^0.8.20;
 
 import {Params} from './Params.sol';
-import {Validators} from './Validators.sol';
+import {IValidators} from './IValidators.sol';
 
 contract Proposal is Params {
     // How long a proposal will exist
@@ -67,7 +67,7 @@ contract Proposal is Params {
     mapping(bytes32 => ResultInfo) public results;
     mapping(address => mapping(bytes32 => VoteInfo)) public votes;
 
-    Validators validators;
+    IValidators validators;
 
     event LogCreateProposal(bytes32 indexed id, address indexed proposer, address indexed dst, bool flag, uint256 time);
     event LogCreateConfigProposal(
@@ -93,7 +93,7 @@ contract Proposal is Params {
     ) external onlyNotInitialized {
         require(_validators != address(0), "Invalid validators address");
         
-        validators = Validators(_validators);
+        validators = IValidators(_validators);
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
             pass[vals[i]] = true;

@@ -3,16 +3,9 @@
 pragma solidity ^0.8.20;
 
 import {Params} from './Params.sol';
-import {Proposal} from './Proposal.sol';
-import {ReentrancyGuard} from './library/ReentrancyGuard.sol';
-
-// Interface for Validators contract to avoid circular dependency
-interface IValidators {
-    function tryAddValidatorToHighestSet(address validator) external;
-    function tryActive(address validator) external returns (bool);
-    function isActiveValidator(address who) external view returns (bool);
-    function removeFromHighestSet(address validator) external;
-}
+import {IProposal} from './IProposal.sol';
+import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import {IValidators} from './IValidators.sol';
 
 /**
  * @title Staking Contract for JPoSA Consensus
@@ -21,19 +14,17 @@ interface IValidators {
 contract Staking is Params, ReentrancyGuard {
 
     // Minimum staking amount to become a validator
+    // TODO used as a governance parameter
     uint256 public constant MIN_VALIDATOR_STAKE = 100000 ether; // 10,000 JU
     
     // Minimum delegation amount
-    uint256 public constant MIN_DELEGATION = 1 ether; // 1 JU
+    uint256 public constant MIN_DELEGATION = 10 ether; // 10 JU
     
     // Maximum validators in active set
+    // TODO used as a governance parameter
     uint256 public constant MAX_VALIDATORS = 21;
     
-    // Minimum validators that must always be active
-    // Design Intent: Set to 3 for flexibility, allowing the network to continue operating
-    // with fewer validators. This provides more operational flexibility while maintaining
-    // basic network functionality. Network security and decentralization may be reduced
-    // with fewer validators, but this is an acceptable trade-off for operational flexibility.
+    // Minimum validators required
     uint256 public constant MIN_VALIDATORS = 3;
     
     // Commission rate precision (10000 = 100%)
@@ -93,7 +84,7 @@ contract Staking is Params, ReentrancyGuard {
 
     // System contracts
     IValidators public validatorsContract;
-    Proposal public proposalContract;
+    IProposal public proposalContract;
 
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
     event ValidatorUpdated(address indexed validator, uint256 commissionRate);
@@ -123,7 +114,7 @@ contract Staking is Params, ReentrancyGuard {
         require(_proposal != address(0), "Invalid proposal address");
         
         validatorsContract = IValidators(_validators);
-        proposalContract = Proposal(_proposal);
+        proposalContract = IProposal(_proposal);
         initialized = true;
     }
 
@@ -149,7 +140,7 @@ contract Staking is Params, ReentrancyGuard {
         require(commissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
         
         validatorsContract = IValidators(_validators);
-        proposalContract = Proposal(_proposal);
+        proposalContract = IProposal(_proposal);
         
         // Pre-register all initial validators with default stake
         // This automatically performs the same logic as registerValidator for genesis validators
@@ -185,7 +176,7 @@ contract Staking is Params, ReentrancyGuard {
      * @dev Register as a validator with self-stake
      * @param commissionRate Commission rate (0-10000, representing 0%-100%)
      */
-    function registerValidator(uint256 commissionRate) external payable onlyInitialized {
+    function registerValidator(uint256 commissionRate) external payable onlyInitialized nonReentrant {
         require(msg.value >= MIN_VALIDATOR_STAKE, "Insufficient self-stake");
         require(commissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
         require(validatorStakes[msg.sender].selfStake == 0, "Already registered");
@@ -315,9 +306,6 @@ contract Staking is Params, ReentrancyGuard {
         // After resigning, they will be excluded from currentValidatorSet at next epoch
         require(!isInCurrentSet, "Cannot exit: validator is in active set, resign first and wait until next epoch");
         
-        // Note: Since validator is not in currentValidatorSet, their exit won't affect
-        // the active validator count, so no need to check MIN_VALIDATORS here
-        
         // Effects: update state before external call
         stake.selfStake = 0;
         totalStaked = totalStaked - withdrawAmount;
@@ -348,7 +336,7 @@ contract Staking is Params, ReentrancyGuard {
      * @dev Delegate tokens to a validator
      * @param validator Validator address to delegate to
      */
-    function delegate(address validator) external payable onlyActiveValidator(validator) {
+    function delegate(address validator) external payable onlyActiveValidator(validator) nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(msg.value >= MIN_DELEGATION, "Insufficient delegation amount");
         require(validator != msg.sender, "Cannot delegate to yourself");
@@ -372,7 +360,7 @@ contract Staking is Params, ReentrancyGuard {
      * @param validator Validator address to undelegate from
      * @param amount Amount to undelegate
      */
-    function undelegate(address validator, uint256 amount) external {
+    function undelegate(address validator, uint256 amount) external nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(amount > 0, "Amount must be positive");
         require(validator != msg.sender, "Cannot undelegate from yourself");
