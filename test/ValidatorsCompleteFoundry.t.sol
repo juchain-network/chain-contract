@@ -93,7 +93,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // In POSA mode, validator must register (stake) after creation to become active
         // Give validator enough ETH and register
-        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         vm.deal(validator, minStake);
         vm.prank(validator);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
@@ -153,7 +153,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         require(!Validators(VALIDATORS).isTopValidator(nval), "should not be top validator yet (not registered)");
         
         // Give new validator enough ETH and register
-        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         vm.deal(nval, minStake);
         vm.prank(nval);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
@@ -342,7 +342,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
 
     function testValidatorSetCompetition() public {
         // Test that multiple validators compete for spots in the highestValidatorsSet
-        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         
         // Create multiple new validators
         address[] memory newValidators = new address[](5);
