@@ -641,30 +641,41 @@ contract Staking is Params, ReentrancyGuard {
             address validator = validators[i];
             ValidatorStake storage stake = validatorStakes[validator];
             
-            candidateValidators[candidateCount] = validator;
-            totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
-            candidateCount++;
+            // Only include validators with self-stake >= MIN_VALIDATOR_STAKE
+            if (stake.selfStake >= MIN_VALIDATOR_STAKE) {
+                candidateValidators[candidateCount] = validator;
+                totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
+                candidateCount++;
+            }
         }
         
         if (candidateCount == 0) {
             return new address[](0);
         }
         
-        // Sort by total stake (simple bubble sort for small arrays)
-        for (uint256 i = 0; i < candidateCount; i++) {
-            for (uint256 j = i + 1; j < candidateCount; j++) {
-                if (totalStakes[i] < totalStakes[j]) {
-                    // Swap stakes
-                    uint256 tempStake = totalStakes[i];
-                    totalStakes[i] = totalStakes[j];
-                    totalStakes[j] = tempStake;
-                    
-                    // Swap validators
-                    address tempValidator = candidateValidators[i];
-                    candidateValidators[i] = candidateValidators[j];
-                    candidateValidators[j] = tempValidator;
-                }
-            }
+        // Sort by total stake using heap sort for improved performance
+        // Build max heap
+        for (uint256 i = candidateCount / 2; i > 0; i--) {
+            heapify(candidateValidators, totalStakes, candidateCount, i - 1);
+        }
+        
+        // Extract max and heapify - this puts elements in ascending order (smallest at beginning)
+        for (uint256 i = candidateCount - 1; i > 0; i--) {
+            // Swap current maximum to end
+            (candidateValidators[0], candidateValidators[i]) = (candidateValidators[i], candidateValidators[0]);
+            (totalStakes[0], totalStakes[i]) = (totalStakes[i], totalStakes[0]);
+            
+            // Heapify the reduced heap
+            heapify(candidateValidators, totalStakes, i, 0);
+        }
+        
+        // Reverse the array to get descending order (largest at beginning)
+        for (uint256 i = 0; i < candidateCount / 2; i++) {
+            uint256 j = candidateCount - 1 - i;
+            // Swap validator addresses
+            (candidateValidators[i], candidateValidators[j]) = (candidateValidators[j], candidateValidators[i]);
+            // Swap corresponding stakes
+            (totalStakes[i], totalStakes[j]) = (totalStakes[j], totalStakes[i]);
         }
         
         // Return top validators (up to MAX_VALIDATORS)
@@ -675,6 +686,36 @@ contract Staking is Params, ReentrancyGuard {
         }
         
         return topValidators;
+    }
+    
+    /**
+     * @dev Heapify function to maintain max heap property
+     * @param arr Array of validator addresses to heapify
+     * @param stakes Array of corresponding total stakes
+     * @param n Size of the heap
+     * @param i Index of the current root
+     */
+    function heapify(address[] memory arr, uint256[] memory stakes, uint256 n, uint256 i) internal pure {
+        uint256 largest = i;
+        uint256 left = 2 * i + 1;
+        uint256 right = 2 * i + 2;
+        
+        // Find largest among root, left child and right child
+        if (left < n && stakes[left] > stakes[largest]) {
+            largest = left;
+        }
+        
+        if (right < n && stakes[right] > stakes[largest]) {
+            largest = right;
+        }
+        
+        // If largest is not root, swap and continue heapifying
+        if (largest != i) {
+            (arr[i], arr[largest]) = (arr[largest], arr[i]);
+            (stakes[i], stakes[largest]) = (stakes[largest], stakes[i]);
+            
+            heapify(arr, stakes, n, largest);
+        }
     }
 
     /**
