@@ -23,7 +23,7 @@ const CONTRACTS = {
 // Paths
 const CONTRACT_DIR = __dirname;
 const OUT_DIR = path.join(CONTRACT_DIR, 'out');
-const BYTECODE_GO_FILE = path.join(CONTRACT_DIR, '..', 'chain.gitlab', 'consensus', 'congress', 'bytecode.go');
+const BYTECODE_GO_FILE = path.join(CONTRACT_DIR, '..', 'chain', 'consensus', 'congress', 'bytecode.go');
 
 /**
  * Extract bytecode from compiled contract JSON

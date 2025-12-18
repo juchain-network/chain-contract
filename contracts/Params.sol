@@ -18,20 +18,11 @@ contract Params {
 
     
 
-    
     modifier onlyMiner() {
         _onlyMiner();
         _;
     }
 
-    function _onlyMiner() internal view {
-        require(
-            msg.sender == block.coinbase,
-            "Miner only"
-        );
-    }
-
-    
     modifier onlyNotInitialized() {
         _onlyNotInitialized();
         _;
@@ -45,18 +36,6 @@ contract Params {
     modifier onlyPunishContract() {
         _onlyPunishContract();
         _;
-    }
-
-    function _onlyNotInitialized() internal view {
-        require(!initialized, "Already initialized");
-    }
-
-    function _onlyInitialized() internal view {
-        require(initialized, "Not init yet");
-    }
-
-    function _onlyPunishContract() internal view {
-        require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
     }
 
     modifier onlyBlockEpoch(uint256 epoch) {
@@ -77,6 +56,27 @@ contract Params {
     modifier onlyStakingContract() {
         _onlyStakingContract();
         _;
+    }
+
+    function _onlyMiner() internal view {
+        
+        require(
+            msg.sender == block.coinbase,
+            "Miner only"
+        );
+        
+    }
+
+    function _onlyNotInitialized() internal view {
+        require(!initialized, "Already initialized");
+    }
+
+    function _onlyInitialized() internal view {
+        require(initialized, "Not init yet");
+    }
+
+    function _onlyPunishContract() internal view {
+        require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
     }
 
     function _onlyBlockEpoch(uint256 epoch) internal view {
