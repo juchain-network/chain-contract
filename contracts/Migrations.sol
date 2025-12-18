@@ -5,12 +5,13 @@ contract Migrations {
     address public owner = msg.sender;
     uint256 public lastCompletedMigration;
 
-    modifier restricted() {
+    modifier restricted() { _restricted(); _; }
+    
+    function _restricted() internal view {
         require(
             msg.sender == owner,
             "This function is restricted to the contract's owner"
         );
-        _;
     }
 
     function setCompleted(uint256 completed) public restricted {

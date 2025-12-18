@@ -3,16 +3,9 @@
 pragma solidity ^0.8.20;
 
 import {Params} from './Params.sol';
-import {Proposal} from './Proposal.sol';
-import {ReentrancyGuard} from './library/ReentrancyGuard.sol';
-
-// Interface for Validators contract to avoid circular dependency
-interface IValidators {
-    function tryAddValidatorToHighestSet(address validator) external;
-    function tryActive(address validator) external returns (bool);
-    function isActiveValidator(address who) external view returns (bool);
-    function removeFromHighestSet(address validator) external;
-}
+import {IProposal} from './IProposal.sol';
+import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import {IValidators} from './IValidators.sol';
 
 /**
  * @title Staking Contract for JPoSA Consensus
@@ -21,19 +14,17 @@ interface IValidators {
 contract Staking is Params, ReentrancyGuard {
 
     // Minimum staking amount to become a validator
-    uint256 public constant MIN_VALIDATOR_STAKE = 10000 ether; // 10,000 JU
+    // TODO used as a governance parameter
+    uint256 public constant MIN_VALIDATOR_STAKE = 100000 ether; // 10,000 JU
     
     // Minimum delegation amount
-    uint256 public constant MIN_DELEGATION = 1 ether; // 1 JU
+    uint256 public constant MIN_DELEGATION = 10 ether; // 10 JU
     
     // Maximum validators in active set
+    // TODO used as a governance parameter
     uint256 public constant MAX_VALIDATORS = 21;
     
-    // Minimum validators that must always be active
-    // Design Intent: Set to 3 for flexibility, allowing the network to continue operating
-    // with fewer validators. This provides more operational flexibility while maintaining
-    // basic network functionality. Network security and decentralization may be reduced
-    // with fewer validators, but this is an acceptable trade-off for operational flexibility.
+    // Minimum validators required
     uint256 public constant MIN_VALIDATORS = 3;
     
     // Commission rate precision (10000 = 100%)
@@ -93,7 +84,7 @@ contract Staking is Params, ReentrancyGuard {
 
     // System contracts
     IValidators public validatorsContract;
-    Proposal public proposalContract;
+    IProposal public proposalContract;
 
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
     event ValidatorUpdated(address indexed validator, uint256 commissionRate);
@@ -108,14 +99,22 @@ contract Staking is Params, ReentrancyGuard {
     event ValidatorUnjailed(address indexed validator);
 
     modifier onlyValidValidator(address validator) {
-        require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Not a valid validator");
+        _onlyValidValidator(validator);
         _;
     }
 
+    function _onlyValidValidator(address validator) internal view {
+        require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Not a valid validator");
+    }
+
     modifier onlyActiveValidator(address validator) {
+        _onlyActiveValidator(validator);
+        _;
+    }
+
+    function _onlyActiveValidator(address validator) internal view {
         require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Not a valid validator");
         require(!validatorStakes[validator].isJailed, "Validator is jailed");
-        _;
     }
 
     function initialize(address _validators, address _proposal) external onlyNotInitialized {
@@ -123,7 +122,7 @@ contract Staking is Params, ReentrancyGuard {
         require(_proposal != address(0), "Invalid proposal address");
         
         validatorsContract = IValidators(_validators);
-        proposalContract = Proposal(_proposal);
+        proposalContract = IProposal(_proposal);
         initialized = true;
     }
 
@@ -149,7 +148,7 @@ contract Staking is Params, ReentrancyGuard {
         require(commissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
         
         validatorsContract = IValidators(_validators);
-        proposalContract = Proposal(_proposal);
+        proposalContract = IProposal(_proposal);
         
         // Pre-register all initial validators with default stake
         // This automatically performs the same logic as registerValidator for genesis validators
@@ -185,7 +184,7 @@ contract Staking is Params, ReentrancyGuard {
      * @dev Register as a validator with self-stake
      * @param commissionRate Commission rate (0-10000, representing 0%-100%)
      */
-    function registerValidator(uint256 commissionRate) external payable onlyInitialized {
+    function registerValidator(uint256 commissionRate) external payable onlyInitialized nonReentrant {
         require(msg.value >= MIN_VALIDATOR_STAKE, "Insufficient self-stake");
         require(commissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
         require(validatorStakes[msg.sender].selfStake == 0, "Already registered");
@@ -243,23 +242,23 @@ contract Staking is Params, ReentrancyGuard {
     }
 
     /**
-     * @dev Start validator stake withdrawal (validator exit)
-     * @param amount Amount to withdraw from self-stake
-     * @notice If remaining stake would be less than MIN_VALIDATOR_STAKE, the withdrawal will fail
-     * @notice Use emergencyExit() to withdraw all stake (requires minimum validators requirement)
+     * @dev Decrease validator's self-stake
+     * @param amount Amount to reduce from self-stake
+     * @notice If remaining stake would be less than MIN_VALIDATOR_STAKE, the reduction will fail
+     * @notice Use withdrawAfterResignation() to withdraw all stake (requires minimum validators requirement)
      */
-    function withdrawValidatorStake(uint256 amount) external nonReentrant onlyValidValidator(msg.sender) {
+    function decreaseValidatorStake(uint256 amount) external nonReentrant onlyValidValidator(msg.sender) {
         require(amount > 0, "Amount must be positive");
         
         ValidatorStake storage stake = validatorStakes[msg.sender];
         require(stake.selfStake >= amount, "Insufficient self-stake");
         
-        // Calculate remaining stake after withdrawal
+        // Calculate remaining stake after reduction
         uint256 remainingStake = stake.selfStake - amount;
         
-        // If partial withdrawal, remaining stake must meet minimum requirement
-        // If complete withdrawal (remainingStake == 0), use emergencyExit() instead
-        require(remainingStake >= MIN_VALIDATOR_STAKE, "Remaining stake below minimum, use emergencyExit() to withdraw all");
+        // If partial reduction, remaining stake must meet minimum requirement
+        // If complete reduction (remainingStake == 0), use exitValidator() instead
+        require(remainingStake >= MIN_VALIDATOR_STAKE, "Remaining stake below minimum, use exitValidator() to withdraw all");
         
         // Effects: update state before external call
         stake.selfStake = remainingStake;
@@ -298,12 +297,12 @@ contract Staking is Params, ReentrancyGuard {
     }
 
     /**
-     * @dev Emergency exit - withdraw all stake and exit validator role
+     * @dev Exit validator - withdraw all stake and exit validator role
      * @notice Validators in currentValidatorSet (active in current epoch) cannot exit
      * @notice Validators must jail themselves first, then wait until next epoch to exit
      * @notice This ensures smooth exit without disrupting consensus
      */
-    function emergencyExit() external nonReentrant onlyValidValidator(msg.sender) {
+    function exitValidator() external nonReentrant onlyValidValidator(msg.sender) {
         ValidatorStake storage stake = validatorStakes[msg.sender];
         uint256 withdrawAmount = stake.selfStake;
         
@@ -314,9 +313,6 @@ contract Staking is Params, ReentrancyGuard {
         // Validators in active set cannot exit - they must resign first
         // After resigning, they will be excluded from currentValidatorSet at next epoch
         require(!isInCurrentSet, "Cannot exit: validator is in active set, resign first and wait until next epoch");
-        
-        // Note: Since validator is not in currentValidatorSet, their exit won't affect
-        // the active validator count, so no need to check MIN_VALIDATORS here
         
         // Effects: update state before external call
         stake.selfStake = 0;
@@ -337,16 +333,18 @@ contract Staking is Params, ReentrancyGuard {
         
         emit ValidatorExited(msg.sender, withdrawAmount);
         
-        // Interactions: external call after state update
-        (bool success, ) = payable(msg.sender).call{value: withdrawAmount}("");
-        require(success, "Transfer failed");
+        // Instead of transferring funds directly, add them to unbonding like undelegate
+        unbondingDelegations[msg.sender][msg.sender].push(UnbondingEntry({
+            amount: withdrawAmount,
+            completionBlock: block.number + proposalContract.unbondingPeriod()
+        }));
     }
 
     /**
      * @dev Delegate tokens to a validator
      * @param validator Validator address to delegate to
      */
-    function delegate(address validator) external payable onlyActiveValidator(validator) {
+    function delegate(address validator) external payable onlyActiveValidator(validator) nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(msg.value >= MIN_DELEGATION, "Insufficient delegation amount");
         require(validator != msg.sender, "Cannot delegate to yourself");
@@ -370,7 +368,7 @@ contract Staking is Params, ReentrancyGuard {
      * @param validator Validator address to undelegate from
      * @param amount Amount to undelegate
      */
-    function undelegate(address validator, uint256 amount) external {
+    function undelegate(address validator, uint256 amount) external nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(amount > 0, "Amount must be positive");
         require(validator != msg.sender, "Cannot undelegate from yourself");
@@ -651,30 +649,41 @@ contract Staking is Params, ReentrancyGuard {
             address validator = validators[i];
             ValidatorStake storage stake = validatorStakes[validator];
             
-            candidateValidators[candidateCount] = validator;
-            totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
-            candidateCount++;
+            // Only include validators with self-stake >= MIN_VALIDATOR_STAKE
+            if (stake.selfStake >= MIN_VALIDATOR_STAKE) {
+                candidateValidators[candidateCount] = validator;
+                totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
+                candidateCount++;
+            }
         }
         
         if (candidateCount == 0) {
             return new address[](0);
         }
         
-        // Sort by total stake (simple bubble sort for small arrays)
-        for (uint256 i = 0; i < candidateCount; i++) {
-            for (uint256 j = i + 1; j < candidateCount; j++) {
-                if (totalStakes[i] < totalStakes[j]) {
-                    // Swap stakes
-                    uint256 tempStake = totalStakes[i];
-                    totalStakes[i] = totalStakes[j];
-                    totalStakes[j] = tempStake;
-                    
-                    // Swap validators
-                    address tempValidator = candidateValidators[i];
-                    candidateValidators[i] = candidateValidators[j];
-                    candidateValidators[j] = tempValidator;
-                }
-            }
+        // Sort by total stake using heap sort for improved performance
+        // Build max heap
+        for (uint256 i = candidateCount / 2; i > 0; i--) {
+            heapify(candidateValidators, totalStakes, candidateCount, i - 1);
+        }
+        
+        // Extract max and heapify - this puts elements in ascending order (smallest at beginning)
+        for (uint256 i = candidateCount - 1; i > 0; i--) {
+            // Swap current maximum to end
+            (candidateValidators[0], candidateValidators[i]) = (candidateValidators[i], candidateValidators[0]);
+            (totalStakes[0], totalStakes[i]) = (totalStakes[i], totalStakes[0]);
+            
+            // Heapify the reduced heap
+            heapify(candidateValidators, totalStakes, i, 0);
+        }
+        
+        // Reverse the array to get descending order (largest at beginning)
+        for (uint256 i = 0; i < candidateCount / 2; i++) {
+            uint256 j = candidateCount - 1 - i;
+            // Swap validator addresses
+            (candidateValidators[i], candidateValidators[j]) = (candidateValidators[j], candidateValidators[i]);
+            // Swap corresponding stakes
+            (totalStakes[i], totalStakes[j]) = (totalStakes[j], totalStakes[i]);
         }
         
         // Return top validators (up to MAX_VALIDATORS)
@@ -685,6 +694,36 @@ contract Staking is Params, ReentrancyGuard {
         }
         
         return topValidators;
+    }
+    
+    /**
+     * @dev Heapify function to maintain max heap property
+     * @param arr Array of validator addresses to heapify
+     * @param stakes Array of corresponding total stakes
+     * @param n Size of the heap
+     * @param i Index of the current root
+     */
+    function heapify(address[] memory arr, uint256[] memory stakes, uint256 n, uint256 i) internal pure {
+        uint256 largest = i;
+        uint256 left = 2 * i + 1;
+        uint256 right = 2 * i + 2;
+        
+        // Find largest among root, left child and right child
+        if (left < n && stakes[left] > stakes[largest]) {
+            largest = left;
+        }
+        
+        if (right < n && stakes[right] > stakes[largest]) {
+            largest = right;
+        }
+        
+        // If largest is not root, swap and continue heapifying
+        if (largest != i) {
+            (arr[i], arr[largest]) = (arr[largest], arr[i]);
+            (stakes[i], stakes[largest]) = (stakes[largest], stakes[i]);
+            
+            heapify(arr, stakes, n, largest);
+        }
     }
 
     /**

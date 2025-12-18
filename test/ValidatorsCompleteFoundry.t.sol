@@ -94,7 +94,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         // In POSA mode, validator must register (stake) after creation to become active
         // Give validator enough ETH and register
         uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
-        vm.deal(validator, 20000 ether);
+        vm.deal(validator, minStake);
         vm.prank(validator);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
         
@@ -154,7 +154,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // Give new validator enough ETH and register
         uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
-        vm.deal(nval, 20000 ether);
+        vm.deal(nval, minStake);
         vm.prank(nval);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
         
@@ -308,5 +308,82 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
             result[i] = "a";
         }
         return string(result);
+    }
+
+    function testRemoveValidatorIncoming() public {
+        // Test that removeValidatorIncoming correctly distributes incoming rewards
+        // when a validator is removed
+        
+        // Add some incoming rewards to v1
+        uint256 reward = 1 ether;
+        vm.prank(miner);
+        Validators(VALIDATORS).distributeBlockReward{value: reward}();
+        
+        // Check v1 has incoming rewards
+        (, , uint256 v1Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v1);
+        require(v1Incoming == reward, "v1 should have incoming rewards");
+        
+        // Remove v1 from incoming set (must be called from Punish contract)
+        vm.prank(PUNISH);
+        Validators(VALIDATORS).removeValidatorIncoming(v1);
+        
+        // Check v1 no longer has incoming rewards
+        (, , uint256 v1IncomingAfter,,) = Validators(VALIDATORS).getValidatorInfo(v1);
+        require(v1IncomingAfter == 0, "v1 should have no incoming rewards after removal");
+        
+        // Check that rewards were distributed to other active validators
+        (, , uint256 v2Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v2);
+        (, , uint256 v3Incoming,,) = Validators(VALIDATORS).getValidatorInfo(v3);
+        
+        // Calculate expected reward per remaining validator
+        uint256 expectedReward = reward / 2; // v2 and v3 should split the reward
+        require(v2Incoming >= expectedReward && v3Incoming >= expectedReward, "Rewards should be distributed to remaining validators");
+    }
+
+    function testValidatorSetCompetition() public {
+        // Test that multiple validators compete for spots in the highestValidatorsSet
+        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        
+        // Create multiple new validators
+        address[] memory newValidators = new address[](5);
+        for (uint i = 0; i < newValidators.length; i++) {
+            newValidators[i] = makeAddr(string(abi.encodePacked("newValidator", i)));
+            
+            // Authorize through proposal
+            _passProposal(newValidators[i], true);
+            
+            // Create validator
+            vm.prank(newValidators[i]);
+            Validators(VALIDATORS).createOrEditValidator(payable(newValidators[i]), "", "", "", "", "");
+            
+            // Register with minimum stake
+            vm.deal(newValidators[i], minStake);
+            vm.prank(newValidators[i]);
+            Staking(STAKING).registerValidator{value: minStake}(1000);
+        }
+        
+        // Add additional stake to some validators to make them competitive
+        uint256 additionalStake = minStake * 2;
+        vm.deal(newValidators[0], additionalStake);
+        vm.prank(newValidators[0]);
+        Staking(STAKING).addValidatorStake{value: additionalStake}();
+        
+        vm.deal(newValidators[1], additionalStake);
+        vm.prank(newValidators[1]);
+        Staking(STAKING).addValidatorStake{value: additionalStake}();
+        
+        // Get highest validators set
+        address[] memory highestSet = Validators(VALIDATORS).getHighestValidators();
+        
+        // Check that validators with higher stake are in the highest set
+        bool foundValidator0 = false;
+        bool foundValidator1 = false;
+        for (uint i = 0; i < highestSet.length; i++) {
+            if (highestSet[i] == newValidators[0]) foundValidator0 = true;
+            if (highestSet[i] == newValidators[1]) foundValidator1 = true;
+        }
+        
+        require(foundValidator0, "Validator with higher stake should be in highest set");
+        require(foundValidator1, "Validator with higher stake should be in highest set");
     }
 }

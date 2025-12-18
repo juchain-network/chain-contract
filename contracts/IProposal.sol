@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.20;
+
+interface IProposal {
+    /**
+     * @dev Sets a validator as unpassed (ineligible).
+     * @param val The address of the validator to mark as unpassed.
+     * @return bool Returns true if the operation was successful.
+     */
+    function setUnpassed(address val) external returns (bool);
+
+    /**
+     * @dev Checks if a validator's proposal is valid for staking.
+     * @param validator The address of the validator to check.
+     * @return bool Returns true if the validator's proposal is valid for staking.
+     */
+    function isProposalValidForStaking(address validator) external view returns (bool);
+
+    /**
+     * @dev Checks if a validator has passed the proposal process and is eligible to participate.
+     * @param validator The address of the validator to check.
+     * @return bool Returns true if the validator has passed the proposal process.
+     */
+    function pass(address validator) external view returns (bool);
+
+    /**
+     * @dev Returns the threshold for punishing validators based on missed blocks.
+     * @return uint256 The number of missed blocks required to trigger a punishment.
+     */
+    function punishThreshold() external view returns (uint256);
+
+    /**
+     * @dev Returns the threshold for removing validators based on missed blocks.
+     * @return uint256 The number of missed blocks required to trigger removal from the validator set.
+     */
+    function removeThreshold() external view returns (uint256);
+
+    /**
+     * @dev Returns the rate at which missed blocks counter decreases.
+     * @return uint256 The decrease rate for the missed blocks counter.
+     */
+    function decreaseRate() external view returns (uint256);
+
+    /**
+     * @dev Returns the period (in blocks) for withdrawing validator profits.
+     * @return uint256 The profit withdrawal period in blocks.
+     */
+    function withdrawProfitPeriod() external view returns (uint256);
+
+    /**
+     * @dev Returns the reward amount for each block produced.
+     * @return uint256 The block reward amount.
+     */
+    function blockReward() external view returns (uint256);
+
+    /**
+     * @dev Returns the unbonding period for delegators (in blocks).
+     * @return uint256 The unbonding period in blocks.
+     */
+    function unbondingPeriod() external view returns (uint256);
+
+    /**
+     * @dev Returns the period (in blocks) a validator must wait to unjail after being jailed.
+     * @return uint256 The validator unjail period in blocks.
+     */
+    function validatorUnjailPeriod() external view returns (uint256);
+}
