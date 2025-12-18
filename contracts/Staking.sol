@@ -99,14 +99,22 @@ contract Staking is Params, ReentrancyGuard {
     event ValidatorUnjailed(address indexed validator);
 
     modifier onlyValidValidator(address validator) {
-        require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Not a valid validator");
+        _onlyValidValidator(validator);
         _;
     }
 
+    function _onlyValidValidator(address validator) internal view {
+        require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Not a valid validator");
+    }
+
     modifier onlyActiveValidator(address validator) {
+        _onlyActiveValidator(validator);
+        _;
+    }
+
+    function _onlyActiveValidator(address validator) internal view {
         require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Not a valid validator");
         require(!validatorStakes[validator].isJailed, "Validator is jailed");
-        _;
     }
 
     function initialize(address _validators, address _proposal) external onlyNotInitialized {

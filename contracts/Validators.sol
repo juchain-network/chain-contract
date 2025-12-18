@@ -72,8 +72,12 @@ contract Validators is Params, ReentrancyGuard {
     event LogUpdateValidator(address[] newSet);
 
     modifier onlyNotRewarded() {
-        require(operationsDone[block.number][uint8(Operations.Distribute)] == false, 'Block is already rewarded');
+        _onlyNotRewarded();
         _;
+    }
+
+    function _onlyNotRewarded() internal view {
+        require(operationsDone[block.number][uint8(Operations.Distribute)] == false, 'Block is already rewarded');
     }
 
     function initialize(
@@ -128,7 +132,7 @@ contract Validators is Params, ReentrancyGuard {
             validatorInfo[validator].feeAddr = feeAddr;
         }
 
-        validatorInfo[validator].description = Description(moniker, identity, website, email, details);
+        validatorInfo[validator].description = Description({moniker: moniker, identity: identity, website: website, email: email, details: details});
 
         emit LogEditValidator(validator, feeAddr, block.timestamp);
         return true;

@@ -83,8 +83,12 @@ contract Proposal is Params {
     event LogSetUnpassed(address indexed val, uint256 time);
 
     modifier onlyValidator() {
-        require(validators.isActiveValidator(msg.sender), 'Validator only');
+        _onlyValidator();
         _;
+    }
+
+    function _onlyValidator() internal view {
+        require(validators.isActiveValidator(msg.sender), 'Validator only');
     }
 
     function initialize(
@@ -129,6 +133,7 @@ contract Proposal is Params {
         );
 
         // generate proposal id
+        // forge-lint: disable-next-line(asm-keccak256)
         bytes32 id = keccak256(abi.encodePacked(msg.sender, dst, flag, details, block.timestamp));
         require(bytes(details).length <= 3000, 'Details too long');
         require(proposals[id].createTime == 0, 'Proposal already exists');
@@ -150,6 +155,7 @@ contract Proposal is Params {
         // Validate config parameters before creating proposal
         validateConfig(cid, newValue);
         
+        // forge-lint: disable-next-line(asm-keccak256)
         bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, block.timestamp));
 
         ProposalInfo memory proposal;
