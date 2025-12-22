@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
-	"juchain.org/chain/congress-cli/contracts/generated"
+	"juchain.org/chain/tools/contracts"
 )
 
 func CreateProposalCmd() *cobra.Command {
@@ -70,7 +70,7 @@ func createProposalTx(cmd *cobra.Command, _ []string) {
 }
 
 func innerCreateProposal(proposer, target string, flag bool, rpc string) error {
-	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
+	proposalAbi, err := abi.JSON(strings.NewReader(contracts.ProposalABI))
 	if err != nil {
 		return fmt.Errorf("failed to parse proposal ABI: %w", err)
 	}
@@ -146,7 +146,7 @@ func createConfigProposalTx(cmd *cobra.Command, _ []string) {
 }
 
 func innerCreateConfigProposal(proposer string, cid, cvalue int64, rpc string) error {
-	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
+	proposalAbi, err := abi.JSON(strings.NewReader(contracts.ProposalABI))
 	if err != nil {
 		return fmt.Errorf("failed to parse proposal ABI: %w", err)
 	}
@@ -219,7 +219,7 @@ func voteProposalTx(cmd *cobra.Command, _ []string) {
 }
 
 func innerVoteProposal(signer, proposalId string, flag bool, rpc string) error {
-	proposalAbi, err := abi.JSON(strings.NewReader(generated.ProposalABI))
+	proposalAbi, err := abi.JSON(strings.NewReader(contracts.ProposalABI))
 	if err != nil {
 		return fmt.Errorf("failed to parse proposal ABI: %w", err)
 	}
@@ -288,7 +288,7 @@ func innerQueryProposal(proposalId string, rpc string) error {
 	}
 	defer client.Close()
 
-	proposalContract, err := generated.NewProposal(common.HexToAddress(ProposalContractAddr), client)
+	proposalContract, err := contracts.NewProposal(common.HexToAddress(ProposalContractAddr), client)
 	if err != nil {
 		return fmt.Errorf("failed to instantiate proposal contract: %w", err)
 	}
@@ -401,7 +401,7 @@ func innerQueryProposals(rpc string) error {
 	}
 	defer client.Close()
 
-	proposalContract, err := generated.NewProposal(common.HexToAddress(ProposalContractAddr), client)
+	proposalContract, err := contracts.NewProposal(common.HexToAddress(ProposalContractAddr), client)
 	if err != nil {
 		return fmt.Errorf("failed to instantiate proposal contract: %w", err)
 	}
