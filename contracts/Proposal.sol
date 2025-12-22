@@ -133,7 +133,7 @@ contract Proposal is Params {
         address dst,
         bool flag,
         string calldata details
-    ) external returns (bool) {
+    ) external onlyValidator returns (bool) {
         // can't add an already exist dst or remove a not exist dst
         require(
             (!pass[dst] && flag) || (pass[dst] && !flag),
@@ -159,7 +159,7 @@ contract Proposal is Params {
         return true;
     }
 
-    function createUpdateConfigProposal(uint256 cid, uint256 newValue) external returns (bool) {
+    function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bool) {
         // Validate config parameters before creating proposal
         validateConfig(cid, newValue);
         

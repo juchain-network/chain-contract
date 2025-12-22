@@ -65,8 +65,8 @@ contract PunishMissingFoundryTest is BaseSetup {
         
         // Create proposal to reactivate validator
         vm.warp(5_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), v1, true, "", block.timestamp));
-        vm.prank(address(this));
+        vm.prank(v2);
+        bytes32 id = keccak256(abi.encodePacked(v2, v1, true, "", block.timestamp));
         require(true == Proposal(PROPOSAL).createProposal(v1, true, ""), "should create proposal");
         
         // Vote to pass proposal
@@ -159,7 +159,8 @@ contract PunishMissingFoundryTest is BaseSetup {
         // When activeValidatorCount = 3 (v1, v2, v3 all in currentValidatorSet): threshold = 3 / 2 + 1 = 2
         // So at least 2 votes are needed to pass proposal
         vm.warp(6_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), v1, true, "", block.timestamp));
+        vm.prank(v3); // v3 is the only unjailed validator
+        bytes32 id = keccak256(abi.encodePacked(v3, v1, true, "", block.timestamp));
         Proposal(PROPOSAL).createProposal(v1, true, "");
         
         // v3 votes (1 vote)
