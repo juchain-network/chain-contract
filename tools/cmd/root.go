@@ -79,19 +79,73 @@ func Execute() {
 	}
 }
 
+// Parent command declarations
+var (
+	// proposalCmd - For all proposal-related operations
+	proposalCmd = &cobra.Command{
+		Use:   "proposal",
+		Short: "Manage proposals on the blockchain",
+		Long:  `Create, vote, and query proposals on the Juchain blockchain.`,
+	}
+
+	// validatorCmd - For validator management
+	validatorCmd = &cobra.Command{
+		Use:   "validator",
+		Short: "Manage validators on the blockchain",
+		Long:  `List, register, edit, and query validators on the Juchain blockchain.`,
+	}
+
+	// stakingCmd - For staking operations
+	stakingCmd = &cobra.Command{
+		Use:   "staking",
+		Short: "Manage staking operations",
+		Long:  `Delegate, undelegate, and claim rewards from staking on the Juchain blockchain.`,
+	}
+
+	// miscCmd - For miscellaneous commands
+	miscCmd = &cobra.Command{
+		Use:   "misc",
+		Short: "Miscellaneous commands",
+		Long:  `Configuration, transaction signing, and other miscellaneous commands.`,
+	}
+)
+
 func init() {
-	rootCmd.AddCommand(
-		ConfigCmd(),
+	// Group commands under parent commands
+
+	// Proposal commands
+	proposalCmd.AddCommand(
 		CreateProposalCmd(),
 		CreateConfigProposalCmd(),
 		VoteProposalCmd(),
 		QueryProposalCmd(),
 		QueryProposalsCmd(),
-		SignRawTxCmd(),
-		SendSignedTxCmd(),
-		WithdrawProfitsCmd(),
+	)
+
+	// Validator commands
+	validatorCmd.AddCommand(
 		ValidatorsCmd(),
 		ValidatorCmd(),
+	)
+
+	// Staking commands
+	stakingCmd.AddCommand(
+		WithdrawProfitsCmd(),
 		StakingCmd(),
+	)
+
+	// Misc commands
+	miscCmd.AddCommand(
+		ConfigCmd(),
+		SignRawTxCmd(),
+		SendSignedTxCmd(),
+	)
+
+	// Add parent commands to root
+	rootCmd.AddCommand(
+		proposalCmd,
+		validatorCmd,
+		stakingCmd,
+		miscCmd,
 	)
 }
