@@ -19,6 +19,10 @@ contract Proposal is Params {
     uint256 public unbondingPeriod;
     // Validator unjail period in blocks (time before jailed validator can unjail)
     uint256 public validatorUnjailPeriod;
+    // Minimum staking amount to become a validator
+    uint256 public minValidatorStake;
+    // Maximum validators in active set
+    uint256 public maxValidators;
 
     // record
     mapping(address => bool) public pass;
@@ -118,6 +122,10 @@ contract Proposal is Params {
         unbondingPeriod = 604800;
         // Default validator unjail period: 24 hours in blocks (86400 blocks = 24 hours * 3600 seconds / 1 second per block)
         validatorUnjailPeriod = 86400;
+        // Default minimum staking amount to become a validator: 100000 ether
+        minValidatorStake = 100000 ether;
+        // Default maximum number of validators in active set: 21
+        maxValidators = 21;
         initialized = true;
     }
 
@@ -125,7 +133,7 @@ contract Proposal is Params {
         address dst,
         bool flag,
         string calldata details
-    ) external returns (bool) {
+    ) external onlyValidator returns (bool) {
         // can't add an already exist dst or remove a not exist dst
         require(
             (!pass[dst] && flag) || (pass[dst] && !flag),
@@ -151,7 +159,7 @@ contract Proposal is Params {
         return true;
     }
 
-    function createUpdateConfigProposal(uint256 cid, uint256 newValue) external returns (bool) {
+    function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bool) {
         // Validate config parameters before creating proposal
         validateConfig(cid, newValue);
         
@@ -234,10 +242,12 @@ contract Proposal is Params {
      *   - 5: blockReward (must > 0, in wei)
      *   - 6: unbondingPeriod (must > 0)
      *   - 7: validatorUnjailPeriod (must > 0)
+     *   - 8: minValidatorStake (must > 0, in wei)
+     *   - 9: maxValidators (must > 0)
      * @param value New configuration value
      */
     function validateConfig(uint256 cid, uint256 value) internal pure returns (bool) {
-        require(cid >= 0 && cid <= 7, "Invalid config ID");
+        require(cid >= 0 && cid <= 9, "Invalid config ID");
         
         // Check specific rules
         if (cid == 0) {
@@ -257,7 +267,7 @@ contract Proposal is Params {
     function updateConfig(uint256 cid, uint256 value) private {
         validateConfig(cid, value);
         
-        // Since validateConfig already checks cid is between 0-7, no need for else checks
+        // Since validateConfig already checks cid is between 0-9, no need for else checks
         if (cid == 0) proposalLastingPeriod = value;
         if (cid == 1) punishThreshold = value;
         if (cid == 2) removeThreshold = value;
@@ -266,6 +276,8 @@ contract Proposal is Params {
         if (cid == 5) blockReward = value;
         if (cid == 6) unbondingPeriod = value;
         if (cid == 7) validatorUnjailPeriod = value;
+        if (cid == 8) minValidatorStake = value;
+        if (cid == 9) maxValidators = value;
     }
 
     /**

@@ -20,13 +20,12 @@ The core of the JPoSA consensus mechanism lies in selecting block producers thro
 
 ### 3. Dynamic Validator Set
 - Automatically updates the validator list based on staking weight
-- Supports up to 21 active validators
-- Minimum validator staking requirement: 100,000 JU
+- Supports up to MAX_VALIDATORS active validators (governable parameter, default: 21)
+- Minimum validator staking requirement: MIN_VALIDATOR_STAKE (governable parameter, default: 100,000 JU)
 
 ### 4. Governance System
 - Proposal governance mechanism supports protocol upgrades and parameter adjustments
-- Validators participate in network governance decisions
-- Punishment mechanism prevents malicious behavior
+- Validators participate in network governance decisions- Punishment mechanism prevents malicious behavior
 
 ### 5. Security Mechanisms
 - Sets unbonding period to prevent sudden exits
@@ -70,7 +69,7 @@ The punishment system monitors validator behavior and executes corresponding pen
 
 - Tracking validators' missed block situations
 - Implementing punishment measures when thresholds are reached
-- Automatically jailing违规 validators
+- Automatically jailing jailed validators
 
 The governance mechanism achieves decentralized network management through the collaborative work of these four systems, ensuring that all major decisions are fully discussed and voted on by the validator community.
 
@@ -102,10 +101,10 @@ Staking yield depends on the network's total staking volume and transaction acti
 - **Validator Self-Staking Income** = Personal share of basic rewards + Transaction fee share + Delegator commissions
 - **Delegator Income** = Reward share obtained based on delegated amount, validator's total staking, and validator's commission rate
 
-Assuming the network has 100,000,000 JU total staking and an annual inflation rate of 3%, the annualized yield is approximately 2-4%, depending specifically on the validator's commission rate and network usage.
+Assuming the network has 100,000,000 JU total staking and an annual inflation rate of 3%, the annualized yield is approximately 5-6%, depending specifically on the validator's commission rate and network usage.
 
 ### Inflation Control
-The JPoSA mechanism controls inflation through a fixed annual issuance rate:
+The JPoSA mechanism controls inflation through a variable annual issuance rate:
 
 - Annual issuance rate: Approximately 3%
 - Inflation rate dynamically adjusts with network total token supply growth
@@ -125,15 +124,13 @@ In the JPoSA network, miners are called "validators" and are responsible for pro
 
 2. **Staking Stage**
    - After proposal passes, applicants must complete staking registration within 7 days
-   - Minimum self-staking requirement: 100,000 JU
+   - Minimum self-staking requirement: MIN_VALIDATOR_STAKE (governable parameter, default: 100,000 JU)
    - Set commission rate (0-100%, default 10%, adjustable according to personal strategy)
 
 3. **Activation Stage**
    - After staking is completed, wait for the next cycle (approximately 24 hours)
-   - The system selects the top 21 validators based on staking weight
-   - Officially begin block production and receive rewards
-
-### Validator Core Functions
+   - The system selects the top MAX_VALIDATORS validators based on staking weight
+   - Officially begin block production and receive rewards### Validator Core Functions
 
 1. **Block Production**
    - Produce new blocks in rotation order
@@ -237,7 +234,7 @@ The governance committee of the JPoSA network consists of all active validators 
 
 3. **Validator Management**
    - Review qualifications of new validators
-   - Make penalty decisions for违规 validators
+   - Make penalty decisions for jailed validators
    - Maintain quality of validator set
 
 ### Proposal Types
@@ -293,7 +290,7 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
 
 3. **Validator Unjail Period** (validatorUnjailPeriod)
    - Default value: 86,400 blocks (approximately 24 hours)
-   - Time required for违规 validators to return to normal state
+   - Time required for jailed validators to return to normal state
 
 ### Punishment-Related Parameters
 
@@ -307,11 +304,11 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
 
 3. **Decrease Rate** (decreaseRate)
    - Default value: 24
-   - Controls punishment counter reduction ratio, used to mitigate punishments for长期违规 validators, reducing punished blocks by removeThreshold/decreaseRate per epoch
+   - Controls punishment counter reduction ratio, used to mitigate punishments for jailed validators, reducing punished blocks by removeThreshold/decreaseRate per epoch
 
 4. **Validator Unjail Period** (validatorUnjailPeriod)
    - Default value: 86,400 blocks (approximately 24 hours)
-   - Time required for违规 validators to return to normal state after removal, only after this time can validators reapply to join the validator set
+   - Time required for jailed validators to return to normal state after removal, only after this time can validators reapply to join the validator set
 
 ### Reward-Related Parameters
 
@@ -332,6 +329,11 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
 2. **Maximum Validator Count** (MAX_VALIDATORS)
    - Upper limit of simultaneously active validators in the network
    - Default value: 21
+
+3. **Minimum Validator Stake** (minValidatorStake)
+   - Minimum staking amount required to become a validator
+   - Default value: 100,000 JU
+   - Ensures validators have sufficient economic incentives to maintain network security
 
 All parameter adjustments require governance proposals and sufficient votes to take effect, ensuring transparency and security of network parameter changes.
 

@@ -54,4 +54,6 @@ interface IStaking {
      * @param jailBlocks Number of blocks the validator will be jailed.
      */
     function jailValidator(address validator, uint256 jailBlocks) external;
+
+
 }
