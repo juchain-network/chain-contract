@@ -1,4 +1,5 @@
 .idea/*
+.trae/*
 .tool-versions
 ./contracts/output.json
 ./node_modules/*

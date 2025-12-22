@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
-	"juchain.org/chain/congress-cli/contracts/generated"
+	"juchain.org/chain/tools/contracts"
 )
 
 func ValidatorsCmd() *cobra.Command {
@@ -39,7 +39,7 @@ func listValidators(cmd *cobra.Command, _ []string) {
 
 	// Get validator information
 	contractAddress := common.HexToAddress(ValidatorContractAddr)
-	instance, err := generated.NewValidators(contractAddress, client)
+	instance, err := contracts.NewValidators(contractAddress, client)
 	if err != nil {
 		PrintError("Failed to instantiate validator contract", err)
 		return
@@ -102,7 +102,7 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 	defer client.Close()
 
 	contractAddress := common.HexToAddress(ValidatorContractAddr)
-	instance, err := generated.NewValidators(contractAddress, client)
+	instance, err := contracts.NewValidators(contractAddress, client)
 	if err != nil {
 		PrintError("Failed to instantiate validator contract", err)
 		return
@@ -112,7 +112,7 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 	queryOneInfo(addr, instance)
 }
 
-func queryOneInfo(addr string, instance *generated.Validators) {
+func queryOneInfo(addr string, instance *contracts.Validators) {
 	feeAddr, status, aacIncoming, totalJailedHB, lastWithdrawProfitsBlock, err := instance.GetValidatorInfo(&bind.CallOpts{}, common.HexToAddress(addr))
 	if err != nil {
 		PrintError(fmt.Sprintf("Failed to get validator info for %s", addr), err)
@@ -180,7 +180,7 @@ func validatorClaim(cmd *cobra.Command, _ []string) {
 }
 
 func innerValidatorClaim(addr string, rpc string) error {
-	validatorAbi, err := abi.JSON(strings.NewReader(generated.ValidatorsABI))
+	validatorAbi, err := abi.JSON(strings.NewReader(contracts.ValidatorsABI))
 	if err != nil {
 		return fmt.Errorf("failed to parse validator ABI: %w", err)
 	}
