@@ -93,7 +93,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // In POSA mode, validator must register (stake) after creation to become active
         // Give validator enough ETH and register
-        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         vm.deal(validator, minStake);
         vm.prank(validator);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
@@ -153,7 +153,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         require(!Validators(VALIDATORS).isTopValidator(nval), "should not be top validator yet (not registered)");
         
         // Give new validator enough ETH and register
-        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         vm.deal(nval, minStake);
         vm.prank(nval);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
@@ -199,7 +199,10 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     function testUpdateWithdrawProfitPeriod() public {
         // Corresponds to "update withdraw profit wait block"
         vm.warp(5_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), uint256(4), uint256(10), block.timestamp));
+        
+        // Create proposal from v1 (active validator) instead of address(this)
+        vm.prank(v1);
+        bytes32 id = keccak256(abi.encodePacked(v1, uint256(4), uint256(10), block.timestamp));
         Proposal(PROPOSAL).createUpdateConfigProposal(4, 10);
         
         vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
@@ -284,7 +287,10 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     // Helper functions
     function _passProposal(address target, bool flag) internal {
         vm.warp(block.timestamp + 1000000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), target, flag, "", block.timestamp));
+        
+        // Create proposal from v1 (active validator) instead of address(this)
+        vm.prank(v1);
+        bytes32 id = keccak256(abi.encodePacked(v1, target, flag, "", block.timestamp));
         Proposal(PROPOSAL).createProposal(target, flag, "");
         
         vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
@@ -294,7 +300,10 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
 
     function _updateWithdrawPeriod(uint256 period) internal {
         vm.warp(block.timestamp + 1000000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), uint256(4), period, block.timestamp));
+        
+        // Create proposal from v1 (active validator) instead of address(this)
+        vm.prank(v1);
+        bytes32 id = keccak256(abi.encodePacked(v1, uint256(4), period, block.timestamp));
         Proposal(PROPOSAL).createUpdateConfigProposal(4, period);
         
         vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
@@ -342,7 +351,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
 
     function testValidatorSetCompetition() public {
         // Test that multiple validators compete for spots in the highestValidatorsSet
-        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         
         // Create multiple new validators
         address[] memory newValidators = new address[](5);

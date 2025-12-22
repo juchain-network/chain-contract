@@ -187,6 +187,12 @@ forge test --match-contract Punish
 ## 🚀 Quick Start
 
 ```bash
+# Install nodejs 
+# https://nodejs.org/en/download
+# Install foundry
+# curl -L https://foundry.paradigm.xyz | bash
+# foundryup 
+
 # 1. Install dependencies
 npm install
 
@@ -202,9 +208,12 @@ npm run generate
 # 5. Initialize genesis (if needed)
 npm run init-genesis
 
-# 6. Build Congress CLI tools
+# 6. Generate contract bytecode (if needed)
+npm run build-and-extract
+
+# 7. Build Congress CLI tools
 cd congress-cli && make build
 
-# 7. Test CLI tools
+# 8. Test CLI tools
 ./build/congress-cli help
 ```

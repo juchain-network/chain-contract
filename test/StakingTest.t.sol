@@ -55,15 +55,11 @@ contract StakingTest is Test {
     }
 
     function testInitialization() public view {
-        assertEq(Staking(STAKING).MIN_VALIDATOR_STAKE(), MIN_STAKE);
-        assertEq(Staking(STAKING).MAX_VALIDATORS(), 21);
-        assertEq(Staking(STAKING).MIN_VALIDATORS(), 3);
+        assertEq(Proposal(PROPOSAL).minValidatorStake(), MIN_STAKE);
+        assertEq(Proposal(PROPOSAL).maxValidators(), 21);
         assertEq(Staking(STAKING).getValidatorCount(), 0);
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 0);
-        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
-        assertLt(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
-    }
-    
+    }    
     // Helper function to set up validator with pass status
     function _setupValidatorPass(address validator) internal {
         // Set pass status directly (simulating proposal passed)
@@ -76,13 +72,13 @@ contract StakingTest is Test {
         //             pass mapping (slot 9), proposalPassedTime mapping (slot 10)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(9))), // pass mapping slot (updated: was 8, now 9 due to validatorUnjailPeriod)
+            keccak256(abi.encode(validator, uint256(11))), // pass mapping slot (updated: was 9, now 11 due to minValidatorStake and maxValidators)
             bytes32(uint256(1))
         );
         // Set proposalPassedTime to current time (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(10))), // proposalPassedTime mapping slot (updated: was 9, now 10 due to validatorUnjailPeriod)
+            keccak256(abi.encode(validator, uint256(12))), // proposalPassedTime mapping slot (updated: was 10, now 12 due to minValidatorStake and maxValidators)
             bytes32(block.timestamp)
         );
     }
@@ -205,9 +201,7 @@ contract StakingTest is Test {
         _updateActiveValidatorSet();
         
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
-        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
-        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
-        
+
         // Now register a 4th validator
         _setupValidatorPass(VALIDATOR4);
         vm.prank(VALIDATOR4);
@@ -235,9 +229,7 @@ contract StakingTest is Test {
         Staking(STAKING).exitValidator();
         
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
-        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
-        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
-        
+
         // Test that 3rd validator must resign first before exiting
         vm.prank(VALIDATOR3);
         vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
@@ -465,9 +457,6 @@ contract StakingTest is Test {
         // Update active validator set to make validators active
         _updateActiveValidatorSet();
         
-        // Check if minimum validators requirement is met (MIN_VALIDATORS = 3)
-        assertGe(Validators(VALIDATORS).getActiveValidatorCount(), Staking(STAKING).MIN_VALIDATORS());
-        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
         
         // Test that no validator can exit (they are in active set, must resign first)
         for (uint i = 0; i < 3; i++) {
@@ -1133,7 +1122,7 @@ contract StakingTest is Test {
         // Set proposalPassedTime to long ago (expired)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(VALIDATOR1, uint256(10))), // proposalPassedTime mapping slot
+            keccak256(abi.encode(VALIDATOR1, uint256(12))), // proposalPassedTime mapping slot (updated: was 10, now 12 due to minValidatorStake and maxValidators)
             bytes32(uint256(block.timestamp - 8 days)) // 8 days ago, expired
         );
         
@@ -1521,8 +1510,8 @@ contract StakingTest is Test {
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Remove both from active set
-        bytes32 proposalPassSlot1 = keccak256(abi.encode(VALIDATOR1, uint256(9)));
-        bytes32 proposalPassSlot2 = keccak256(abi.encode(VALIDATOR2, uint256(9)));
+        bytes32 proposalPassSlot1 = keccak256(abi.encode(VALIDATOR1, uint256(11)));
+        bytes32 proposalPassSlot2 = keccak256(abi.encode(VALIDATOR2, uint256(11)));
         vm.store(PROPOSAL, proposalPassSlot1, bytes32(uint256(0)));
         vm.store(PROPOSAL, proposalPassSlot2, bytes32(uint256(0)));
         
@@ -1568,9 +1557,9 @@ contract StakingTest is Test {
         assertEq(initialValidatorCount, 3);
         
         // Remove from active set
-        bytes32 proposalPassSlot1 = keccak256(abi.encode(VALIDATOR1, uint256(9)));
-        bytes32 proposalPassSlot2 = keccak256(abi.encode(VALIDATOR2, uint256(9)));
-        bytes32 proposalPassSlot3 = keccak256(abi.encode(VALIDATOR3, uint256(9)));
+        bytes32 proposalPassSlot1 = keccak256(abi.encode(VALIDATOR1, uint256(11))); // pass mapping slot (updated: was 9, now 11 due to minValidatorStake and maxValidators)
+        bytes32 proposalPassSlot2 = keccak256(abi.encode(VALIDATOR2, uint256(11))); // pass mapping slot (updated: was 9, now 11 due to minValidatorStake and maxValidators)
+        bytes32 proposalPassSlot3 = keccak256(abi.encode(VALIDATOR3, uint256(11))); // pass mapping slot (updated: was 9, now 11 due to minValidatorStake and maxValidators)
         vm.store(PROPOSAL, proposalPassSlot1, bytes32(uint256(0)));
         vm.store(PROPOSAL, proposalPassSlot2, bytes32(uint256(0)));
         vm.store(PROPOSAL, proposalPassSlot3, bytes32(uint256(0)));
@@ -1956,7 +1945,7 @@ contract StakingTest is Test {
         vm.roll(block.number + 101);
 
         // Make proposal not passed
-        bytes32 proposalPassSlot = keccak256(abi.encode(VALIDATOR1, uint256(9)));
+        bytes32 proposalPassSlot = keccak256(abi.encode(VALIDATOR1, uint256(11))); // pass mapping slot (updated: was 9, now 11 due to minValidatorStake and maxValidators)
         vm.store(PROPOSAL, proposalPassSlot, bytes32(uint256(0)));
 
         // Try to unjail without passing proposal - should revert

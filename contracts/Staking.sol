@@ -13,22 +13,11 @@ import {IValidators} from './IValidators.sol';
  */
 contract Staking is Params, ReentrancyGuard {
 
-    // Minimum staking amount to become a validator
-    // TODO used as a governance parameter
-    uint256 public constant MIN_VALIDATOR_STAKE = 100000 ether; // 10,000 JU
-    
     // Minimum delegation amount
     uint256 public constant MIN_DELEGATION = 10 ether; // 10 JU
     
-    // Maximum validators in active set
-    // TODO used as a governance parameter
-    uint256 public constant MAX_VALIDATORS = 21;
-    
-    // Minimum validators required
-    uint256 public constant MIN_VALIDATORS = 3;
-    
     // Commission rate precision (10000 = 100%)
-    uint256 public constant COMMISSION_RATE_BASE = 10000;
+    uint256 public constant COMMISSION_RATE_BASE = 10000;    
     
     // Maximum number of unbonding entries to process in a single withdrawUnbonded call
     uint256 public constant MAX_UNBONDING_ENTRIES_PER_WITHDRAW = 50;
@@ -104,7 +93,7 @@ contract Staking is Params, ReentrancyGuard {
     }
 
     function _onlyValidValidator(address validator) internal view {
-        require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Not a valid validator");
+        require(validatorStakes[validator].selfStake >= proposalContract.minValidatorStake(), "Not a valid validator");
     }
 
     modifier onlyActiveValidator(address validator) {
@@ -113,7 +102,7 @@ contract Staking is Params, ReentrancyGuard {
     }
 
     function _onlyActiveValidator(address validator) internal view {
-        require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Not a valid validator");
+        require(validatorStakes[validator].selfStake >= proposalContract.minValidatorStake(), "Not a valid validator");
         require(!validatorStakes[validator].isJailed, "Validator is jailed");
     }
 
@@ -159,7 +148,7 @@ contract Staking is Params, ReentrancyGuard {
             
             // Set up validator stake (same as registerValidator)
             validatorStakes[validator] = ValidatorStake({
-                selfStake: MIN_VALIDATOR_STAKE,
+                selfStake: proposalContract.minValidatorStake(),
                 totalDelegated: 0,
                 commissionRate: commissionRate,
                 accumulatedRewards: 0,
@@ -172,9 +161,9 @@ contract Staking is Params, ReentrancyGuard {
             // Add to validators list (same as registerValidator)
             validatorIndex[validator] = allValidators.length;
             allValidators.push(validator);
-            totalStaked = totalStaked + MIN_VALIDATOR_STAKE;
+            totalStaked = totalStaked + proposalContract.minValidatorStake();
             // Emit event for each validator (more accurate than single event)
-            emit ValidatorRegistered(validator, MIN_VALIDATOR_STAKE, commissionRate);
+            emit ValidatorRegistered(validator, proposalContract.minValidatorStake(), commissionRate);
         }
         
         initialized = true;
@@ -185,7 +174,7 @@ contract Staking is Params, ReentrancyGuard {
      * @param commissionRate Commission rate (0-10000, representing 0%-100%)
      */
     function registerValidator(uint256 commissionRate) external payable onlyInitialized nonReentrant {
-        require(msg.value >= MIN_VALIDATOR_STAKE, "Insufficient self-stake");
+        require(msg.value >= proposalContract.minValidatorStake(), "Insufficient self-stake");
         require(commissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
         require(validatorStakes[msg.sender].selfStake == 0, "Already registered");
         require(proposalContract.pass(msg.sender), "Must pass proposal first");
@@ -258,7 +247,7 @@ contract Staking is Params, ReentrancyGuard {
         
         // If partial reduction, remaining stake must meet minimum requirement
         // If complete reduction (remainingStake == 0), use exitValidator() instead
-        require(remainingStake >= MIN_VALIDATOR_STAKE, "Remaining stake below minimum, use exitValidator() to withdraw all");
+        require(remainingStake >= proposalContract.minValidatorStake(), "Remaining stake below minimum, use exitValidator() to withdraw all");
         
         // Effects: update state before external call
         stake.selfStake = remainingStake;
@@ -586,7 +575,7 @@ contract Staking is Params, ReentrancyGuard {
         require(block.number >= validatorStakes[validator].jailUntilBlock, "Jail period not complete");
         
         // Check if validator has sufficient stake to be active
-        require(validatorStakes[validator].selfStake >= MIN_VALIDATOR_STAKE, "Insufficient stake, must add stake first");
+        require(validatorStakes[validator].selfStake >= proposalContract.minValidatorStake(), "Insufficient stake, must add stake first");
         
         // Must have passed proposal (reproposal required) - no automatic restoration
         require(proposalContract.pass(validator), "Must pass reproposal first");
@@ -650,7 +639,7 @@ contract Staking is Params, ReentrancyGuard {
             ValidatorStake storage stake = validatorStakes[validator];
             
             // Only include validators with self-stake >= MIN_VALIDATOR_STAKE
-            if (stake.selfStake >= MIN_VALIDATOR_STAKE) {
+            if (stake.selfStake >= proposalContract.minValidatorStake()) {
                 candidateValidators[candidateCount] = validator;
                 totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
                 candidateCount++;
@@ -687,7 +676,7 @@ contract Staking is Params, ReentrancyGuard {
         }
         
         // Return top validators (up to MAX_VALIDATORS)
-        uint256 returnLength = candidateCount < MAX_VALIDATORS ? candidateCount : MAX_VALIDATORS;
+        uint256 returnLength = candidateCount < proposalContract.maxValidators() ? candidateCount : proposalContract.maxValidators();
         address[] memory topValidators = new address[](returnLength);
         for (uint256 i = 0; i < returnLength; i++) {
             topValidators[i] = candidateValidators[i];

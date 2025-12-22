@@ -27,7 +27,8 @@ contract ProposalFoundryTest is BaseSetup {
         
         // Create a proposal
         vm.warp(5_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), newValidator, true, "", block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(v1, newValidator, true, "", block.timestamp));
+        vm.prank(v1); // Use validator v1 as proposer
         p.createProposal(newValidator, true, "");
         
         // Manually set resultExist to true to test the early return path
@@ -50,7 +51,8 @@ contract ProposalFoundryTest is BaseSetup {
         
         // Create a proposal
         vm.warp(5_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), newValidator, true, "", block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(v1, newValidator, true, "", block.timestamp));
+        vm.prank(v1); // Use validator v1 as proposer
         p.createProposal(newValidator, true, "");
         
         // Vote to make it rejected (majority against)
@@ -80,7 +82,8 @@ contract ProposalFoundryTest is BaseSetup {
         // Create a new validator proposal and pass it
         address testValidator = makeAddr("testValidator");
         vm.warp(5_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), testValidator, true, "", block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(v1, testValidator, true, "", block.timestamp));
+        vm.prank(v1); // Use validator v1 as proposer
         p.createProposal(testValidator, true, "");
         vm.prank(v1); p.voteProposal(id, true);
         vm.prank(v2); p.voteProposal(id, true);
@@ -106,26 +109,30 @@ contract ProposalFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         // can't remove a not passed dst (choose an address not initialized)
         address notPassed = makeAddr("np");
-        (bool ok1, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, notPassed, false, ""));
-        require(!ok1, "remove not-exist should fail");
+        vm.prank(v1);
+        vm.expectRevert("Can't add an already exist dst or Can't remove a not passed dst");
+        p.createProposal(notPassed, false, "");
 
         // details too long
         string memory tooLong = new string(3001);
-        (bool ok2, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, address(0xAAA1), true, tooLong));
-        require(!ok2, "details too long should fail");
+        vm.prank(v1);
+        vm.expectRevert("Details too long");
+        p.createProposal(address(0xAAA1), true, tooLong);
 
     // ok to add not passed address; freeze time to compute id
     vm.warp(1_200_000);
-    bytes32 id = keccak256(abi.encodePacked(address(this), address(0xBBB2), true, "", block.timestamp));
-    (bool ok3, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, address(0xBBB2), true, ""));
+    bytes32 id = keccak256(abi.encodePacked(v1, address(0xBBB2), true, "", block.timestamp));
+    vm.prank(v1);
+    bool ok3 = p.createProposal(address(0xBBB2), true, "");
     require(ok3, "create add should succeed");
 
     // can't add already exist dst after pass
     vm.prank(v1); p.voteProposal(id, true);
     vm.prank(v2); p.voteProposal(id, true);
     vm.prank(v3); p.voteProposal(id, true);
-    (bool ok4, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, address(0xBBB2), true, ""));
-    require(!ok4, "add already passed should fail");
+    vm.prank(v1);
+    vm.expectRevert("Can't add an already exist dst or Can't remove a not passed dst");
+    p.createProposal(address(0xBBB2), true, "");
     }
 
     function testCreateAndVoteAddProposalPass() public {
@@ -134,9 +141,10 @@ contract ProposalFoundryTest is BaseSetup {
         
         // freeze timestamp to compute deterministic id
         vm.warp(1_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), newValidator, true, "", block.timestamp));
-        // create by anyone (this contract)
-        (bool ok, ) = address(p).call(abi.encodeWithSelector(p.createProposal.selector, newValidator, true, ""));
+        bytes32 id = keccak256(abi.encodePacked(v1, newValidator, true, "", block.timestamp));
+        // create by validator v1
+        vm.prank(v1);
+        bool ok = p.createProposal(newValidator, true, "");
         require(ok, "create failed");
 
         // validators vote
@@ -151,7 +159,7 @@ contract ProposalFoundryTest is BaseSetup {
         // In POSA mode, validator must register (stake) to become top validator
         // This is the design: proposal passing only grants permission, validator must actively register
         // Give new validator enough ETH and register
-        uint256 minStake = Staking(STAKING).MIN_VALIDATOR_STAKE();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         vm.deal(newValidator, minStake);
         vm.prank(newValidator);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
@@ -165,7 +173,9 @@ contract ProposalFoundryTest is BaseSetup {
     function testOnlyValidatorCanVote() public {
     Proposal p = Proposal(PROPOSAL);
     vm.warp(1_111_111);
-    bytes32 id = keccak256(abi.encodePacked(address(this), address(0xCAFE), true, "", block.timestamp));
+    bytes32 id = keccak256(abi.encodePacked(v1, address(0xCAFE), true, "", block.timestamp));
+    // Create proposal using validator v1
+    vm.prank(v1);
     p.createProposal(address(0xCAFE), true, "");
         // non-validator
         address nv = makeAddr("nv");
@@ -177,7 +187,9 @@ contract ProposalFoundryTest is BaseSetup {
     function testValidatorCanOnlyVoteOnceAndExpire() public {
         Proposal p = Proposal(PROPOSAL);
         vm.warp(2_222_222);
-        bytes32 id = keccak256(abi.encodePacked(address(this), address(0xDEAD), true, "", block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(v1, address(0xDEAD), true, "", block.timestamp));
+        // Create proposal using validator v1
+        vm.prank(v1);
         p.createProposal(address(0xDEAD), true, "");
         vm.prank(v1); p.voteProposal(id, true);
         // second vote by same validator should fail
@@ -197,7 +209,9 @@ contract ProposalFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         // remove an existing validator (v1)
         vm.warp(3_000_000);
-        bytes32 id = keccak256(abi.encodePacked(address(this), v1, false, "", block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(v2, v1, false, "", block.timestamp));
+        // Create proposal using validator v2
+        vm.prank(v2);
         p.createProposal(v1, false, "");
         vm.prank(v1); p.voteProposal(id, true);
         vm.prank(v2); p.voteProposal(id, true);
@@ -212,7 +226,9 @@ contract ProposalFoundryTest is BaseSetup {
         uint256[8] memory vals = [uint256(3600),200,300,400,500,833_000_000_000_000_000,604800,86400];
         for (uint i = 0; i < cids.length; i++) {
             vm.warp(4_000_000 + i);
-            bytes32 id = keccak256(abi.encodePacked(address(this), cids[i], vals[i], block.timestamp));
+            bytes32 id = keccak256(abi.encodePacked(v1, cids[i], vals[i], block.timestamp));
+            // Create config proposal using validator v1
+            vm.prank(v1);
             p.createUpdateConfigProposal(cids[i], vals[i]);
             vm.prank(v1); p.voteProposal(id, true);
             vm.prank(v2); p.voteProposal(id, true);
@@ -235,6 +251,7 @@ contract ProposalFoundryTest is BaseSetup {
         
         // CID 100 is invalid, should revert during proposal creation
         vm.warp(6_000_000);
+        vm.prank(v1);
         vm.expectRevert("Invalid config ID");
         p.createUpdateConfigProposal(100, 12345);
     }
@@ -245,6 +262,7 @@ contract ProposalFoundryTest is BaseSetup {
         // Test that the validation checks work during proposal creation
         
         // CID 0 - Invalid proposal period (too small)
+        vm.prank(v1);
         vm.expectRevert("Invalid proposal period");
         p.createUpdateConfigProposal(0, 100); // Less than 1 hour
     }
