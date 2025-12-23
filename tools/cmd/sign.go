@@ -14,7 +14,7 @@ import (
 func SignRawTxCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sign",
-		Short: "sign raw tx from file",
+		Short: "Sign raw transaction from file",
 		Run:   signRawTx,
 	}
 	signRawTxCmdFlags(cmd)
@@ -22,11 +22,11 @@ func SignRawTxCmd() *cobra.Command {
 }
 
 func signRawTxCmdFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("file", "f", "", "raw tx file")
+	cmd.Flags().StringP("file", "f", "", "Raw transaction file")
 	_ = cmd.MarkFlagRequired("file")
-	cmd.Flags().StringP("wallet", "w", "", "signer wallet file")
-	cmd.Flags().StringP("private-key", "k", "", "signer private key (hex string)")
-	cmd.Flags().StringP("password", "p", "", "signer password file (required when using wallet file)")
+	cmd.Flags().StringP("wallet", "w", "", "Signer wallet file")
+	cmd.Flags().StringP("private-key", "k", "", "Signer private key (hex string)")
+	cmd.Flags().StringP("password", "p", "", "Signer password file (required when using wallet file)")
 }
 
 func signRawTx(cmd *cobra.Command, _ []string) {

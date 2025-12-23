@@ -15,7 +15,7 @@ import (
 func ValidatorsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "list all validators",
+		Short: "List all validators",
 		Run:   listValidators,
 	}
 	return cmd
@@ -58,7 +58,7 @@ func listValidators(cmd *cobra.Command, _ []string) {
 func ValidatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query",
-		Short: "query a validator by address",
+		Short: "Query a validator by address",
 		Run:   queryValidator,
 	}
 	queryValidatorFlags(cmd)
@@ -161,7 +161,7 @@ func formatValidatorStatus(status uint64) string {
 func WithdrawProfitsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "claim",
-		Short: "claim validator's reward",
+		Short: "Claim validator's reward",
 		Run:   validatorClaim,
 	}
 	validatorClaimFlags(cmd)
@@ -169,7 +169,7 @@ func WithdrawProfitsCmd() *cobra.Command {
 }
 
 func validatorClaimFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("addr", "a", "", "validator address to claim")
+	cmd.Flags().StringP("addr", "a", "", "Validator address to claim rewards from")
 	_ = cmd.MarkFlagRequired("addr")
 }
 
@@ -221,18 +221,18 @@ func innerValidatorClaim(addr string, rpc string) error {
 func EditValidatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "edit",
-		Short: "create edit validator transaction",
+		Short: "Create edit validator transaction",
 		Long:  "Create a transaction to edit validator information including fee address and description",
 		Run:   createEditValidatorTx,
 	}
 
-	cmd.Flags().String("validator", "", "Validator address (required)")
-	cmd.Flags().String("fee-addr", "", "Fee address for receiving rewards (required)")
-	cmd.Flags().String("moniker", "", "Validator display name")
-	cmd.Flags().String("identity", "", "Validator identity (keybase signature)")
-	cmd.Flags().String("website", "", "Validator website URL")
-	cmd.Flags().String("email", "", "Validator contact email")
-	cmd.Flags().String("details", "", "Validator description details")
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
+	cmd.Flags().StringP("fee-addr", "f", "", "Fee address for receiving rewards (required)")
+	cmd.Flags().StringP("moniker", "m", "", "Validator display name")
+	cmd.Flags().StringP("identity", "i", "", "Validator identity (keybase signature)")
+	cmd.Flags().StringP("website", "w", "", "Validator website URL")
+	cmd.Flags().StringP("email", "e", "", "Validator contact email")
+	cmd.Flags().StringP("details", "d", "", "Validator description details")
 
 	_ = cmd.MarkFlagRequired("validator")
 	_ = cmd.MarkFlagRequired("fee-addr")

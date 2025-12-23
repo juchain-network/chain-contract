@@ -23,9 +23,9 @@ func RegisterValidatorCmd() *cobra.Command {
 		Run:   createRegisterValidatorTx,
 	}
 
-	cmd.Flags().String("proposer", "", "Proposer address (required)")
-	cmd.Flags().String("stake-amount", "", "Amount of JU to stake (required, minimum 10000)")
-	cmd.Flags().String("commission-rate", "", "Commission rate in basis points (0-10000, e.g., 500 = 5%)")
+	cmd.Flags().StringP("proposer", "p", "", "Proposer address (required)")
+	cmd.Flags().StringP("stake-amount", "s", "", "Amount of JU to stake (required, minimum 10000)")
+	cmd.Flags().StringP("commission-rate", "c", "", "Commission rate in basis points (0-10000, e.g., 500 = 5%)")
 
 	_ = cmd.MarkFlagRequired("proposer")
 	_ = cmd.MarkFlagRequired("stake-amount")
@@ -43,9 +43,9 @@ func DelegateCmd() *cobra.Command {
 		Run:   createDelegateTx,
 	}
 
-	cmd.Flags().String("delegator", "", "Delegator address (required)")
-	cmd.Flags().String("validator", "", "Validator address to delegate to (required)")
-	cmd.Flags().String("amount", "", "Amount of JU to delegate (required, minimum 1)")
+	cmd.Flags().StringP("delegator", "d", "", "Delegator address (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address to delegate to (required)")
+	cmd.Flags().StringP("amount", "s", "", "Amount of JU to delegate (required, minimum 1)")
 
 	_ = cmd.MarkFlagRequired("delegator")
 	_ = cmd.MarkFlagRequired("validator")
@@ -63,9 +63,9 @@ func UndelegateCmd() *cobra.Command {
 		Run:   createUndelegateTx,
 	}
 
-	cmd.Flags().String("delegator", "", "Delegator address (required)")
-	cmd.Flags().String("validator", "", "Validator address to undelegate from (required)")
-	cmd.Flags().String("amount", "", "Amount of JU to undelegate (required)")
+	cmd.Flags().StringP("delegator", "d", "", "Delegator address (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address to undelegate from (required)")
+	cmd.Flags().StringP("amount", "s", "", "Amount of JU to undelegate (required)")
 
 	_ = cmd.MarkFlagRequired("delegator")
 	_ = cmd.MarkFlagRequired("validator")
@@ -83,8 +83,8 @@ func ClaimRewardsCmd() *cobra.Command {
 		Run:   createClaimRewardsTx,
 	}
 
-	cmd.Flags().String("claimer", "", "Claimer address (required)")
-	cmd.Flags().String("validator", "", "Validator address to claim rewards from (required)")
+	cmd.Flags().StringP("claimer", "c", "", "Claimer address (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address to claim rewards from (required)")
 
 	_ = cmd.MarkFlagRequired("claimer")
 	_ = cmd.MarkFlagRequired("validator")
@@ -101,8 +101,8 @@ func QueryDelegationCmd() *cobra.Command {
 		Run:   queryDelegationInfo,
 	}
 
-	cmd.Flags().String("delegator", "", "Delegator address (required)")
-	cmd.Flags().String("validator", "", "Validator address (required)")
+	cmd.Flags().StringP("delegator", "d", "", "Delegator address (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
 
 	_ = cmd.MarkFlagRequired("delegator")
 	_ = cmd.MarkFlagRequired("validator")
@@ -119,8 +119,8 @@ func IncreaseStakeCmd() *cobra.Command {
 		Run:   createIncreaseStakeTx,
 	}
 
-	cmd.Flags().String("validator", "", "Validator address (required)")
-	cmd.Flags().String("amount", "", "Amount of JU to add to stake (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
+	cmd.Flags().StringP("amount", "s", "", "Amount of JU to add to stake (required)")
 
 	_ = cmd.MarkFlagRequired("validator")
 	_ = cmd.MarkFlagRequired("amount")
@@ -137,8 +137,8 @@ func DecreaseStakeCmd() *cobra.Command {
 		Run:   createDecreaseStakeTx,
 	}
 
-	cmd.Flags().String("validator", "", "Validator address (required)")
-	cmd.Flags().String("amount", "", "Amount of JU to remove from stake (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
+	cmd.Flags().StringP("amount", "s", "", "Amount of JU to remove from stake (required)")
 
 	_ = cmd.MarkFlagRequired("validator")
 	_ = cmd.MarkFlagRequired("amount")
@@ -155,8 +155,8 @@ func SetCommissionCmd() *cobra.Command {
 		Run:   createSetCommissionTx,
 	}
 
-	cmd.Flags().String("validator", "", "Validator address (required)")
-	cmd.Flags().String("rate", "", "New commission rate in basis points (0-10000, required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
+	cmd.Flags().StringP("rate", "r", "", "New commission rate in basis points (0-10000, required)")
 
 	_ = cmd.MarkFlagRequired("validator")
 	_ = cmd.MarkFlagRequired("rate")
@@ -173,7 +173,7 @@ func DeregisterValidatorCmd() *cobra.Command {
 		Run:   createDeregisterValidatorTx,
 	}
 
-	cmd.Flags().String("validator", "", "Validator address (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
 
 	_ = cmd.MarkFlagRequired("validator")
 
@@ -189,7 +189,7 @@ func ValidatorExitCmd() *cobra.Command {
 		Run:   createValidatorExitTx,
 	}
 
-	cmd.Flags().String("validator", "", "Validator address (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
 
 	_ = cmd.MarkFlagRequired("validator")
 
@@ -205,8 +205,8 @@ func WithdrawUnbondedCmd() *cobra.Command {
 		Run:   createWithdrawUnbondedTx,
 	}
 
-	cmd.Flags().String("claimer", "", "Claimer address (required)")
-	cmd.Flags().String("validator", "", "Validator address to withdraw from (required)")
+	cmd.Flags().StringP("claimer", "c", "", "Claimer address (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address to withdraw from (required)")
 
 	_ = cmd.MarkFlagRequired("claimer")
 	_ = cmd.MarkFlagRequired("validator")
