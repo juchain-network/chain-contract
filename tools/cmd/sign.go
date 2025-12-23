@@ -3,11 +3,11 @@ package cmd
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/spf13/cobra"
 )
 
@@ -24,54 +24,87 @@ func SignRawTxCmd() *cobra.Command {
 func signRawTxCmdFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("file", "f", "", "raw tx file")
 	_ = cmd.MarkFlagRequired("file")
-	cmd.Flags().StringP("key", "k", "", "singer wallet file")
-	_ = cmd.MarkFlagRequired("key")
-	cmd.Flags().StringP("password", "p", "", "singer  password file ")
-	_ = cmd.MarkFlagRequired("password")
+	cmd.Flags().StringP("wallet", "w", "", "signer wallet file")
+	cmd.Flags().StringP("private-key", "k", "", "signer private key (hex string)")
+	cmd.Flags().StringP("password", "p", "", "signer password file (required when using wallet file)")
 }
 
 func signRawTx(cmd *cobra.Command, _ []string) {
-	chainId := GetChainID(cmd) // Use config-aware function
 	file, _ := cmd.Flags().GetString("file")
-	key, _ := cmd.Flags().GetString("key")
+	wallet, _ := cmd.Flags().GetString("wallet")
+	privateKeyStr, _ := cmd.Flags().GetString("private-key")
 	passwordFile, _ := cmd.Flags().GetString("password")
 
 	// Validate input parameters
-	if err := ValidateChainID(chainId); err != nil {
-		PrintValidationError(err)
-		return
-	}
-
 	if err := ValidateFile(file); err != nil {
 		PrintValidationError(err)
 		return
 	}
 
-	if err := ValidateFile(key); err != nil {
-		PrintValidationError(err)
+	// Check that either wallet or private-key is provided, but not both
+	walletProvided := wallet != ""
+	privateKeyProvided := privateKeyStr != ""
+
+	if !walletProvided && !privateKeyProvided {
+		PrintValidationError(fmt.Errorf("must provide either --wallet or --private-key"))
 		return
 	}
 
-	if err := ValidateFile(passwordFile); err != nil {
-		PrintValidationError(err)
+	if walletProvided && privateKeyProvided {
+		PrintValidationError(fmt.Errorf("cannot provide both --wallet and --private-key"))
 		return
 	}
 
-	PrintInfo(fmt.Sprintf("Signing transaction from file: %s", file))
+	var privateKey *ecdsa.PrivateKey
+	var err error
 
-	password, err := fethchKeyFromFile(passwordFile)
-	if err != nil {
-		PrintError("Failed to read password file", err)
-		return
+	if walletProvided {
+		// Validate wallet file
+		if err := ValidateFile(wallet); err != nil {
+			PrintValidationError(err)
+			return
+		}
+
+		// Validate password file (required for wallet)
+		if passwordFile == "" {
+			PrintValidationError(fmt.Errorf("--password is required when using --wallet"))
+			return
+		}
+
+		if err := ValidateFile(passwordFile); err != nil {
+			PrintValidationError(err)
+			return
+		}
+
+		PrintInfo(fmt.Sprintf("Signing transaction from file: %s using wallet: %s", file, wallet))
+
+		// Read password
+		password, err := fethchKeyFromFile(passwordFile)
+		if err != nil {
+			PrintError("Failed to read password file", err)
+			return
+		}
+
+		// Decrypt wallet file
+		privateKey, err = ReadKeystoreFile(wallet, password)
+		if err != nil {
+			PrintError("Failed to decrypt keystore file", err)
+			return
+		}
+	} else {
+		// Using private key string
+		PrintInfo(fmt.Sprintf("Signing transaction from file: %s using private key", file))
+
+		// Parse private key string
+		privateKeyStr = strings.TrimPrefix(privateKeyStr, "0x")
+		privateKey, err = crypto.HexToECDSA(privateKeyStr)
+		if err != nil {
+			PrintError("Failed to parse private key", err)
+			return
+		}
 	}
 
-	privateKey, err := ReadKeystoreFile(key, password)
-	if err != nil {
-		PrintError("Failed to decrypt keystore file", err)
-		return
-	}
-
-	if err := innerSignRawTx(chainId, file, privateKey); err != nil {
+	if err := innerSignRawTx(file, privateKey); err != nil {
 		PrintError("Failed to sign transaction", err)
 		return
 	}
@@ -90,10 +123,10 @@ func fethchKeyFromFile(path string) (string, error) {
 	return lines[0], nil
 }
 
-func innerSignRawTx(chainId int64, file string, privateKey *ecdsa.PrivateKey) error {
+func innerSignRawTx(file string, privateKey *ecdsa.PrivateKey) error {
 	outputFile := addSuffixToFilename(file, "_signed")
 
-	err := SignRawTx(file, privateKey, big.NewInt(chainId), outputFile)
+	err := SignRawTx(file, privateKey, outputFile)
 	if err != nil {
 		return fmt.Errorf("failed to sign transaction: %w", err)
 	}

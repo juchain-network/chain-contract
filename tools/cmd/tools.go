@@ -47,6 +47,11 @@ func CreateRawTx(
 		return nil
 	}
 
+	chainID, err := client.ChainID(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get chain ID: %v", err)
+	}
+
 	msg := ethereum.CallMsg{
 		From:  caller,
 		To:    &contract,
@@ -75,6 +80,7 @@ func CreateRawTx(
 		"to":       tx.To().Hex(),
 		"value":    tx.Value(),
 		"data":     common.Bytes2Hex(tx.Data()),
+		"chainId":  chainID,
 	}
 
 	file, err := os.Create(output)
@@ -91,7 +97,6 @@ func CreateRawTx(
 func SignRawTx(
 	inputFile string,
 	privateKey *ecdsa.PrivateKey,
-	chainID *big.Int,
 	outputFile string,
 ) error {
 	var rawTx map[string]interface{}
@@ -118,6 +123,14 @@ func SignRawTx(
 	default:
 		return fmt.Errorf("invalid value type: %T", v)
 	}
+	chainID, ok := rawTx["chainId"].(float64)
+	if !ok {
+		return fmt.Errorf("invalid chainId type: %T", rawTx["chainId"])
+	}
+	if err := ValidateChainID(int64(chainID)); err != nil {
+		PrintValidationError(err)
+		return err
+	}
 
 	tx := types.NewTransaction(
 		uint64(rawTx["nonce"].(float64)),
@@ -128,7 +141,7 @@ func SignRawTx(
 		common.Hex2Bytes(rawTx["data"].(string)),
 	)
 
-	signer := types.NewEIP155Signer(chainID)
+	signer := types.NewEIP155Signer(big.NewInt(int64(chainID)))
 	signedTx, err := types.SignTx(tx, signer, privateKey)
 	if err != nil {
 		return fmt.Errorf("failed to sign: %v", err)
