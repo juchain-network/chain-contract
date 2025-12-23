@@ -7,7 +7,7 @@ OUT := build
 ALLOW_PATH := $(currentDir)
 
 # Project information
-PROJECT_NAME := juchain-tools
+PROJECT_NAME := ju-cli
 VERSION := 1.2.1
 BUILD_DATE := $(shell date -u +'%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")

@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
 	"juchain.org/chain/tools/contracts"
 )
@@ -31,23 +30,14 @@ func listValidators(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	client, err := ethclient.Dial(rpc)
+	validatorInstance, stakingInstance, _, err := GetContractInstance(rpc)
 	if err != nil {
-		PrintError("Failed to connect to RPC endpoint", err)
-		return
-	}
-	defer client.Close()
-
-	// Get validator information
-	contractAddress := common.HexToAddress(ValidatorContractAddr)
-	instance, err := contracts.NewValidators(contractAddress, client)
-	if err != nil {
-		PrintError("Failed to instantiate validator contract", err)
+		PrintError("Failed to get contract instance", err)
 		return
 	}
 
 	PrintInfo("Fetching validator information...")
-	vals, err := instance.GetTopValidators(&bind.CallOpts{})
+	vals, err := validatorInstance.GetTopValidators(&bind.CallOpts{})
 	if err != nil {
 		PrintError("Failed to get validators", err)
 		return
@@ -61,7 +51,7 @@ func listValidators(cmd *cobra.Command, _ []string) {
 	PrintInfo(fmt.Sprintf("Found %d validators:", len(vals)))
 	for i, val := range vals {
 		fmt.Printf("\n--- Validator %d ---\n", i+1)
-		queryOneInfo(val.Hex(), instance)
+		queryOneInfo(val.Hex(), validatorInstance, stakingInstance)
 	}
 }
 
@@ -95,58 +85,33 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	client, err := ethclient.Dial(rpc)
+	validatorInstance, stakingInstance, _, err := GetContractInstance(rpc)
 	if err != nil {
-		PrintError("Failed to connect to RPC endpoint", err)
-		return
-	}
-	defer client.Close()
-
-	contractAddress := common.HexToAddress(ValidatorContractAddr)
-	instance, err := contracts.NewValidators(contractAddress, client)
-	if err != nil {
-		PrintError("Failed to instantiate validator contract", err)
+		PrintError("Failed to get contract instance", err)
 		return
 	}
 
 	PrintInfo(fmt.Sprintf("Querying validator information for: %s", addr))
-	queryOneInfo(addr, instance)
+	queryOneInfo(addr, validatorInstance, stakingInstance)
 }
 
-func queryOneInfo(addr string, instance *contracts.Validators) {
+func queryOneInfo(addr string, validatorInstance *contracts.Validators, stakingInstance *contracts.Staking) {
 	// Get basic validator info
-	feeAddr, status, aacIncoming, totalJailedHB, lastWithdrawProfitsBlock, err := instance.GetValidatorInfo(&bind.CallOpts{}, common.HexToAddress(addr))
+	feeAddr, status, aacIncoming, totalJailedHB, lastWithdrawProfitsBlock, err := validatorInstance.GetValidatorInfo(&bind.CallOpts{}, common.HexToAddress(addr))
 	if err != nil {
 		PrintError(fmt.Sprintf("Failed to get validator info for %s", addr), err)
 		return
 	}
 
 	// Get validator description
-	moniker, identity, website, email, details, err := instance.GetValidatorDescription(&bind.CallOpts{}, common.HexToAddress(addr))
+	moniker, identity, website, email, details, err := validatorInstance.GetValidatorDescription(&bind.CallOpts{}, common.HexToAddress(addr))
 	if err != nil {
 		PrintError(fmt.Sprintf("Failed to get validator description for %s", addr), err)
 		return
 	}
 
-	// Get staking info from staking contract
-	client, err := ethclient.Dial(GetRPCEndpoint(nil))
-	if err != nil {
-		PrintError("Failed to connect to RPC for staking info", err)
-		return
-	}
-	defer client.Close()
-
-	// Connect to staking contract
-	stakingContractAddr := common.HexToAddress(StakingContractAddr)
-	stakingInstance, err := contracts.NewStaking(stakingContractAddr, client)
-	if err != nil {
-		PrintError("Failed to instantiate staking contract", err)
-		return
-	}
-
 	// Get validator staking information
-	validatorAddr := common.HexToAddress(addr)
-	validatorInfo, err := stakingInstance.GetValidatorInfo(&bind.CallOpts{}, validatorAddr)
+	validatorInfo, err := stakingInstance.GetValidatorInfo(&bind.CallOpts{}, common.HexToAddress(addr))
 	if err != nil {
 		PrintError("Failed to get validator staking info", err)
 		return
@@ -195,7 +160,7 @@ func formatValidatorStatus(status uint64) string {
 
 func WithdrawProfitsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "withdraw_profits",
+		Use:   "claim",
 		Short: "claim validator's reward",
 		Run:   validatorClaim,
 	}
@@ -223,9 +188,9 @@ func validatorClaim(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	PrintInfo(fmt.Sprintf("Creating withdraw profits transaction for validator: %s", addr))
+	PrintInfo(fmt.Sprintf("Creating claim transaction for validator: %s", addr))
 	if err := innerValidatorClaim(addr, rpc); err != nil {
-		PrintError("Failed to create withdraw transaction", err)
+		PrintError("Failed to create claim transaction", err)
 		return
 	}
 }
@@ -249,5 +214,112 @@ func innerValidatorClaim(addr string, rpc string) error {
 	PrintSuccess("Withdraw profits transaction created successfully!")
 	PrintInfo(fmt.Sprintf("Transaction file: %s", WithdrawProfitsFile))
 	PrintWarning("Note: Withdrawal has minimum waiting period restrictions")
+	return nil
+}
+
+// EditValidatorCmd creates command for editing validator information
+func EditValidatorCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit",
+		Short: "create edit validator transaction",
+		Long:  "Create a transaction to edit validator information including fee address and description",
+		Run:   createEditValidatorTx,
+	}
+
+	cmd.Flags().String("validator", "", "Validator address (required)")
+	cmd.Flags().String("fee-addr", "", "Fee address for receiving rewards (required)")
+	cmd.Flags().String("moniker", "", "Validator display name")
+	cmd.Flags().String("identity", "", "Validator identity (keybase signature)")
+	cmd.Flags().String("website", "", "Validator website URL")
+	cmd.Flags().String("email", "", "Validator contact email")
+	cmd.Flags().String("details", "", "Validator description details")
+
+	_ = cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("fee-addr")
+
+	return cmd
+}
+
+func createEditValidatorTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorAddr, _ := cmd.Flags().GetString("validator")
+	feeAddr, _ := cmd.Flags().GetString("fee-addr")
+	moniker, _ := cmd.Flags().GetString("moniker")
+	identity, _ := cmd.Flags().GetString("identity")
+	website, _ := cmd.Flags().GetString("website")
+	email, _ := cmd.Flags().GetString("email")
+	details, _ := cmd.Flags().GetString("details")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddresses(validatorAddr, feeAddr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Creating edit validator transaction")
+
+	if err := innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, website, email, details, rpc); err != nil {
+		PrintError("Failed to create edit validator transaction", err)
+		return
+	}
+}
+
+func innerCreateEditValidatorTx(validatorAddr, feeAddr, moniker, identity, website, email, details, rpc string) error {
+	// Parse Validators contract ABI
+	validatorsAbi, err := abi.JSON(strings.NewReader(contracts.ValidatorsABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse validators ABI: %w", err)
+	}
+
+	// Use default values if not provided
+	if moniker == "" {
+		moniker = "validator"
+	}
+	if identity == "" {
+		identity = ""
+	}
+	if website == "" {
+		website = ""
+	}
+	if email == "" {
+		email = ""
+	}
+	if details == "" {
+		details = "Validator node"
+	}
+
+	abiData, err := validatorsAbi.Pack("createOrEditValidator",
+		common.HexToAddress(feeAddr), moniker, identity, website, email, details)
+	if err != nil {
+		return fmt.Errorf("failed to pack createOrEditValidator data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(ValidatorContractAddr), big.NewInt(0), abiData, rpc, EditValidatorFile)
+	if err != nil {
+		return fmt.Errorf("failed to create raw transaction: %w", err)
+	}
+
+	PrintSuccess("Edit validator transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", EditValidatorFile))
+	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
+	PrintInfo(fmt.Sprintf("Fee address: %s", feeAddr))
+	PrintInfo(fmt.Sprintf("Moniker: %s", moniker))
+	if identity != "" {
+		PrintInfo(fmt.Sprintf("Identity: %s", identity))
+	}
+	if website != "" {
+		PrintInfo(fmt.Sprintf("Website: %s", website))
+	}
+	if email != "" {
+		PrintInfo(fmt.Sprintf("Email: %s", email))
+	}
+	if details != "" {
+		PrintInfo(fmt.Sprintf("Details: %s", details))
+	}
 	return nil
 }

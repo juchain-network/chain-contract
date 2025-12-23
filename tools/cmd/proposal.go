@@ -103,7 +103,7 @@ func CreateConfigProposalCmd() *cobra.Command {
 func createConfigProposalFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("proposer", "p", "", "proposer addr (must be valid validator)")
 	_ = cmd.MarkFlagRequired("proposer")
-	cmd.Flags().Int64P("cid", "i", 0, "config id (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod)")
+	cmd.Flags().Int64P("cid", "i", 0, "config id (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod, 5 blockReward, 6 unbondingPeriod, 7 validatorUnjailPeriod, 8 minValidatorStake, 9 maxValidators)")
 	_ = cmd.MarkFlagRequired("cid")
 	cmd.Flags().Int64P("value", "v", 0, "new config value")
 	_ = cmd.MarkFlagRequired("value")
@@ -362,6 +362,10 @@ func getConfigIDName(cid int64) string {
 		return "Unbonding Period"
 	case 7:
 		return "Validator Unjail Period"
+	case 8:
+		return "Min Validator Stake"
+	case 9:
+		return "Max Validators"
 	default:
 		return "Unknown Config"
 	}

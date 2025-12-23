@@ -53,34 +53,11 @@ func validateGlobalFlags(cmd *cobra.Command, args []string) {
 			break
 		}
 	}
-
-	// Check if command requires chain ID
-	requiresChainID := []string{"create", "config", "vote", "withdraw_profits", "sign"}
-
-	for _, name := range requiresChainID {
-		if cmdName == name {
-			chainID := GetChainID(cmd) // Use config-aware function instead of flag only
-			if chainID == 0 {
-				PrintValidationError(fmt.Errorf("chain ID is required for command '%s'", cmdName))
-				os.Exit(1)
-			}
-			if err := ValidateChainID(chainID); err != nil {
-				PrintValidationError(err)
-				os.Exit(1)
-			}
-			break
-		}
-	}
 }
 
 // GetRPCEndpoint gets RPC endpoint from global flag
 func GetRPCEndpoint(cmd *cobra.Command) string {
 	return rpcEndpoint
-}
-
-// GetChainID gets chain ID from global flag
-func GetChainID(cmd *cobra.Command) int64 {
-	return chainID
 }
 
 func Execute() {
@@ -124,13 +101,11 @@ var (
 var (
 	// Global flags
 	rpcEndpoint string
-	chainID     int64
 )
 
 func init() {
 	// Add global flags to root command
 	rootCmd.PersistentFlags().StringVar(&rpcEndpoint, "rpc", "", "RPC endpoint URL")
-	rootCmd.PersistentFlags().Int64Var(&chainID, "chain-id", 0, "Chain ID")
 
 	// Group commands under parent commands
 
@@ -147,25 +122,23 @@ func init() {
 	validatorCmd.AddCommand(
 		ValidatorsCmd(),      // list validators
 		ValidatorCmd(),       // query validator info
-		QueryValidatorCmd(),  // query validator detailed info
 		EditValidatorCmd(),   // edit validator information
 		WithdrawProfitsCmd(), // withdraw validator profits
 	)
 
 	// Staking commands - staking and delegation operations
 	stakingCmd.AddCommand(
-		RegisterValidatorCmd(),     // register validator staking
-		DelegateCmd(),              // delegate to validator
-		UndelegateCmd(),            // undelegate from validator
-		IncreaseStakeCmd(),         // increase validator stake
-		DecreaseStakeCmd(),         // decrease validator stake
-		SetCommissionCmd(),         // set validator commission rate
-		DeregisterValidatorCmd(),   // validator deregistration
-		ValidatorExitCmd(),         // validator complete exit
-		ClaimRewardsCmd(),          // claim staking rewards
-		ClaimUnbondingRewardsCmd(), // claim unbonding rewards
-		QueryDelegationCmd(),       // query delegation information
-		ListTopValidatorsCmd(),     // list top validators by stake
+		RegisterValidatorCmd(),   // register validator staking
+		DelegateCmd(),            // delegate to validator
+		UndelegateCmd(),          // undelegate from validator
+		IncreaseStakeCmd(),       // increase validator stake
+		DecreaseStakeCmd(),       // decrease validator stake
+		SetCommissionCmd(),       // set validator commission rate
+		DeregisterValidatorCmd(), // validator deregistration
+		ValidatorExitCmd(),       // validator complete exit
+		ClaimRewardsCmd(),        // claim staking rewards
+		WithdrawUnbondedCmd(),    // withdraw unbonded stakes
+		QueryDelegationCmd(),     // query delegation information
 	)
 
 	// Misc commands
