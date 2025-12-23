@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"juchain.org/chain/tools/contracts"
 )
 
 // ValidateAddress validates Ethereum address format
@@ -70,8 +73,8 @@ func ValidateOperation(operation string) error {
 
 // ValidateConfigID validates configuration ID
 func ValidateConfigID(cid int64) error {
-	if cid < 0 || cid > 7 {
-		return fmt.Errorf("invalid config ID: %d, must be 0-7", cid)
+	if cid < 0 || cid > 9 {
+		return fmt.Errorf("invalid config ID: %d, must be 0-9", cid)
 	}
 	return nil
 }
@@ -142,4 +145,61 @@ func PrintWarning(message string) {
 // PrintError prints error message
 func PrintError(message string, err error) {
 	fmt.Printf("❌ %s: %v\n", message, err)
+}
+
+func EtherToWei(ether string) *big.Int {
+	parts := strings.Split(ether, ".")
+	if len(parts) == 1 {
+		result := new(big.Int)
+		result.SetString(parts[0], 10)
+		return result.Mul(result, big.NewInt(1e18))
+	}
+
+	integerPart := new(big.Int)
+	integerPart.SetString(parts[0], 10)
+	integerPart.Mul(integerPart, big.NewInt(1e18))
+
+	decimalPart := new(big.Int)
+	decimalPart.SetString(parts[1], 10)
+
+	zeros := 18 - len(parts[1])
+	if zeros > 0 {
+		decimalPart.Mul(decimalPart, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(zeros)), nil))
+	}
+
+	return integerPart.Add(integerPart, decimalPart)
+}
+
+func WeiToEther(wei *big.Int) string {
+	eth := new(big.Float).Quo(new(big.Float).SetInt(wei), big.NewFloat(1e18))
+	return eth.Text('f', 18)
+}
+
+func GetContractInstance(rpc string) (*contracts.Validators, *contracts.Staking, *contracts.Proposal, error) {
+	client, err := ethclient.Dial(rpc)
+	if err != nil {
+		PrintError("Failed to connect to RPC endpoint", err)
+		return nil, nil, nil, err
+	}
+	defer client.Close()
+
+	// Get validator information
+	validatorInstance, err := contracts.NewValidators(common.HexToAddress(ValidatorContractAddr), client)
+	if err != nil {
+		PrintError("Failed to instantiate validator contract", err)
+		return nil, nil, nil, err
+	}
+	// Connect to staking contract
+	stakingInstance, err := contracts.NewStaking(common.HexToAddress(StakingContractAddr), client)
+	if err != nil {
+		PrintError("Failed to instantiate staking contract", err)
+		return nil, nil, nil, err
+	}
+	// Connect to proposal contract
+	proposalInstance, err := contracts.NewProposal(common.HexToAddress(ProposalContractAddr), client)
+	if err != nil {
+		PrintError("Failed to instantiate proposal contract", err)
+		return nil, nil, nil, err
+	}
+	return validatorInstance, stakingInstance, proposalInstance, nil
 }

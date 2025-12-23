@@ -20,14 +20,13 @@ func TestCreaetProposalTx(t *testing.T) {
 func TestSignTx(t *testing.T) {
 	file := "createProposal.json"
 	key := "0xca881281fb10b53a87d00cbfae29f7cf8cfe8ac7c8389b3d20b24fc6bc3f3ff9"
-	chainId := 202599
 	key = strings.TrimPrefix(key, "0x")
 	privateKey, err := crypto.HexToECDSA(key)
 	if err != nil {
 		fmt.Printf("invalid private key: %v", err)
 		return
 	}
-	_ = innerSignRawTx(int64(chainId), file, privateKey)
+	_ = innerSignRawTx(file, privateKey)
 }
 
 func TestSendTx(t *testing.T) {

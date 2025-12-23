@@ -21,31 +21,6 @@ func showUsageGuide(cmd *cobra.Command, _ []string) {
 	fmt.Println("===========================")
 	fmt.Println()
 
-	fmt.Println("⚙️  CONFIG COMMANDS")
-	fmt.Println()
-
-	fmt.Println("1. View current configuration:")
-	fmt.Println("   congress-cli config get")
-	fmt.Println("   congress-cli config list")
-	fmt.Println()
-
-	fmt.Println("2. Set configuration for local network:")
-	fmt.Println("   congress-cli config set --rpc http://localhost:8545 --chain-id 202599")
-	fmt.Println()
-
-	fmt.Println("3. Set configuration for test network:")
-	fmt.Println("   congress-cli config set --rpc https://testnet-rpc.juchain.org --chain-id 202599")
-	fmt.Println()
-
-	fmt.Println("4. Set configuration for main network:")
-	fmt.Println("   congress-cli config set --rpc https://rpc.juchain.org --chain-id 210000")
-	fmt.Println()
-
-	fmt.Println("5. Get specific config value:")
-	fmt.Println("   congress-cli config get --rpc")
-	fmt.Println("   congress-cli config get --chain-id")
-	fmt.Println()
-
 	fmt.Println("🔍 QUERY COMMANDS")
 	fmt.Println()
 
