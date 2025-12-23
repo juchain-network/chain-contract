@@ -3,10 +3,10 @@ package cmd
 // Smart contract address constants - JuChain system contract addresses
 const (
 	// Main contract addresses
-	ValidatorContractAddr = "0x000000000000000000000000000000000000f000"
-	PunishContractAddr    = "0x000000000000000000000000000000000000f001"
-	ProposalContractAddr  = "0x000000000000000000000000000000000000f002"
-	StakingContractAddr   = "0x000000000000000000000000000000000000f003"
+	ValidatorContractAddr = "0x000000000000000000000000000000000000f010"
+	PunishContractAddr    = "0x000000000000000000000000000000000000f011"
+	ProposalContractAddr  = "0x000000000000000000000000000000000000f012"
+	StakingContractAddr   = "0x000000000000000000000000000000000000f013"
 )
 
 // Default configuration constants
