@@ -13,30 +13,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// StakingCmd creates the main staking command
-func StakingCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "staking",
-		Short: "Staking operations for JPoSA consensus",
-		Long:  "Manage validator staking, delegation, and rewards in JuChain PoSA consensus",
-	}
-
-	cmd.AddCommand(
-		registerValidatorCmd(),
-		editValidatorCmd(),
-		delegateCmd(),
-		undelegateCmd(),
-		claimRewardsCmd(),
-		queryValidatorCmd(),
-		queryDelegationCmd(),
-		listTopValidatorsCmd(),
-	)
-
-	return cmd
-}
-
-// registerValidatorCmd creates command for validator registration
-func registerValidatorCmd() *cobra.Command {
+// RegisterValidatorCmd creates command for validator registration
+func RegisterValidatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "register-validator",
 		Short: "Create validator registration transaction",
@@ -55,8 +33,8 @@ func registerValidatorCmd() *cobra.Command {
 	return cmd
 }
 
-// editValidatorCmd creates command for editing validator information
-func editValidatorCmd() *cobra.Command {
+// EditValidatorCmd creates command for editing validator information
+func EditValidatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "edit-validator",
 		Short: "Create edit validator transaction",
@@ -78,8 +56,8 @@ func editValidatorCmd() *cobra.Command {
 	return cmd
 }
 
-// delegateCmd creates command for delegation
-func delegateCmd() *cobra.Command {
+// DelegateCmd creates command for delegation
+func DelegateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delegate",
 		Short: "Create delegation transaction",
@@ -98,8 +76,8 @@ func delegateCmd() *cobra.Command {
 	return cmd
 }
 
-// undelegateCmd creates command for undelegation
-func undelegateCmd() *cobra.Command {
+// UndelegateCmd creates command for undelegation
+func UndelegateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "undelegate",
 		Short: "Create undelegation transaction",
@@ -118,8 +96,8 @@ func undelegateCmd() *cobra.Command {
 	return cmd
 }
 
-// claimRewardsCmd creates command for claiming rewards
-func claimRewardsCmd() *cobra.Command {
+// ClaimRewardsCmd creates command for claiming rewards
+func ClaimRewardsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "claim-rewards",
 		Short: "Create claim rewards transaction",
@@ -136,8 +114,8 @@ func claimRewardsCmd() *cobra.Command {
 	return cmd
 }
 
-// queryValidatorCmd creates command for querying validator info
-func queryValidatorCmd() *cobra.Command {
+// QueryValidatorCmd creates command for querying validator info
+func QueryValidatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query-validator",
 		Short: "Query validator information",
@@ -151,8 +129,8 @@ func queryValidatorCmd() *cobra.Command {
 	return cmd
 }
 
-// queryDelegationCmd creates command for querying delegation info
-func queryDelegationCmd() *cobra.Command {
+// QueryDelegationCmd creates command for querying delegation info
+func QueryDelegationCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query-delegation",
 		Short: "Query delegation information",
@@ -169,8 +147,8 @@ func queryDelegationCmd() *cobra.Command {
 	return cmd
 }
 
-// listTopValidatorsCmd creates command for listing top validators
-func listTopValidatorsCmd() *cobra.Command {
+// ListTopValidatorsCmd creates command for listing top validators
+func ListTopValidatorsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list-top-validators",
 		Short: "List top validators by stake",
@@ -180,6 +158,110 @@ func listTopValidatorsCmd() *cobra.Command {
 
 	// Note: limit flag is kept for compatibility but not used (Staking.getTopValidators has no limit parameter)
 	cmd.Flags().Int("limit", 21, "Maximum number of validators to display (not enforced, for display only)")
+
+	return cmd
+}
+
+// IncreaseStakeCmd creates command for increasing validator stake
+func IncreaseStakeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "increase-stake",
+		Short: "Increase validator stake amount",
+		Long:  "Create a transaction to increase validator staking amount",
+		Run:   createIncreaseStakeTx,
+	}
+
+	cmd.Flags().String("validator", "", "Validator address (required)")
+	cmd.Flags().String("amount", "", "Amount of JU to add to stake (required)")
+
+	_ = cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("amount")
+
+	return cmd
+}
+
+// DecreaseStakeCmd creates command for decreasing validator stake
+func DecreaseStakeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "decrease-stake",
+		Short: "Decrease validator stake amount",
+		Long:  "Create a transaction to decrease validator staking amount",
+		Run:   createDecreaseStakeTx,
+	}
+
+	cmd.Flags().String("validator", "", "Validator address (required)")
+	cmd.Flags().String("amount", "", "Amount of JU to remove from stake (required)")
+
+	_ = cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("amount")
+
+	return cmd
+}
+
+// SetCommissionCmd creates command for setting validator commission rate
+func SetCommissionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "set-commission",
+		Short: "Set validator commission rate",
+		Long:  "Create a transaction to set validator commission rate in basis points (0-10000)",
+		Run:   createSetCommissionTx,
+	}
+
+	cmd.Flags().String("validator", "", "Validator address (required)")
+	cmd.Flags().String("rate", "", "New commission rate in basis points (0-10000, required)")
+
+	_ = cmd.MarkFlagRequired("validator")
+	_ = cmd.MarkFlagRequired("rate")
+
+	return cmd
+}
+
+// DeregisterValidatorCmd creates command for deregistering validator
+func DeregisterValidatorCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "deregister",
+		Short: "Deregister validator",
+		Long:  "Create a transaction to deregister as a validator",
+		Run:   createDeregisterValidatorTx,
+	}
+
+	cmd.Flags().String("validator", "", "Validator address (required)")
+
+	_ = cmd.MarkFlagRequired("validator")
+
+	return cmd
+}
+
+// ValidatorExitCmd creates command for validator complete exit
+func ValidatorExitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "exit",
+		Short: "Validator complete exit",
+		Long:  "Create a transaction for validator to completely exit the network",
+		Run:   createValidatorExitTx,
+	}
+
+	cmd.Flags().String("validator", "", "Validator address (required)")
+
+	_ = cmd.MarkFlagRequired("validator")
+
+	return cmd
+}
+
+// ClaimUnbondingRewardsCmd creates command for claiming unbonding rewards
+func ClaimUnbondingRewardsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "claim-unbonding-rewards",
+		Short: "Claim unbonding rewards",
+		Long:  "Create a transaction to claim rewards from unbonding period",
+		Run:   createClaimUnbondingRewardsTx,
+	}
+
+	cmd.Flags().String("claimer", "", "Claimer address (required)")
+	cmd.Flags().String("validator", "", "Validator address to claim from (required)")
+
+	_ = cmd.MarkFlagRequired("claimer")
+	_ = cmd.MarkFlagRequired("validator")
 
 	return cmd
 }
@@ -765,4 +847,318 @@ func queryTopValidators(cmd *cobra.Command, args []string) {
 	if limit > 0 && limit < len(validators) {
 		fmt.Printf("... and %d more validators\n", len(validators)-displayCount)
 	}
+}
+
+// Implementation of the missing commands
+
+func createIncreaseStakeTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorAddr, _ := cmd.Flags().GetString("validator")
+	amountStr, _ := cmd.Flags().GetString("amount")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(validatorAddr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	// Parse amount
+	amount, ok := new(big.Int).SetString(amountStr, 10)
+	if !ok {
+		PrintValidationError(fmt.Errorf("invalid amount: %s", amountStr))
+		return
+	}
+
+	// Convert to wei
+	weiAmount := new(big.Int).Mul(amount, big.NewInt(1e18))
+
+	PrintInfo("Creating increase stake transaction")
+
+	if err := innerCreateIncreaseStakeTx(validatorAddr, weiAmount, rpc); err != nil {
+		PrintError("Failed to create increase stake transaction", err)
+		return
+	}
+}
+
+func innerCreateIncreaseStakeTx(validatorAddr string, amount *big.Int, rpc string) error {
+	stakingAbi, err := abi.JSON(strings.NewReader(stakingABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse staking ABI: %w", err)
+	}
+
+	// Increase stake function name may vary depending on actual contract
+	abiData, err := stakingAbi.Pack("increaseStake")
+	if err != nil {
+		return fmt.Errorf("failed to pack increaseStake data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), amount, abiData, rpc, "increaseStake.json")
+	if err != nil {
+		return fmt.Errorf("failed to create increase stake transaction: %w", err)
+	}
+
+	PrintSuccess("Increase stake transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "increaseStake.json"))
+	PrintInfo(fmt.Sprintf("Amount: %s wei", amount.String()))
+	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
+	return nil
+}
+
+func createDecreaseStakeTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorAddr, _ := cmd.Flags().GetString("validator")
+	amountStr, _ := cmd.Flags().GetString("amount")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(validatorAddr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	// Parse amount
+	amount, ok := new(big.Int).SetString(amountStr, 10)
+	if !ok {
+		PrintValidationError(fmt.Errorf("invalid amount: %s", amountStr))
+		return
+	}
+
+	// Convert to wei
+	weiAmount := new(big.Int).Mul(amount, big.NewInt(1e18))
+
+	PrintInfo("Creating decrease stake transaction")
+
+	if err := innerCreateDecreaseStakeTx(validatorAddr, weiAmount, rpc); err != nil {
+		PrintError("Failed to create decrease stake transaction", err)
+		return
+	}
+}
+
+func innerCreateDecreaseStakeTx(validatorAddr string, amount *big.Int, rpc string) error {
+	stakingAbi, err := abi.JSON(strings.NewReader(stakingABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse staking ABI: %w", err)
+	}
+
+	// Decrease stake function name may vary depending on actual contract
+	abiData, err := stakingAbi.Pack("decreaseStake", amount)
+	if err != nil {
+		return fmt.Errorf("failed to pack decreaseStake data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), nil, abiData, rpc, "decreaseStake.json")
+	if err != nil {
+		return fmt.Errorf("failed to create decrease stake transaction: %w", err)
+	}
+
+	PrintSuccess("Decrease stake transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "decreaseStake.json"))
+	PrintInfo(fmt.Sprintf("Amount: %s wei", amount.String()))
+	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
+	return nil
+}
+
+func createSetCommissionTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorAddr, _ := cmd.Flags().GetString("validator")
+	rateStr, _ := cmd.Flags().GetString("rate")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(validatorAddr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	// Parse commission rate
+	rate, ok := new(big.Int).SetString(rateStr, 10)
+	if !ok {
+		PrintValidationError(fmt.Errorf("invalid commission rate: %s", rateStr))
+		return
+	}
+
+	// Validate commission rate (0-10000)
+	if rate.Cmp(big.NewInt(10000)) > 0 {
+		PrintValidationError(fmt.Errorf("commission rate must be between 0 and 10000 (100%%)"))
+		return
+	}
+
+	PrintInfo("Creating set commission rate transaction")
+
+	if err := innerCreateSetCommissionTx(validatorAddr, rate, rpc); err != nil {
+		PrintError("Failed to create set commission transaction", err)
+		return
+	}
+}
+
+func innerCreateSetCommissionTx(validatorAddr string, rate *big.Int, rpc string) error {
+	stakingAbi, err := abi.JSON(strings.NewReader(stakingABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse staking ABI: %w", err)
+	}
+
+	abiData, err := stakingAbi.Pack("setCommissionRate", rate)
+	if err != nil {
+		return fmt.Errorf("failed to pack setCommissionRate data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "setCommission.json")
+	if err != nil {
+		return fmt.Errorf("failed to create set commission transaction: %w", err)
+	}
+
+	PrintSuccess("Set commission rate transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "setCommission.json"))
+	PrintInfo(fmt.Sprintf("Commission rate: %s basis points", rate.String()))
+	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
+	return nil
+}
+
+func createDeregisterValidatorTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorAddr, _ := cmd.Flags().GetString("validator")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(validatorAddr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Creating deregister validator transaction")
+
+	if err := innerCreateDeregisterValidatorTx(validatorAddr, rpc); err != nil {
+		PrintError("Failed to create deregister validator transaction", err)
+		return
+	}
+}
+
+func innerCreateDeregisterValidatorTx(validatorAddr string, rpc string) error {
+	stakingAbi, err := abi.JSON(strings.NewReader(stakingABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse staking ABI: %w", err)
+	}
+
+	abiData, err := stakingAbi.Pack("deregisterValidator")
+	if err != nil {
+		return fmt.Errorf("failed to pack deregisterValidator data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "deregisterValidator.json")
+	if err != nil {
+		return fmt.Errorf("failed to create deregister validator transaction: %w", err)
+	}
+
+	PrintSuccess("Deregister validator transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "deregisterValidator.json"))
+	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
+	return nil
+}
+
+func createValidatorExitTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorAddr, _ := cmd.Flags().GetString("validator")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(validatorAddr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Creating validator exit transaction")
+
+	if err := innerCreateValidatorExitTx(validatorAddr, rpc); err != nil {
+		PrintError("Failed to create validator exit transaction", err)
+		return
+	}
+}
+
+func innerCreateValidatorExitTx(validatorAddr string, rpc string) error {
+	stakingAbi, err := abi.JSON(strings.NewReader(stakingABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse staking ABI: %w", err)
+	}
+
+	abiData, err := stakingAbi.Pack("validatorExit")
+	if err != nil {
+		return fmt.Errorf("failed to pack validatorExit data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "validatorExit.json")
+	if err != nil {
+		return fmt.Errorf("failed to create validator exit transaction: %w", err)
+	}
+
+	PrintSuccess("Validator exit transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "validatorExit.json"))
+	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
+	return nil
+}
+
+func createClaimUnbondingRewardsTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	claimer, _ := cmd.Flags().GetString("claimer")
+	validatorStr, _ := cmd.Flags().GetString("validator")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddresses(claimer, validatorStr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Creating claim unbonding rewards transaction")
+
+	if err := innerCreateClaimUnbondingRewardsTx(claimer, validatorStr, rpc); err != nil {
+		PrintError("Failed to create claim unbonding rewards transaction", err)
+		return
+	}
+}
+
+func innerCreateClaimUnbondingRewardsTx(claimer, validator string, rpc string) error {
+	stakingAbi, err := abi.JSON(strings.NewReader(stakingABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse staking ABI: %w", err)
+	}
+
+	abiData, err := stakingAbi.Pack("claimUnbondingRewards", common.HexToAddress(validator))
+	if err != nil {
+		return fmt.Errorf("failed to pack claimUnbondingRewards data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(claimer), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "claimUnbondingRewards.json")
+	if err != nil {
+		return fmt.Errorf("failed to create claim unbonding rewards transaction: %w", err)
+	}
+
+	PrintSuccess("Claim unbonding rewards transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "claimUnbondingRewards.json"))
+	PrintInfo(fmt.Sprintf("Validator: %s", validator))
+	return nil
 }

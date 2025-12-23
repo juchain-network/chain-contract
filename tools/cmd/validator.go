@@ -14,8 +14,8 @@ import (
 
 func ValidatorsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "miners",
-		Short: "list all valid miners",
+		Use:   "list",
+		Short: "list all validators",
 		Run:   listValidators,
 	}
 	return cmd
@@ -66,8 +66,8 @@ func listValidators(cmd *cobra.Command, _ []string) {
 
 func ValidatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "miner",
-		Short: "query one miner info",
+		Use:   "query",
+		Short: "query a validator by address",
 		Run:   queryValidator,
 	}
 	queryValidatorFlags(cmd)
@@ -145,7 +145,7 @@ func formatValidatorStatus(status uint64) string {
 func WithdrawProfitsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "withdraw_profits",
-		Short: "claim miner's reward",
+		Short: "claim validator's reward",
 		Run:   validatorClaim,
 	}
 	validatorClaimFlags(cmd)

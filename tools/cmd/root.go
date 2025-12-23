@@ -8,9 +8,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "congress-cli",
-	Short: "Juchain blockchain governance command line tool",
-	Long: `Congress CLI is a command line tool for Juchain blockchain governance.
+	Use:   "ju-cli",
+	Short: "JuChain blockchain governance command line tool",
+	Long: `JuChain CLI is a command line tool for JuChain blockchain governance.
 It provides comprehensive functionality for validator management and proposal voting.
 
 Features:
@@ -19,7 +19,7 @@ Features:
 - Query validator information and manage rewards
 - Sign and broadcast transactions to the blockchain network
 
-Use "congress-cli [command] --help" for more information about a command.`,
+Use "ju-cli [command] --help" for more information about a command.`,
 	PersistentPreRun: validateGlobalFlags,
 }
 
@@ -31,10 +31,11 @@ func validateGlobalFlags(cmd *cobra.Command, args []string) {
 
 	// Check if command requires RPC connection
 	requiresRPC := []string{
-		"miners", "miner", "create_proposal", "create_config_proposal",
-		"vote_proposal", "proposal", "proposals", "withdraw_profits",
+		"list", "query", "create", "config", "vote", "withdraw_profits",
 		"send", "register-validator", "edit-validator", "delegate", "undelegate",
 		"claim-rewards", "query-validator", "query-delegation", "list-top-validators",
+		"increase-stake", "decrease-stake", "set-commission", "deregister", "exit",
+		"claim-unbonding-rewards",
 	}
 	cmdName := cmd.Name()
 
@@ -54,7 +55,7 @@ func validateGlobalFlags(cmd *cobra.Command, args []string) {
 	}
 
 	// Check if command requires chain ID
-	requiresChainID := []string{"create_proposal", "create_config_proposal", "vote_proposal", "withdraw_profits", "sign"}
+	requiresChainID := []string{"create", "config", "vote", "withdraw_profits", "sign"}
 
 	for _, name := range requiresChainID {
 		if cmdName == name {
@@ -70,6 +71,16 @@ func validateGlobalFlags(cmd *cobra.Command, args []string) {
 			break
 		}
 	}
+}
+
+// GetRPCEndpoint gets RPC endpoint from global flag
+func GetRPCEndpoint(cmd *cobra.Command) string {
+	return rpcEndpoint
+}
+
+// GetChainID gets chain ID from global flag
+func GetChainID(cmd *cobra.Command) int64 {
+	return chainID
 }
 
 func Execute() {
@@ -110,7 +121,17 @@ var (
 	}
 )
 
+var (
+	// Global flags
+	rpcEndpoint string
+	chainID     int64
+)
+
 func init() {
+	// Add global flags to root command
+	rootCmd.PersistentFlags().StringVar(&rpcEndpoint, "rpc", "", "RPC endpoint URL")
+	rootCmd.PersistentFlags().Int64Var(&chainID, "chain-id", 0, "Chain ID")
+
 	// Group commands under parent commands
 
 	// Proposal commands
@@ -122,21 +143,33 @@ func init() {
 		QueryProposalsCmd(),
 	)
 
-	// Validator commands
+	// Validator commands - validator management
 	validatorCmd.AddCommand(
-		ValidatorsCmd(),
-		ValidatorCmd(),
+		ValidatorsCmd(),      // list validators
+		ValidatorCmd(),       // query validator info
+		QueryValidatorCmd(),  // query validator detailed info
+		EditValidatorCmd(),   // edit validator information
+		WithdrawProfitsCmd(), // withdraw validator profits
 	)
 
-	// Staking commands
+	// Staking commands - staking and delegation operations
 	stakingCmd.AddCommand(
-		WithdrawProfitsCmd(),
-		StakingCmd(),
+		RegisterValidatorCmd(),     // register validator staking
+		DelegateCmd(),              // delegate to validator
+		UndelegateCmd(),            // undelegate from validator
+		IncreaseStakeCmd(),         // increase validator stake
+		DecreaseStakeCmd(),         // decrease validator stake
+		SetCommissionCmd(),         // set validator commission rate
+		DeregisterValidatorCmd(),   // validator deregistration
+		ValidatorExitCmd(),         // validator complete exit
+		ClaimRewardsCmd(),          // claim staking rewards
+		ClaimUnbondingRewardsCmd(), // claim unbonding rewards
+		QueryDelegationCmd(),       // query delegation information
+		ListTopValidatorsCmd(),     // list top validators by stake
 	)
 
 	// Misc commands
 	miscCmd.AddCommand(
-		ConfigCmd(),
 		SignRawTxCmd(),
 		SendSignedTxCmd(),
 	)
