@@ -9,7 +9,7 @@ import (
 func SendSignedTxCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "send",
-		Short: "send signed tx from file to remote rpc endpoint",
+		Short: "Send signed transaction to remote RPC endpoint",
 		Run:   sendSignedTx,
 	}
 	sendSignedTxCmdFlags(cmd)
@@ -17,9 +17,7 @@ func SendSignedTxCmd() *cobra.Command {
 }
 
 func sendSignedTxCmdFlags(cmd *cobra.Command) {
-	// cmd.Flags().StringP("proposer", "p", "", "proposer addr (must be valid validator)")
-	// _ = cmd.MarkFlagRequired("proposer")
-	cmd.Flags().StringP("file", "f", "", "signed tx file")
+	cmd.Flags().StringP("file", "f", "", "Signed transaction file")
 	_ = cmd.MarkFlagRequired("file")
 }
 
