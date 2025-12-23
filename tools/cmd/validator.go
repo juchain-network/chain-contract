@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -113,9 +114,41 @@ func queryValidator(cmd *cobra.Command, _ []string) {
 }
 
 func queryOneInfo(addr string, instance *contracts.Validators) {
+	// Get basic validator info
 	feeAddr, status, aacIncoming, totalJailedHB, lastWithdrawProfitsBlock, err := instance.GetValidatorInfo(&bind.CallOpts{}, common.HexToAddress(addr))
 	if err != nil {
 		PrintError(fmt.Sprintf("Failed to get validator info for %s", addr), err)
+		return
+	}
+
+	// Get validator description
+	moniker, identity, website, email, details, err := instance.GetValidatorDescription(&bind.CallOpts{}, common.HexToAddress(addr))
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to get validator description for %s", addr), err)
+		return
+	}
+
+	// Get staking info from staking contract
+	client, err := ethclient.Dial(GetRPCEndpoint(nil))
+	if err != nil {
+		PrintError("Failed to connect to RPC for staking info", err)
+		return
+	}
+	defer client.Close()
+
+	// Connect to staking contract
+	stakingContractAddr := common.HexToAddress(StakingContractAddr)
+	stakingInstance, err := contracts.NewStaking(stakingContractAddr, client)
+	if err != nil {
+		PrintError("Failed to instantiate staking contract", err)
+		return
+	}
+
+	// Get validator staking information
+	validatorAddr := common.HexToAddress(addr)
+	validatorInfo, err := stakingInstance.GetValidatorInfo(&bind.CallOpts{}, validatorAddr)
+	if err != nil {
+		PrintError("Failed to get validator staking info", err)
 		return
 	}
 
@@ -123,10 +156,28 @@ func queryOneInfo(addr string, instance *contracts.Validators) {
 	fmt.Printf("Fee Address: %s\n", feeAddr.Hex())
 	// Print friendly status label instead of raw number
 	fmt.Printf("Status: %s\n", formatValidatorStatus(uint64(status)))
-	fmt.Printf("Accumulated Rewards: %s\n", aacIncoming.String())
+	fmt.Printf("Self Stake: %s\n", WeiToEther(validatorInfo.SelfStake))
+	fmt.Printf("Total Delegated: %s\n", WeiToEther(validatorInfo.TotalDelegated))
+	fmt.Printf("Commission Rate: %.2f%%\n", float64(validatorInfo.CommissionRate.Int64())/100) // Commission rate is in basis points (0-10000)
+	fmt.Printf("Block Rewards: %s\n", WeiToEther(aacIncoming))
 	// totalJailedHB represents total penalized (forfeited) rewards
-	fmt.Printf("Penalized Rewards: %s\n", totalJailedHB.String())
+	fmt.Printf("Penalized Rewards: %s\n", WeiToEther(totalJailedHB))
 	fmt.Printf("Last Withdraw Block: %s\n", lastWithdrawProfitsBlock.String())
+	fmt.Printf("Moniker: %s\n", moniker)
+	fmt.Printf("Identity: %s\n", identity)
+	fmt.Printf("Website: %s\n", website)
+	fmt.Printf("Email: %s\n", email)
+	fmt.Printf("Details: %s\n", details)
+	if validatorInfo.AccumulatedRewards.Cmp(big.NewInt(0)) > 0 {
+		fmt.Printf("Staking Rewards: %s\n", WeiToEther(validatorInfo.AccumulatedRewards))
+	}
+	if validatorInfo.IsJailed {
+		fmt.Printf("Jailed: Yes, until block %s\n", validatorInfo.JailUntilBlock.String())
+	}
+	if validatorInfo.TotalClaimedRewards.Cmp(big.NewInt(0)) > 0 {
+		fmt.Printf("Total Claimed Rewards: %s\n", WeiToEther(validatorInfo.TotalClaimedRewards))
+		fmt.Printf("Last Claim Block: %s\n", validatorInfo.LastClaimBlock.String())
+	}
 }
 
 // formatValidatorStatus converts numeric status to a concise, friendly label

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"regexp"
 	"strings"
@@ -142,4 +143,32 @@ func PrintWarning(message string) {
 // PrintError prints error message
 func PrintError(message string, err error) {
 	fmt.Printf("❌ %s: %v\n", message, err)
+}
+
+func EtherToWei(ether string) *big.Int {
+	parts := strings.Split(ether, ".")
+	if len(parts) == 1 {
+		result := new(big.Int)
+		result.SetString(parts[0], 10)
+		return result.Mul(result, big.NewInt(1e18))
+	}
+
+	integerPart := new(big.Int)
+	integerPart.SetString(parts[0], 10)
+	integerPart.Mul(integerPart, big.NewInt(1e18))
+
+	decimalPart := new(big.Int)
+	decimalPart.SetString(parts[1], 10)
+
+	zeros := 18 - len(parts[1])
+	if zeros > 0 {
+		decimalPart.Mul(decimalPart, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(zeros)), nil))
+	}
+
+	return integerPart.Add(integerPart, decimalPart)
+}
+
+func WeiToEther(wei *big.Int) string {
+	eth := new(big.Float).Quo(new(big.Float).SetInt(wei), big.NewFloat(1e18))
+	return eth.Text('f', 18)
 }
