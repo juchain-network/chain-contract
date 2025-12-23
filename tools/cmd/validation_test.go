@@ -144,7 +144,7 @@ func TestValidateConfigID(t *testing.T) {
 		},
 		{
 			name:     "invalid config ID too large",
-			configID: 5,
+			configID: 10,
 			wantErr:  true,
 		},
 	}
