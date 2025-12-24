@@ -9,8 +9,8 @@ import (
 
 // Version information constants
 const (
-	Version   = "1.2.1"
-	BuildDate = "2025-08-27"
+	Version   = "1.2.2"
+	BuildDate = "2025-12-23"
 )
 
 var versionCmd = &cobra.Command{

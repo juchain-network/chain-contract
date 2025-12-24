@@ -18,7 +18,7 @@ import (
 func CreateProposalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "create a proposal",
+		Short: "Create a proposal",
 		Run:   createProposalTx,
 	}
 	createProposalFlags(cmd)
@@ -26,11 +26,11 @@ func CreateProposalCmd() *cobra.Command {
 }
 
 func createProposalFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("proposer", "p", "", "proposer addr (must be valid validator)")
+	cmd.Flags().StringP("proposer", "p", "", "Proposer address (must be a valid validator)")
 	_ = cmd.MarkFlagRequired("proposer")
-	cmd.Flags().StringP("target", "t", "", "target addr (to be a validator)")
+	cmd.Flags().StringP("target", "t", "", "Target address (validator to add or remove)")
 	_ = cmd.MarkFlagRequired("target")
-	cmd.Flags().StringP("operation", "o", "", "operation add|remove")
+	cmd.Flags().StringP("operation", "o", "", "Operation type: add|remove")
 	_ = cmd.MarkFlagRequired("operation")
 }
 
@@ -93,7 +93,7 @@ func innerCreateProposal(proposer, target string, flag bool, rpc string) error {
 func CreateConfigProposalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "create a config proposal",
+		Short: "Create a config proposal",
 		Run:   createConfigProposalTx,
 	}
 	createConfigProposalFlags(cmd)
@@ -101,11 +101,11 @@ func CreateConfigProposalCmd() *cobra.Command {
 }
 
 func createConfigProposalFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("proposer", "p", "", "proposer addr (must be valid validator)")
+	cmd.Flags().StringP("proposer", "p", "", "Proposer address (must be a valid validator)")
 	_ = cmd.MarkFlagRequired("proposer")
-	cmd.Flags().Int64P("cid", "i", 0, "config id (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod, 5 blockReward, 6 unbondingPeriod, 7 validatorUnjailPeriod, 8 minValidatorStake, 9 maxValidators)")
+	cmd.Flags().Int64P("cid", "i", 0, "Config ID (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod, 5 blockReward, 6 unbondingPeriod, 7 validatorUnjailPeriod, 8 minValidatorStake, 9 maxValidators)")
 	_ = cmd.MarkFlagRequired("cid")
-	cmd.Flags().Int64P("value", "v", 0, "new config value")
+	cmd.Flags().Int64P("value", "v", 0, "New configuration value")
 	_ = cmd.MarkFlagRequired("value")
 }
 
@@ -169,7 +169,7 @@ func innerCreateConfigProposal(proposer string, cid, cvalue int64, rpc string) e
 func VoteProposalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vote",
-		Short: "vote on a proposal",
+		Short: "Vote on a proposal",
 		Run:   voteProposalTx,
 	}
 	voteProposalCmdFlags(cmd)
@@ -177,11 +177,11 @@ func VoteProposalCmd() *cobra.Command {
 }
 
 func voteProposalCmdFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("signer", "s", "", "signer addr (must be valid validator)")
+	cmd.Flags().StringP("signer", "s", "", "Signer address (must be a valid validator)")
 	_ = cmd.MarkFlagRequired("signer")
-	cmd.Flags().StringP("proposalId", "i", "", "proposal id (64-character hex string)")
+	cmd.Flags().StringP("proposalId", "i", "", "Proposal ID (64-character hex string)")
 	_ = cmd.MarkFlagRequired("proposalId")
-	cmd.Flags().BoolP("approve", "a", false, "approve this proposal (use -a for YES, omit for NO)")
+	cmd.Flags().BoolP("approve", "a", false, "Approve this proposal (use -a for YES, omit for NO)")
 }
 
 func voteProposalTx(cmd *cobra.Command, _ []string) {
@@ -246,7 +246,7 @@ func innerVoteProposal(signer, proposalId string, flag bool, rpc string) error {
 func QueryProposalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query",
-		Short: "query a proposal by ID",
+		Short: "Query a proposal by ID",
 		Run:   queryProposalTx,
 	}
 	queryProposalFlags(cmd)
@@ -254,7 +254,7 @@ func QueryProposalCmd() *cobra.Command {
 }
 
 func queryProposalFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("id", "i", "", "proposal ID (64-character hex string)")
+	cmd.Flags().StringP("id", "i", "", "Proposal ID (64-character hex string)")
 	_ = cmd.MarkFlagRequired("id")
 }
 
@@ -375,7 +375,7 @@ func getConfigIDName(cid int64) string {
 func QueryProposalsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "list all proposals",
+		Short: "List all proposals",
 		Run:   queryProposalsTx,
 	}
 	return cmd
