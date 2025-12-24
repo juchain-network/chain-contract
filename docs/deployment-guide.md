@@ -2,11 +2,11 @@
 
 ## 📋 Overview
 
-JuChain is a high-performance blockchain network built on the Ethereum technology stack, utilizing the Congress PoSA (Proof of Stake Authority) hybrid consensus mechanism. This document provides a complete deployment, configuration, and operations guide from scratch.
+JuChain is a high-performance blockchain network built on the Ethereum technology stack, utilizing the JuChain PoSA (Proof of Stake Authority) hybrid consensus mechanism. This document provides a complete deployment, configuration, and operations guide from scratch.
 
 ### Core Features
 
-- **🏛️ Congress PoSA**: Hybrid consensus mechanism combining PoA and PoS
+- **🏛️ JuChain PoSA**: Hybrid consensus mechanism combining PoA and PoS
 - **⚡ High Performance**: 1-second block intervals, high TPS processing capability
 - **🔒 Security**: Multi-layer validator management and punishment mechanisms
 - **🏗️ Modularization**: Separation of system contracts and business logic
@@ -20,12 +20,12 @@ JuChain is a high-performance blockchain network built on the Ethereum technolog
 ┌─────────────────────────────────────────────────────────────┐
 │                    JuChain Network                          │
 ├─────────────────┬─────────────────┬─────────────────────────┤
-│   Geth Client   │  Congress CLI   │    System Contracts     │
+│   Geth Client   │     Ju CLI      │    System Contracts     │
 │                 │                 │                         │
-│ • Mining        │ • Validator Mgmt│ • Validators (0xf000)   │
-│ • P2P Network   │ • Proposal Mgmt │ • Punish (0xf001)       │
-│ • JSON-RPC API  │ • Query Tools   │ • Proposal (0xf002)     │
-│ • External Sign │ • Auto Scripts  │ • Staking (0xf003)      │
+│ • Mining        │ • Validator Mgmt│ • Validators (0xf010)   │
+│ • P2P Network   │ • Proposal Mgmt │ • Punish (0xf011)       │
+│ • JSON-RPC API  │ • Query Tools   │ • Proposal (0xf012)     │
+│ • External Sign │ • Auto Scripts  │ • Staking (0xf013)      │
 └─────────────────┴─────────────────┴─────────────────────────┘
 ```
 
@@ -33,16 +33,16 @@ JuChain is a high-performance blockchain network built on the Ethereum technolog
 
 | Contract Name | Address | Function Description |
 |---------|------|----------|
-| **Validators** | `0x000000000000000000000000000000000000f000` | Validator status management, reward distribution |
-| **Punish** | `0x000000000000000000000000000000000000f001` | Validator punishment mechanism, imprisonment handling |
-| **Proposal** | `0x000000000000000000000000000000000000f002` | Governance proposals, voting management |
-| **Staking** | `0x000000000000000000000000000000000000f003` | Staking management, delegation mechanism |
+| **Validators** | `0x000000000000000000000000000000000000f010` | Validator status management, reward distribution |
+| **Punish** | `0x000000000000000000000000000000000000f011` | Validator punishment mechanism, imprisonment handling |
+| **Proposal** | `0x000000000000000000000000000000000000f012` | Governance proposals, voting management |
+| **Staking** | `0x000000000000000000000000000000000000f013` | Staking management, delegation mechanism |
 
 ### Network Parameters
 
 | Parameter | Mainnet | Testnet | Description |
 |------|------|--------|------|
-| **Chain ID** | 202599 | 202583 | Network identifier |
+| **Chain ID** | 210000 | 202599 | Network identifier |
 | **Block Time** | 1 second | 1 second | Average block interval |
 | **Epoch Length** | 86400 blocks | 86400 blocks | Validator rotation period |
 | **Max Validators** | 21 | 21 | Maximum active validator count |
@@ -50,7 +50,7 @@ JuChain is a high-performance blockchain network built on the Ethereum technolog
 
 ## ⚙️ System Configuration Parameters
 
-### Congress Consensus Parameters
+### JuChain Consensus Parameters
 
 Core consensus parameters configured in the genesis block:
 
@@ -60,7 +60,6 @@ Core consensus parameters configured in the genesis block:
     "congress": {
       "period": 1,        // Block interval (seconds)
       "epoch": 86400,       // Validator rotation period (blocks)
-      "rewards": "0x56BC75E2D63100000"  // Block reward (wei)
     }
   }
 }
@@ -72,14 +71,16 @@ These parameters are set at contract compilation time, and modifications require
 
 | Parameter Name | Default Value | Unit | Description |
 |----------|--------|------|------|
+| `proposalLastingPeriod` | 86400 | Seconds | Proposal validity period (24 hours) |
 | `punishThreshold` | 24 | Blocks | Continuous missed blocks triggering profit confiscation |
 | `removeThreshold` | 48 | Blocks | Continuous missed blocks triggering validator removal |
 | `decreaseRate` | 24 | % | Reduction rate during punishment |
 | `withdrawProfitPeriod` | 28800 | Blocks | Profit withdrawal interval (~24 hours) |
-| `proposalLastingPeriod` | 86400 | Seconds | Proposal validity period (24 hours) |
-| `increasePeriod` | 1y | Blocks | Issuance increase period |
-| `minStakeAmount` | 10000 | JU | Staking contract minimum staking amount |
-| `commissionRateBase` | 10000 | Basis Points | Commission rate base (100% = 10000) |
+| `blockReward` | 1000000000000000000 | Wei | Block reward amount |
+| `unbondingPeriod` | 201600 | Blocks | Unbonding period (7 days) |
+| `validatorUnjailPeriod` | 86400 | Seconds | Validator unjail period (24 hours) |
+| `minValidatorStake` | 10000000000000000000000 | Wei | Minimum validator staking amount (10000 JU) |
+| `maxValidators` | 21 | Count | Maximum number of active validators |
 
 > ⚠️ **Important Reminder**: Modifying contract parameters requires:
 >
@@ -99,7 +100,6 @@ JuChain introduces a dual-contract validator management mechanism:
     "maxCommissionRate": 5000,                    // Maximum commission rate 50%
     "unbondingPeriod": 201600,                    // Unbonding period 7 days (blocks)
     "maxValidators": 21,                          // Maximum active validator count
-    "slashingRate": 500                           // Malicious behavior penalty rate 5%
   }
 }
 ```
@@ -223,7 +223,7 @@ System contract bytecode needs to be generated through the following steps:
 
 ```bash
 # 1. Compile all contracts
-cd sys-contract
+cd chain-contract
 forge build
 
 # 2. Generate contract deployment code
@@ -294,9 +294,9 @@ ju-chain/
 │   ├── core/             # Core blockchain logic
 │   ├── eth/              # Ethereum protocol implementation
 │   └── Makefile          # Build scripts
-├── sys-contract/          # System contract source code
+├── chain-contract/          # System contract source code
 │   ├── contracts/        # Solidity contract source code
-│   ├── congress-cli/     # CLI tool source code
+│   ├── tools/     # CLI tool source code
 │   ├── scripts/          # Automation scripts
 │   ├── foundry.toml      # Foundry configuration
 │   └── package.json      # Node.js dependencies
@@ -326,7 +326,7 @@ ls -la build/bin/
 
 ```bash
 # 🏗️ Compile smart contracts
-cd sys-contract
+cd chain-contract
 
 # Install Node.js dependencies
 npm install
@@ -359,13 +359,13 @@ echo "✅ Genesis block file generation complete: genesis.json"
 #### 4. Compile Management Tools
 
 ```bash
-# 🛠️ Compile Congress CLI tool
-cd sys-contract/congress-cli
+# 🛠️ Compile Ju CLI tool
+cd chain-contract/tools
 make build
 
 # ✅ Test tool functionality
-./build/congress-cli --version
-./build/congress-cli help
+./build/ju-cli version
+./build/ju-cli --help
 
 # 🛠️ Compile automation scripts
 chmod +x *.sh
@@ -382,13 +382,13 @@ echo "=== Verifying Geth Client ==="
 ./chain/build/bin/geth version
 
 echo "=== Verifying System Contracts ==="
-forge test --root ./sys-contract
+forge test --root ./chain-contract
 
 echo "=== Verifying CLI Tool ==="
-./sys-contract/congress-cli/build/congress-cli --version
+./chain-contract/tools/build/ju-cli --version
 
 echo "=== Verifying Genesis Block ==="
-./chain/build/bin/geth --datadir temp_test init ./sys-contract/genesis.json
+./chain/build/bin/geth --datadir temp_test init ./chain-contract/genesis.json
 rm -rf temp_test
 
 echo "✅ All components verified successfully"
@@ -433,7 +433,7 @@ foundryup
 
 ```bash
 # Solution: Clean and reinstall
-cd sys-contract
+cd chain-contract
 rm -rf lib/
 forge install
 forge build --force
@@ -453,7 +453,7 @@ mkdir -p dev-node/data
 cd dev-node
 
 # Initialize genesis block
-../chain/build/bin/geth --datadir data init ../sys-contract/genesis.json
+../chain/build/bin/geth --datadir data init ../chain-contract/genesis.json
 
 # Start development node (auto-mining)
 ../chain/build/bin/geth \
@@ -480,7 +480,7 @@ for i in {1..5}; do
   mkdir -p validator$i/data
   
   # Initialize each node
-  ./chain/build/bin/geth --datadir validator$i/data init sys-contract/genesis.json
+  ./chain/build/bin/geth --datadir validator$i/data init chain-contract/genesis.json
   
   # Configure static node connections
   echo '[
@@ -734,7 +734,7 @@ graph LR
 
 ```bash
 # 🤖 Use one-click addition script (recommended)
-cd sys-contract/congress-cli
+cd chain-contract/tools
 ./add_validator6.sh
 
 # This script automatically performs the following steps:
@@ -764,23 +764,22 @@ echo "Please ensure account balance >= 10000 JU"
 # 📝 Created by existing validator
 PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
-./build/congress-cli create_proposal \
+./build/ju-cli proposal create \
   -p $PROPOSER_ADDR \
   -t $NEW_VALIDATOR_ADDR \
   -o add \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 # Sign transaction
-./build/congress-cli sign \
+./build/ju-cli misc sign \
   -f createProposal.json \
   -k proposer.key \
-  -p password.txt \
-  --chainId 202599
+  -p password.txt
 
 # Send transaction
-./build/congress-cli send \
+./build/ju-cli misc send \
   -f createProposal_signed.json \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 echo "✅ Proposal created, Proposal ID: [Check transaction receipt]"
 ```
@@ -792,21 +791,21 @@ echo "✅ Proposal created, Proposal ID: [Check transaction receipt]"
 PROPOSAL_ID="0xProposal ID"
 
 # Validator 1 vote
-./build/congress-cli vote_proposal \
+./build/ju-cli proposal vote \
   -s "0x970e8128ab834e3eac664312d6e30df9e93cb357" \
   -i $PROPOSAL_ID \
-  -a true \
-  --rpc_laddr http://localhost:8545
+  -a \
+  -r http://localhost:8545
 
 # Validator 2 vote
-./build/congress-cli vote_proposal \
+./build/ju-cli vote_proposal \
   -s "0x6e30df9e93cb3578ec64c67c554dddd8d1da2c25" \
   -i $PROPOSAL_ID \
   -a true \
   --rpc_laddr http://localhost:8545
 
 # Validator 3 vote (majority reached)
-./build/congress-cli vote_proposal \
+./build/ju-cli vote_proposal \
   -s "0x3858ffca201b0a7d75fd23bb302c12332c5e4000" \
   -i $PROPOSAL_ID \
   -a true \
@@ -819,11 +818,11 @@ echo "✅ Proposal voting completed, awaiting execution"
 
 ```bash
 # 💰 Register validator in Staking contract
-./build/congress-cli staking register \
-  --from $NEW_VALIDATOR_ADDR \
-  --stake 10000 \
-  --commission 500 \
-  --rpc_laddr http://localhost:8545
+./build/ju-cli staking validator-register \
+  -p $NEW_VALIDATOR_ADDR \
+  -s 10000 \
+  -c 500 \
+  -r http://localhost:8545
 
 echo "✅ Validator registered in Staking contract"
 ```
@@ -852,41 +851,41 @@ echo "✅ New validator node started"
 
 ```bash
 # 📊 Query all active validators
-./build/congress-cli miners --rpc_laddr http://localhost:8545
+./build/ju-cli validator list -r http://localhost:8545
 
 # 👤 Query specific validator details
-./build/congress-cli miner \
+./build/ju-cli validator query \
   -a 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 # 💰 Query Staking contract information
-./build/congress-cli staking list-top-validators \
-  --rpc_laddr http://localhost:8545
+./build/ju-cli staking list-top-validators \
+  -r http://localhost:8545
 
 # 🏆 Query specific validator staking information
-./build/congress-cli staking query-validator \
+./build/ju-cli staking query-validator \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 ```
 
 #### Advanced Monitoring Queries
 
 ```bash
 # 📈 Validator performance statistics
-./build/congress-cli validator-stats \
+./build/ju-cli validator stats \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --blocks 1000 \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 # ⚠️ Check validator punishment status
-./build/congress-cli punishment-status \
+./build/ju-cli validator punishment-status \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 # 💎 Query validator rewards
-./build/congress-cli validator-rewards \
+./build/ju-cli staking validator-rewards \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 ```
 
 ### Validator Reward Management
@@ -898,25 +897,24 @@ echo "✅ New validator node started"
 VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
 # Check withdrawable rewards
-./build/congress-cli check-withdrawable \
+./build/ju-cli validator check-withdrawable \
   -a $VALIDATOR_ADDR \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 # Create withdrawal transaction
-./build/congress-cli withdraw-profits \
+./build/ju-cli validator withdraw-profits \
   -a $VALIDATOR_ADDR \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 # Sign and send
-./build/congress-cli sign \
+./build/ju-cli misc sign \
   -f withdrawProfits.json \
   -k validator.key \
-  -p password.txt \
-  --chainId 202599
+  -p password.txt
 
-./build/congress-cli send \
+./build/ju-cli misc send \
   -f withdrawProfits_signed.json \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 echo "✅ Reward withdrawal transaction sent"
 ```
@@ -938,19 +936,20 @@ echo "✅ Reward withdrawal transaction sent"
 VALIDATOR_ADDR="0xAddress of validator to exit"
 
 # 1. Create removal proposal
-./build/congress-cli create_proposal \
+./build/ju-cli proposal create \
   -p $VALIDATOR_ADDR \
   -t $VALIDATOR_ADDR \
   -o remove \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 # 2. Collect votes (requires support from other validators)
 echo "Waiting for other validators to vote in support of removal proposal"
 
 # 3. Unstake in Staking contract
-./build/congress-cli staking unstake \
-  --from $VALIDATOR_ADDR \
-  --rpc_laddr http://localhost:8545
+./build/ju-cli staking undelegate \
+  -d $VALIDATOR_ADDR \
+  -v $VALIDATOR_ADDR \
+  -r http://localhost:8545
 
 echo "✅ Validator exit process initiated"
 ```
@@ -975,11 +974,11 @@ Validators will be automatically penalized when the following situations occur:
 PARAM_INDEX=0      # 0: proposalLastingPeriod
 NEW_VALUE=172800   # 48 hours
 
-./build/congress-cli create-config-proposal \
+./build/ju-cli proposal create-config \
   -p $PROPOSER_ADDR \
   -i $PARAM_INDEX \
   -v $NEW_VALUE \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 echo "✅ System parameter modification proposal created"
 ```
@@ -988,11 +987,16 @@ echo "✅ System parameter modification proposal created"
 
 | Parameter Index | Parameter Name | Description | Default Value |
 |----------|----------|------|--------|
-| 0 | proposalLastingPeriod | Proposal validity period | 86400 seconds (24 hours) |
-| 1 | punishThreshold | Punishment threshold | 24 blocks |
-| 2 | removeThreshold | Removal threshold | 48 blocks |
-| 3 | decreaseRate | Reduction rate | 24% |
+| 0 | proposalLastingPeriod | Proposal validity period (1 hour - 30 days) | 86400 seconds (24 hours) |
+| 1 | punishThreshold | Continuous missed blocks triggering profit confiscation | 24 blocks |
+| 2 | removeThreshold | Continuous missed blocks triggering validator removal | 48 blocks |
+| 3 | decreaseRate | Reduction rate during punishment | 24% |
 | 4 | withdrawProfitPeriod | Profit withdrawal interval | 28800 blocks (~24 hours) |
+| 5 | blockReward | Block reward amount | 1000000000000000000 wei (1 JU) |
+| 6 | unbondingPeriod | Unbonding period | 201600 blocks (7 days) |
+| 7 | validatorUnjailPeriod | Validator unjail period | 86400 seconds (24 hours) |
+| 8 | minValidatorStake | Minimum validator staking amount | 10000000000000000000000 wei (10000 JU) |
+| 9 | maxValidators | Maximum number of active validators | 21 |
 
 ## 🔧 System Configuration Management
 
@@ -1004,33 +1008,37 @@ Key system parameters can be adjusted through governance proposals without resta
 
 ```bash
 # 📝 Configuration item parameter explanation
-echo "0: proposalLastingPeriod (Proposal validity period, seconds)"
-echo "1: punishThreshold (Punishment threshold, blocks)"  
-echo "2: removeThreshold (Removal threshold, blocks)"
-echo "3: decreaseRate (Reduction rate, percentage)"
+echo "0: proposalLastingPeriod (Proposal validity period, 1 hour - 30 days)"
+echo "1: punishThreshold (Continuous missed blocks triggering profit confiscation)  "
+echo "2: removeThreshold (Continuous missed blocks triggering validator removal)"
+echo "3: decreaseRate (Reduction rate during punishment, %)"
 echo "4: withdrawProfitPeriod (Profit withdrawal interval, blocks)"
+echo "5: blockReward (Block reward amount, wei)"
+echo "6: unbondingPeriod (Unbonding period, blocks)"
+echo "7: validatorUnjailPeriod (Validator unjail period, seconds)"
+echo "8: minValidatorStake (Minimum validator staking amount, wei)"
+echo "9: maxValidators (Maximum number of active validators)"
 
 # Example: Modify proposal validity period to 48 hours
 PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 PARAM_INDEX=0
 NEW_VALUE=172800  # 48 hours
 
-./build/congress-cli create-config-proposal \
+./build/ju-cli create-config-proposal \
   -p $PROPOSER_ADDR \
   -i $PARAM_INDEX \
   -v $NEW_VALUE \
   --rpc_laddr http://localhost:8545
 
 # Sign and send configuration proposal
-./build/congress-cli sign \
+./build/ju-cli misc sign \
   -f createConfigProposal.json \
   -k proposer.key \
-  -p password.txt \
-  --chainId 202599
+  -p password.txt
 
-./build/congress-cli send \
+./build/ju-cli misc send \
   -f createConfigProposal_signed.json \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 echo "✅ Configuration update proposal created"
 ```
@@ -1039,7 +1047,7 @@ echo "✅ Configuration update proposal created"
 
 ```bash
 # 📊 Query all system parameters
-./build/congress-cli get-params --rpc_laddr http://localhost:8545
+./build/ju-cli proposal get-params -r http://localhost:8545
 
 # 🔍 Query specific parameter
 curl -X POST http://localhost:8545 \
@@ -1063,25 +1071,26 @@ curl -X POST http://localhost:8545 \
 # 💰 Check withdrawable rewards
 VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
-./build/congress-cli check-rewards \
-  -a $VALIDATOR_ADDR \
-  --rpc_laddr http://localhost:8545
+./build/ju-cli staking check-rewards \
+  -c $VALIDATOR_ADDR \
+  -v $VALIDATOR_ADDR \
+  -r http://localhost:8545
 
 # Create reward withdrawal transaction
-./build/congress-cli withdraw-rewards \
-  -a $VALIDATOR_ADDR \
-  --rpc_laddr http://localhost:8545
+./build/ju-cli staking claim-rewards \
+  -c $VALIDATOR_ADDR \
+  -v $VALIDATOR_ADDR \
+  -r http://localhost:8545
 
 # Sign and send
-./build/congress-cli sign \
+./build/ju-cli misc sign \
   -f withdrawRewards.json \
   -k validator.key \
-  -p password.txt \
-  --chainId 202599
+  -p password.txt
 
-./build/congress-cli send \
+./build/ju-cli misc send \
   -f withdrawRewards_signed.json \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 ```
 
 #### Withdrawal Restrictions and Rules
@@ -1125,18 +1134,18 @@ curl -X POST http://localhost:8545 \
 
 ```bash
 # 👥 Active validator list
-./build/congress-cli validators --rpc_laddr http://localhost:8545
+./build/ju-cli validator list -r http://localhost:8545
 
 # 📈 Validator performance statistics
-./build/congress-cli validator-performance \
+./build/ju-cli validator performance \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --blocks 1000 \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 
 # ⚠️ Punishment and imprisonment status
-./build/congress-cli punishment-history \
+./build/ju-cli validator punishment-history \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --rpc_laddr http://localhost:8545
+  -r http://localhost:8545
 ```
 
 ### Event Listening and Alerts
@@ -1231,7 +1240,7 @@ send_alert() {
 
 # Check validator status
 check_validators() {
-    local validators=$(./build/congress-cli validators --rpc_laddr $RPC_URL | grep "0x" | wc -l)
+    local validators=$(./build/ju-cli validators --rpc_laddr $RPC_URL | grep "0x" | wc -l)
     echo "$(date): Active validator count:$validators" | tee -a $LOG_FILE
     
     if [ $validators -lt 3 ]; then
@@ -1371,7 +1380,7 @@ sudo ufw allow 8545
 
 ```bash
 # 1. Check validator status
-./build/congress-cli validator-status \
+./build/ju-cli validator-status \
   --address [validator address] \
   --rpc_laddr http://localhost:8545
 
@@ -1384,7 +1393,7 @@ eth.mining
 miner.mining
 
 # 4. Check if validator is in active list
-./build/congress-cli validators --rpc_laddr http://localhost:8545
+./build/ju-cli validators --rpc_laddr http://localhost:8545
 ```
 
 **Solutions**:
@@ -1398,7 +1407,7 @@ miner.setEtherbase("[validator address]")
 miner.start(1)
 
 # Check if punished
-./build/congress-cli punishment-status \
+./build/ju-cli punishment-status \
   --address [validator address] \
   --rpc_laddr http://localhost:8545
 ```
@@ -1422,7 +1431,7 @@ miner.start(1)
 
 # 4. Duplicate voting
 # Solution: Check if already voted
-./build/congress-cli proposal-votes \
+./build/ju-cli proposal-votes \
   --proposal-id [proposal ID] \
   --rpc_laddr http://localhost:8545
 ```
@@ -1436,7 +1445,7 @@ Recovery steps when network becomes stagnant:
 ```bash
 # 1. Collect network status information
 echo "=== Network Diagnosis ==="
-./build/congress-cli network-status --rpc_laddr http://localhost:8545
+./build/ju-cli network-status --rpc_laddr http://localhost:8545
 
 # 2. Restart all validator nodes
 echo "=== Restarting Validators ==="
@@ -1647,14 +1656,14 @@ JuChain blockchain network achieves high performance and high security through t
 
 ### 🏛️ Technical Architecture Advantages
 
-1. **Congress PoSA Consensus**: Combines advantages of PoA and PoS to achieve fast block production and economic security
+1. **JuChain PoSA Consensus**: Combines advantages of PoA and PoS to achieve fast block production and economic security
 2. **Dual-contract System**: Clear division of labor between Validators and Staking contracts with complete functionality
 3. **Governance Mechanism**: Comprehensive proposal voting system supporting dynamic parameter adjustment
 4. **Punishment Mechanism**: Multi-level punishment ensures honest validator behavior
 
 ### 🛠️ Complete Operations Tools
 
-1. **Congress CLI**: Feature-rich command-line management tool
+1. **JuChain CLI**: Feature-rich command-line management tool
 2. **Automation Scripts**: One-click deployment and validator management
 3. **Monitoring System**: Real-time network status and performance monitoring
 4. **Fault Recovery**: Complete fault diagnosis and recovery procedures
@@ -1682,7 +1691,7 @@ With this guide, you should be able to:
 
 ### 📖 Related Resources
 
-- [Congress CLI Usage Guide](./congress-cli-guide.md)
+- [Ju CLI Usage Guide](./ju-cli-guide.md)
 - [Clef External Signer Guide](./clef-external-signer-guide.md)
 - [System Contract API Documentation](../contracts/README.md)
 - [Foundry Development Framework](https://book.getfoundry.sh/)

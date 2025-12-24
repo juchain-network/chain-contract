@@ -214,6 +214,22 @@ func WithdrawUnbondedCmd() *cobra.Command {
 	return cmd
 }
 
+// UnjailValidatorCmd creates command for unjailing a validator
+func UnjailValidatorCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validator-unjail",
+		Short: "Unjail a validator",
+		Long:  "Create a transaction to unjail a validator that has been jailed",
+		Run:   createUnjailValidatorTx,
+	}
+
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
+
+	_ = cmd.MarkFlagRequired("validator")
+
+	return cmd
+}
+
 // Implementation functions
 
 func createRegisterValidatorTx(cmd *cobra.Command, args []string) {
@@ -535,6 +551,53 @@ func queryDelegationInfo(cmd *cobra.Command, args []string) {
 }
 
 // Implementation of the missing commands
+
+// Unjail validator implementation
+func createUnjailValidatorTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorStr, _ := cmd.Flags().GetString("validator")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(validatorStr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Creating unjail validator transaction")
+
+	if err := innerCreateUnjailValidatorTx(validatorStr, rpc); err != nil {
+		PrintError("Failed to create unjail validator transaction", err)
+		return
+	}
+}
+
+func innerCreateUnjailValidatorTx(validator string, rpc string) error {
+	stakingAbi, err := abi.JSON(strings.NewReader(contracts.StakingABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse staking ABI: %w", err)
+	}
+
+	abiData, err := stakingAbi.Pack("unjailValidator", common.HexToAddress(validator))
+	if err != nil {
+		return fmt.Errorf("failed to pack unjailValidator data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validator), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, UnjailValidatorFile)
+	if err != nil {
+		return fmt.Errorf("failed to create unjail validator transaction: %w", err)
+	}
+
+	PrintSuccess("Unjail validator transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", UnjailValidatorFile))
+	PrintInfo(fmt.Sprintf("Validator: %s", validator))
+	PrintWarning("Note: Validator must have passed a proposal before unjailing")
+	return nil
+}
 
 func createIncreaseStakeTx(cmd *cobra.Command, args []string) {
 	rpc := GetRPCEndpoint(cmd)

@@ -13,7 +13,7 @@ This repository contains the system contracts for the Ju blockchain's JPoSA (JPo
 
 ```
 chain-contract/
-├── congress-cli/        # Congress JPoSA management CLI tool
+├── tools/               # Congress JPoSA management CLI tool
 ├── contracts/           # Solidity source code
 ├── script/              # Foundry deployment scripts
 ├── test/                # Foundry test suites
@@ -33,7 +33,7 @@ chain-contract/
 - [**JPoSA Whitepaper (Chinese)**](docs/posa-whitepaper-zh.md) - Chinese version of JPoSA consensus mechanism whitepaper
 - [**JPoSA Technical Specification**](docs/posa-tech-spec.md) - Detailed technical specification of JPoSA consensus mechanism
 - [**Deployment Guide**](docs/deployment-guide.md) - Complete deployment and configuration guide
-- [**Congress CLI Guide**](docs/congress-cli-guide.md) - Complete guide for Congress JPoSA management
+- [**Congress CLI Guide**](docs/ju-cli-guide.md) - Complete guide for Congress JPoSA management
 
 
 
@@ -105,25 +105,6 @@ forge build
 npm run init-genesis
 ```
 
-### **Congress CLI Tools**
-
-Command-line utilities for Congress JPoSA consensus management.
-
-```bash
-# Build CLI tools
-cd congress-cli
-make build
-
-# View available commands
-./build/congress-cli help
-
-# Query miners
-./build/congress-cli miners
-
-# Create proposal
-./build/congress-cli create_proposal -p PROPOSER_ADDR -t TARGET_ADDR -o add
-```
-
 ## 🧪 Testing
 
 ### **Foundry Tests** (Primary)
@@ -153,22 +134,22 @@ forge test --match-contract Punish
 
 ```bash
 # Query all active validators
-./build/congress-cli miners
+./build/ju-cli validator list
 # Query specific validator
-./build/congress-cli miner -a VALIDATOR_ADDRESS
+./build/ju-cli validator -a VALIDATOR_ADDRESS
 ```
 
 ### **Proposal Management**
 
 ```bash
 # Create proposal to add new validator
-./build/congress-cli create_proposal -p PROPOSER_ADDR -t NEW_VALIDATOR_ADDR -o add
+./build/ju-cli proposal create -p PROPOSER_ADDR -t NEW_VALIDATOR_ADDR -o add
 
 # Sign transaction
-./build/congress-cli sign -f createProposal.json -k keyfile -p passwordfile
+./build/ju-cli misc sign -f createProposal.json -w keyfile -p passwordfile
 
 # Send transaction
-./build/congress-cli send -f createProposal_signed.json
+./build/ju-cli misc send -f createProposal_signed.json
 ```
 
 
@@ -176,11 +157,11 @@ forge test --match-contract Punish
 
 ```bash
 # Vote on proposal
-./build/congress-cli vote_proposal -s VOTER_ADDR -i PROPOSAL_ID -a true
+./build/ju-cli proposal vote -s VOTER_ADDR -i PROPOSAL_ID -a true
 
 # Sign and send vote
-./build/congress-cli sign -f voteProposal.json -k keyfile -p passwordfile
-./build/congress-cli send -f voteProposal_signed.json
+./build/ju-cli misc sign -f voteProposal.json -w keyfile -p passwordfile
+./build/ju-cli misc send -f voteProposal_signed.json
 ```
 
 
@@ -212,8 +193,8 @@ npm run init-genesis
 npm run build-and-extract
 
 # 7. Build Congress CLI tools
-cd congress-cli && make build
+cd tools && make build
 
 # 8. Test CLI tools
-./build/congress-cli help
+./build/ju-cli help
 ```

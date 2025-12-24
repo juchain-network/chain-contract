@@ -58,6 +58,11 @@ contract Params {
         _;
     }
 
+    modifier onlyPunishOrValidatorsContract() {
+        _onlyPunishOrValidatorsContract();
+        _;
+    }
+
     function _onlyMiner() internal view {
         
         require(
@@ -104,5 +109,10 @@ contract Params {
         );
     }
 
-    
+    function _onlyPunishOrValidatorsContract() internal view {
+        require(
+            msg.sender == PUNISH_CONTRACT_ADDR || msg.sender == VALIDATOR_CONTRACT_ADDR,
+            "Only punish or validators contract can call this function"
+        );
+    }
 }
