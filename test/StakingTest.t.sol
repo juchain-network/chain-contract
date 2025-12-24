@@ -143,7 +143,7 @@ contract StakingTest is Test {
     function test_RevertWhen_InvalidCommissionRate() public {
         _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
-        vm.expectRevert("Invalid commission rate");
+        vm.expectRevert("Commission rate exceeds maximum allowed");
         Staking(STAKING).registerValidator{value: MIN_STAKE}(10001); // > 100%
     }
 
@@ -623,7 +623,7 @@ contract StakingTest is Test {
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Try to set invalid commission rate
-        vm.expectRevert("Invalid commission rate");
+        vm.expectRevert("Commission rate exceeds maximum allowed");
         Staking(STAKING).updateCommissionRate(11000); // > 100%
         vm.stopPrank();
     }
@@ -812,12 +812,12 @@ contract StakingTest is Test {
     }
 
     function testClaimRewards_WithZeroCommission() public {
-        // Register a validator with 0% commission
+        // Register a validator with valid non-zero commission (minimum allowed)
         _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
-        Staking(STAKING).registerValidator{value: MIN_STAKE}(0);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(1); // 0.01% commission
         
-        // Try to claim rewards with zero commission
+        // Try to claim rewards
         Staking(STAKING).claimRewards(VALIDATOR1);
         vm.stopPrank();
     }
@@ -1436,7 +1436,7 @@ contract StakingTest is Test {
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Try to update commission rate to invalid value (should revert)
-        vm.expectRevert("Invalid commission rate");
+        vm.expectRevert("Commission rate exceeds maximum allowed");
         Staking(STAKING).updateCommissionRate(10001); // COMMISSION_RATE_BASE is 10000
         vm.stopPrank();
     }
@@ -1709,8 +1709,8 @@ contract StakingTest is Test {
         vm.expectRevert("No validators provided");
         staking.initializeWithValidators(VALIDATORS, PROPOSAL, emptyValidators, COMMISSION_RATE);
         
-        // Test with invalid commission rate
-        vm.expectRevert("Invalid commission rate");
+        // Test with invalid commission rate (exceeds maximum)
+        vm.expectRevert("Commission rate exceeds maximum allowed");
         staking.initializeWithValidators(VALIDATORS, PROPOSAL, validators, 10001); // COMMISSION_RATE_BASE is 10000
     }
 
