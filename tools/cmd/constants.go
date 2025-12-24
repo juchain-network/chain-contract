@@ -43,6 +43,7 @@ const (
 	DelegateFile          = "delegate.json"
 	UndelegateFile        = "undelegate.json"
 	ClaimRewardsFile      = "claimRewards.json"
+	UnjailValidatorFile   = "unjailValidator.json"
 )
 
 // Status code constants

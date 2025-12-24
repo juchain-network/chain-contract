@@ -267,6 +267,9 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     function tryRemoveValidator(address val) external onlyProposalContract nonReentrant {
+        // Jail validator first to ensure no more rewards are distributed
+        staking.jailValidator(val, proposal.validatorUnjailPeriod());
+        // Remove validator from active set
         removeValidatorInternal(val);
     }
 

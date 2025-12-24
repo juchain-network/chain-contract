@@ -134,7 +134,8 @@ contract Staking is Params, ReentrancyGuard {
         require(_validators != address(0), "Invalid validators address");
         require(_proposal != address(0), "Invalid proposal address");
         require(initialValidators.length > 0, "No validators provided");
-        require(commissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
+        require(commissionRate > 0, "Commission rate must be greater than 0");
+        require(commissionRate < COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
         
         validatorsContract = IValidators(_validators);
         proposalContract = IProposal(_proposal);
@@ -175,7 +176,8 @@ contract Staking is Params, ReentrancyGuard {
      */
     function registerValidator(uint256 commissionRate) external payable onlyInitialized nonReentrant {
         require(msg.value >= proposalContract.minValidatorStake(), "Insufficient self-stake");
-        require(commissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
+        require(commissionRate > 0, "Commission rate must be greater than 0");
+        require(commissionRate <= COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
         require(validatorStakes[msg.sender].selfStake == 0, "Already registered");
         require(proposalContract.pass(msg.sender), "Must pass proposal first");
         // Check if proposal is still valid (within 7 days)
@@ -222,7 +224,8 @@ contract Staking is Params, ReentrancyGuard {
      * @param newCommissionRate New commission rate (0-10000)
      */
     function updateCommissionRate(uint256 newCommissionRate) external onlyValidValidator(msg.sender) {
-        require(newCommissionRate <= COMMISSION_RATE_BASE, "Invalid commission rate");
+        require(newCommissionRate > 0, "Commission rate must be greater than 0");
+        require(newCommissionRate < COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
         // Check if jailed (jailed validators must unjail first before updating commission)
         require(!validatorStakes[msg.sender].isJailed, "Validator is jailed, must unjail first");
         
@@ -277,7 +280,7 @@ contract Staking is Params, ReentrancyGuard {
         // Mark validator as jailed to ensure exclusion from currentValidatorSet at next epoch
         // This is a technical mechanism to ensure smooth exit, not a punishment
         stake.isJailed = true;
-        stake.jailUntilBlock = block.number + 86400;
+        stake.jailUntilBlock = block.number + proposalContract.validatorUnjailPeriod();
         emit ValidatorJailed(msg.sender, stake.jailUntilBlock);
         
         // Remove from highestValidatorsSet and set pass = false
@@ -543,18 +546,13 @@ contract Staking is Params, ReentrancyGuard {
     }
 
     /**
-     * @dev Jail a validator for misbehavior
+     * @dev Jail a validator for misbehavior (called by Punish or Validators contract)
      * @param validator Validator address to jail
      * @param jailBlocks Number of blocks to jail for
-     */
-    /**
-     * @dev Jail a validator for misbehavior (called by Punish contract)
-     * @param validator Validator address to jail
-     * @param jailBlocks Number of blocks to jail for
-     * @notice Only Punish contract can call this function
+     * @notice Only Punish or Validators contract can call this function
      * @notice Validators should use resignValidator() to voluntarily resign from validator role
      */
-    function jailValidator(address validator, uint256 jailBlocks) external onlyPunishContract {
+    function jailValidator(address validator, uint256 jailBlocks) external onlyPunishOrValidatorsContract {
         require(validator != address(0), "Invalid validator address");
         require(jailBlocks > 0, "Jail blocks must be positive");
         validatorStakes[validator].isJailed = true;
