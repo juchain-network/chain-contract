@@ -161,7 +161,7 @@ contract Proposal is Params {
 
     function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bool) {
         // Validate config parameters before creating proposal
-        validateConfig(cid, newValue);
+        require(validateConfig(cid, newValue), "Config validation failed");
         
         // forge-lint: disable-next-line(asm-keccak256)
         bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, block.timestamp));

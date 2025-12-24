@@ -164,7 +164,7 @@ contract Validators is Params, ReentrancyGuard {
         
         // Clean punish record if validator was previously jailed
         // This clears any missed blocks counter from previous punishments
-        punish.cleanPunishRecord(validator);
+        require(punish.cleanPunishRecord(validator), "Punish record clean failed");
         
         // Note: Status is now managed by Staking contract, we don't set it here
 
@@ -288,7 +288,7 @@ contract Validators is Params, ReentrancyGuard {
 
             // call proposal contract to set unpass.
             // you have to repropose to be a validator.
-            proposal.setUnpassed(val);
+            require(proposal.setUnpassed(val), "Validator unpass set failed");
             emit LogRemoveValidator(val, hb, block.timestamp);
         }
     }
@@ -551,7 +551,8 @@ contract Validators is Params, ReentrancyGuard {
         }
         
         // Set unpassed so validator must repropose to regain validator status
-        proposal.setUnpassed(validator);
+        bool success = proposal.setUnpassed(validator);
+        require(success, "setUnpassed failed");
         
         // Note: We do NOT remove transaction fee income (aacIncoming) here
         // This is different from removeValidatorInternal() which calls tryRemoveValidatorIncoming()
