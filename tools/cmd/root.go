@@ -136,6 +136,7 @@ func init() {
 		SetCommissionCmd(),       // set validator commission rate
 		DeregisterValidatorCmd(), // validator deregistration
 		ValidatorExitCmd(),       // validator complete exit
+		UnjailValidatorCmd(),     // unjail a validator
 		ClaimRewardsCmd(),        // claim staking rewards
 		WithdrawUnbondedCmd(),    // withdraw unbonded stakes
 		QueryDelegationCmd(),     // query delegation information
