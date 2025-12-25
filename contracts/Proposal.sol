@@ -147,7 +147,7 @@ contract Proposal is Params, ReentrancyGuard {
         require(bytes(details).length <= 3000, 'Details too long');
         require(proposals[id].createTime == 0, 'Proposal already exists');
 
-        ProposalInfo memory proposal;
+        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
         proposal.proposer = msg.sender;
         proposal.dst = dst;
         proposal.flag = flag;
@@ -167,7 +167,7 @@ contract Proposal is Params, ReentrancyGuard {
         // forge-lint: disable-next-line(asm-keccak256)
         bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, block.timestamp));
 
-        ProposalInfo memory proposal;
+        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
         proposal.proposer = msg.sender;
         proposal.cid = cid;
         proposal.newValue = newValue;
@@ -248,7 +248,7 @@ contract Proposal is Params, ReentrancyGuard {
      * @param value New configuration value
      */
     function validateConfig(uint256 cid, uint256 value) internal pure returns (bool) {
-        require(cid >= 0 && cid <= 9, "Invalid config ID");
+        require(cid <= 9, "Invalid config ID");
         
         // Check specific rules
         if (cid == 0) {
