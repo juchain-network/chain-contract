@@ -96,7 +96,8 @@ contract Punish is Params, ReentrancyGuard {
             return;
         }
 
-        for (uint256 i = 0; i < punishValidators.length; i++) {
+        uint256 punishValidatorsLength = punishValidators.length;
+        for (uint256 i = 0; i < punishValidatorsLength; i++) {
             if (
                 punishRecords[punishValidators[i]].missedBlocksCounter >
                 proposal.removeThreshold() / proposal.decreaseRate()

@@ -7,8 +7,9 @@ import {IProposal} from './IProposal.sol';
 import {IPunish} from './IPunish.sol';
 import {IStaking} from './IStaking.sol';
 import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import {IValidators} from './IValidators.sol';
 
-contract Validators is Params, ReentrancyGuard {
+contract Validators is Params, ReentrancyGuard, IValidators {
 
     /**
      * @dev Validator status enum
@@ -77,7 +78,7 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     function _onlyNotRewarded() internal view {
-        require(operationsDone[block.number][uint8(Operations.Distribute)] == false, 'Block is already rewarded');
+        require(!operationsDone[block.number][uint8(Operations.Distribute)], 'Block is already rewarded');
     }
 
     function initialize(
@@ -241,7 +242,7 @@ contract Validators is Params, ReentrancyGuard {
         onlyBlockEpoch(epoch)
     {
         // Check if validators have already been updated for this block
-        if (operationsDone[block.number][uint8(Operations.UpdateValidators)] == true) {
+        if (operationsDone[block.number][uint8(Operations.UpdateValidators)]) {
             return; // Silently return to avoid consensus issues
         }
         
@@ -418,7 +419,8 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     function isActiveValidator(address who) public view returns (bool) {
-        for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+        uint256 currentSetLength = currentValidatorSet.length;
+        for (uint256 i = 0; i < currentSetLength; i++) {
             if (currentValidatorSet[i] == who) {
                 return true;
             }
@@ -457,7 +459,8 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     function isTopValidator(address who) public view returns (bool) {
-        for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
+        uint256 highestSetLength = highestValidatorsSet.length;
+        for (uint256 i = 0; i < highestSetLength; i++) {
             if (highestValidatorsSet[i] == who) {
                 return true;
             }
@@ -505,7 +508,8 @@ contract Validators is Params, ReentrancyGuard {
 
     function _tryAddValidatorToHighestSet(address val) internal {
         // do nothing if you are already in highestValidatorsSet set
-        for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
+        uint256 highestSetLength = highestValidatorsSet.length;
+        for (uint256 i = 0; i < highestSetLength; i++) {
             if (highestValidatorsSet[i] == val) {
                 return;
             }
@@ -537,7 +541,8 @@ contract Validators is Params, ReentrancyGuard {
     function removeFromHighestSet(address validator) external onlyStakingContract onlyInitialized nonReentrant {
         // Check if validator is in highestValidatorsSet
         bool isInSet = false;
-        for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
+        uint256 highestSetLength = highestValidatorsSet.length;
+        for (uint256 i = 0; i < highestSetLength; i++) {
             if (highestValidatorsSet[i] == validator) {
                 isInSet = true;
                 break;
@@ -592,11 +597,12 @@ contract Validators is Params, ReentrancyGuard {
         }
 
         uint256 remain;
-        address last;
+        address last = address(0);
         uint256 per = totalReward / rewardValsLen;
         remain = totalReward - (per * rewardValsLen);
 
-        for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+        uint256 currentSetLength = currentValidatorSet.length;
+        for (uint256 i = 0; i < currentSetLength; i++) {
             address val = currentValidatorSet[i];
             // Exclude the punished validator and jailed validators
             // Jailed validators remain in currentValidatorSet until next epoch, but should not receive rewards
@@ -613,8 +619,9 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     function getRewardLen(address punishedVal) private view returns (uint256) {
-        uint256 l;
-        for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+        uint256 l = 0;
+        uint256 currentSetLength = currentValidatorSet.length;
+        for (uint256 i = 0; i < currentSetLength; i++) {
             address val = currentValidatorSet[i];
             // Exclude the punished validator and jailed validators
             // Jailed validators remain in currentValidatorSet until next epoch, but should not receive rewards

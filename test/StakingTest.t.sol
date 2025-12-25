@@ -72,13 +72,13 @@ contract StakingTest is Test {
         // In real-world scenarios, this would be done through proper proposal voting
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(11))), // pass mapping slot (updated: was 9, now 11 due to minValidatorStake and maxValidators)
+            keccak256(abi.encode(validator, uint256(12))), // pass mapping slot (correct slot is 12)
             bytes32(uint256(1))
         );
         // Set proposalPassedTime to current time (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(12))), // proposalPassedTime mapping slot (updated: was 10, now 12 due to minValidatorStake and maxValidators)
+            keccak256(abi.encode(validator, uint256(13))), // proposalPassedTime mapping slot (correct slot is 13)
             bytes32(block.timestamp)
         );
     }
@@ -1125,7 +1125,7 @@ contract StakingTest is Test {
         // Set proposalPassedTime to long ago (expired)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(VALIDATOR1, uint256(12))), // proposalPassedTime mapping slot (updated: was 10, now 12 due to minValidatorStake and maxValidators)
+            keccak256(abi.encode(VALIDATOR1, uint256(13))), // proposalPassedTime mapping slot (correct slot is 13)
             bytes32(uint256(block.timestamp - 8 days)) // 8 days ago, expired
         );
         
@@ -1150,7 +1150,7 @@ contract StakingTest is Test {
         vm.store(PROPOSAL, bytes32(uint256(8)), bytes32(shortUnjailPeriod)); // validatorUnjailPeriod at slot 8
         
         // Set removeThreshold to 1 to ensure punishment happens immediately
-        vm.store(PROPOSAL, bytes32(uint256(3)), bytes32(uint256(1))); // removeThreshold at slot 3
+        vm.store(PROPOSAL, bytes32(uint256(4)), bytes32(uint256(1))); // removeThreshold at slot 4 (correct slot is 4)
         
         // Call Punish.punish() function as miner, which will jail the validator
         vm.prank(block.coinbase);
@@ -1302,7 +1302,7 @@ contract StakingTest is Test {
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Set withdrawProfitPeriod to 100 blocks for faster testing
-        uint256 withdrawPeriodSlot = 5; // withdrawProfitPeriod in Proposal contract (slot 5 according to storage layout comment)
+        uint256 withdrawPeriodSlot = 6; // withdrawProfitPeriod in Proposal contract (correct slot is 6)
         uint256 withdrawPeriod = 100;
         vm.store(PROPOSAL, bytes32(withdrawPeriodSlot), bytes32(uint256(withdrawPeriod)));
         
@@ -1343,15 +1343,15 @@ contract StakingTest is Test {
     }
 
     function testOnlyValidValidator_RevertWhen_InsufficientStake() public {
-        // Test with an unregistered validator - should revert with "Not a valid validator"
+        // Test with an unregistered validator - should revert with "Validator not registered"
         vm.startPrank(VALIDATOR1);
-        vm.expectRevert("Not a valid validator");
+        vm.expectRevert("Validator not registered");
         Staking(STAKING).addValidatorStake{value: 1 ether}();
         vm.stopPrank();
         
         // Test with another unregistered validator for updateCommissionRate
         vm.startPrank(VALIDATOR2);
-        vm.expectRevert("Not a valid validator");
+        vm.expectRevert("Validator not registered");
         Staking(STAKING).updateCommissionRate(COMMISSION_RATE);
         vm.stopPrank();
         
@@ -1367,7 +1367,7 @@ contract StakingTest is Test {
         // Set selfStake to below minimum
         vm.store(STAKING, validatorStakeSlot, bytes32(uint256(99999 ether))); // Below MIN_STAKE (100000 ether)
         
-        // Now try to call a function with onlyValidValidator modifier - should revert
+        // Now try to call a function with onlyValidValidator modifier - should revert with "Not a valid validator"
         vm.prank(VALIDATOR3);
         vm.expectRevert("Not a valid validator");
         Staking(STAKING).updateCommissionRate(COMMISSION_RATE);
@@ -1992,7 +1992,7 @@ contract StakingTest is Test {
         vm.roll(block.number + 101);
 
         // Make proposal not passed
-        bytes32 proposalPassSlot = keccak256(abi.encode(VALIDATOR1, uint256(11))); // pass mapping slot (updated: was 9, now 11 due to minValidatorStake and maxValidators)
+        bytes32 proposalPassSlot = keccak256(abi.encode(VALIDATOR1, uint256(12))); // pass mapping slot (correct slot is 12)
         vm.store(PROPOSAL, proposalPassSlot, bytes32(uint256(0)));
 
         // Try to unjail without passing proposal - should revert
