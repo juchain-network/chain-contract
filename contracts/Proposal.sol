@@ -4,8 +4,9 @@ pragma solidity ^0.8.20;
 
 import {Params} from './Params.sol';
 import {IValidators} from './IValidators.sol';
+import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
-contract Proposal is Params {
+contract Proposal is Params, ReentrancyGuard {
     // How long a proposal will exist
     uint256 public proposalLastingPeriod;
     uint256 public punishThreshold;
@@ -178,7 +179,7 @@ contract Proposal is Params {
         return true;
     }
 
-    function voteProposal(bytes32 id, bool auth) external onlyValidator returns (bool) {
+    function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {
         require(proposals[id].createTime != 0, 'Proposal not exist');
         require(votes[msg.sender][id].voteTime == 0, "You can't vote for a proposal twice");
         require(block.timestamp < proposals[id].createTime + proposalLastingPeriod, 'Proposal expired');
