@@ -147,7 +147,7 @@ contract Validators is Params, ReentrancyGuard {
      * @notice This function does NOT check jailed status, only checks if validator is in currentValidatorSet
      * @notice Can be called even if validator is still jailed (e.g., in unjailValidator before state change)
      */
-    function tryActive(address validator) external onlyInitialized returns (bool) {
+    function tryActive(address validator) external onlyInitialized nonReentrant returns (bool) {
         require(
             msg.sender == address(proposal) || msg.sender == address(staking),
             "Only Proposal or Staking contract can call"
@@ -534,7 +534,7 @@ contract Validators is Params, ReentrancyGuard {
      * @notice This is different from removeValidatorInternal() which calls tryRemoveValidatorIncoming()
      * @notice Ensures at least one validator remains in highestValidatorsSet
      */
-    function removeFromHighestSet(address validator) external onlyStakingContract onlyInitialized {
+    function removeFromHighestSet(address validator) external onlyStakingContract onlyInitialized nonReentrant {
         // Check if validator is in highestValidatorsSet
         bool isInSet = false;
         for (uint256 i = 0; i < highestValidatorsSet.length; i++) {

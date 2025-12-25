@@ -305,24 +305,24 @@ contract Staking is Params, ReentrancyGuard {
         // After resigning, they will be excluded from currentValidatorSet at next epoch
         require(!isInCurrentSet, "Cannot exit: validator is in active set, resign first and wait until next epoch");
         
-        // Effects: update state before external call
+        // Check if we need to remove from highest set before state changes
+        bool needRemoveFromHighestSet = proposalContract.pass(msg.sender);
+        
+        // Effects: update all state variables first
         stake.selfStake = 0;
         totalStaked = totalStaked - withdrawAmount;
         
-        // Note: If validator called resignValidator() before, they are already removed from
-        // highestValidatorsSet and pass is already set to false, so no need to do it again
-        // Only remove from highestValidatorsSet and set pass = false if validator didn't call resignValidator
-        // Check if validator is still in highestValidatorsSet (by checking if pass is still true)
-        if (proposalContract.pass(msg.sender)) {
-            // Validator didn't call resignValidator(), so we need to remove them now
-            validatorsContract.removeFromHighestSet(msg.sender);
-        }
-
         // Instead of transferring funds directly, add them to unbonding like undelegate
         unbondingDelegations[msg.sender][msg.sender].push(UnbondingEntry({
             amount: withdrawAmount,
             completionBlock: block.number + proposalContract.unbondingPeriod()
         }));
+        
+        // Interactions: external call after state updates
+        if (needRemoveFromHighestSet) {
+            // Validator didn't call resignValidator(), so we need to remove them now
+            validatorsContract.removeFromHighestSet(msg.sender);
+        }
 
         emit ValidatorExited(msg.sender, withdrawAmount);
     }
@@ -388,7 +388,7 @@ contract Staking is Params, ReentrancyGuard {
      * @param validator Validator address
      * @param maxEntries Maximum number of unbonding entries to process
      */
-    function withdrawUnbonded(address validator, uint256 maxEntries) external {
+    function withdrawUnbonded(address validator, uint256 maxEntries) external nonReentrant {
         require(maxEntries > 0, "maxEntries must be positive");
         require(maxEntries <= MAX_UNBONDING_ENTRIES_PER_WITHDRAW, "maxEntries too large");
         
@@ -412,16 +412,22 @@ contract Staking is Params, ReentrancyGuard {
         
         require(totalWithdraw > 0, "No unbonded tokens available");
         
+        // Check if we need to delete the delegation before external call
+        bool shouldDeleteDelegation = false;
+        if (delegations[msg.sender][validator].amount == 0 && 
+            unbondingDelegations[msg.sender][validator].length == 0) {
+            shouldDeleteDelegation = true;
+        }
+        
+        // Effects: delete delegation entry if needed before external call
+        if (shouldDeleteDelegation) {
+            delete delegations[msg.sender][validator];
+        }
+        
+        // Interactions: external call after all state updates
         (bool success, ) = payable(msg.sender).call{value: totalWithdraw}("");
         require(success, "Transfer failed");
         emit UnbondingCompleted(msg.sender, validator, totalWithdraw);
-        
-        // If delegation amount is 0 and all unbonding entries are withdrawn, delete the delegation entry
-        // This helps save storage when delegation is completely removed
-        if (delegations[msg.sender][validator].amount == 0 && 
-            unbondingDelegations[msg.sender][validator].length == 0) {
-            delete delegations[msg.sender][validator];
-        }
     }
 
     /**
@@ -509,34 +515,41 @@ contract Staking is Params, ReentrancyGuard {
      * @notice First claim is always allowed (when lastClaimBlock == 0)
      */
     function claimRewards(address validator) external nonReentrant {
-        _updateRewards(msg.sender, validator);
-        
-        // For validator claiming their commission
+        // Get current commission first
+        uint256 commission = 0;
         if (msg.sender == validator) {
             ValidatorStake storage stake = validatorStakes[validator];
-            uint256 commission = stake.accumulatedRewards;
+            commission = stake.accumulatedRewards;
+        }
+        
+        // Effects: Update all state first before external calls
+        if (commission > 0) {
+            ValidatorStake storage stake = validatorStakes[validator];
             
-            if (commission > 0) {
-                // Check withdrawal period restriction (allow first claim when lastClaimBlock == 0)
-                if (stake.lastClaimBlock > 0) {
-                    uint256 withdrawPeriod = proposalContract.withdrawProfitPeriod();
-                    require(
-                        block.number >= stake.lastClaimBlock + withdrawPeriod,
-                        "Must wait withdrawProfitPeriod blocks between claims"
-                    );
-                }
-                
-                // Effects: update state before external call
-                stake.accumulatedRewards = 0;
-                stake.totalClaimedRewards = stake.totalClaimedRewards + commission;
-                stake.lastClaimBlock = block.number;
-                
-                // Interactions: external call after state update
-                (bool success, ) = payable(msg.sender).call{value: commission}("");
-                require(success, "Transfer failed");
-                
-                emit RewardsClaimed(msg.sender, validator, commission);
+            // Check withdrawal period restriction (allow first claim when lastClaimBlock == 0)
+            if (stake.lastClaimBlock > 0) {
+                uint256 withdrawPeriod = proposalContract.withdrawProfitPeriod();
+                require(
+                    block.number >= stake.lastClaimBlock + withdrawPeriod,
+                    "Must wait withdrawProfitPeriod blocks between claims"
+                );
             }
+            
+            // Clear accumulated rewards first
+            stake.accumulatedRewards = 0;
+            stake.totalClaimedRewards = stake.totalClaimedRewards + commission;
+            stake.lastClaimBlock = block.number;
+        }
+        
+        // Interactions: Now update rewards (which makes external call)
+        _updateRewards(msg.sender, validator);
+        
+        // Interactions: External call for commission after all state updates
+        if (commission > 0) {
+            (bool success, ) = payable(msg.sender).call{value: commission}("");
+            require(success, "Transfer failed");
+            
+            emit RewardsClaimed(msg.sender, validator, commission);
         }
     }
 
@@ -561,7 +574,7 @@ contract Staking is Params, ReentrancyGuard {
      * @notice Validator must have passed a proposal (reproposal) before unjailing
      * @notice Once jailed, validator must go through the voting process again to regain validator status
      */
-    function unjailValidator(address validator) external {
+    function unjailValidator(address validator) external nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(msg.sender == validator, "Only validator can unjail themselves");
         require(validatorStakes[validator].isJailed, "Validator not jailed");
