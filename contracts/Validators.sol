@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.29;
 
 import {Params} from './Params.sol';
 import {IProposal} from './IProposal.sol';
@@ -83,17 +83,17 @@ contract Validators is Params, ReentrancyGuard, IValidators {
 
     function initialize(
         address[] calldata vals,
-        address _proposal,
-        address _punish,
-        address _staking
+        address proposal_,
+        address punish_,
+        address staking_
     ) external onlyNotInitialized {
-        require(_proposal != address(0), "Invalid proposal address");
-        require(_punish != address(0), "Invalid punish address");
-        require(_staking != address(0), "Invalid staking address");
+        require(proposal_ != address(0), "Invalid proposal address");
+        require(punish_ != address(0), "Invalid punish address");
+        require(staking_ != address(0), "Invalid staking address");
         
-        proposal = IProposal(_proposal);
-        punish = IPunish(_punish);
-        staking = IStaking(_staking);
+        proposal = IProposal(proposal_);
+        punish = IPunish(punish_);
+        staking = IStaking(staking_);
 
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
@@ -155,7 +155,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         );
         
         // Check if validator is already active (from Staking contract)
-        (bool isActive, bool isJailed) = staking.getValidatorStatus(validator);
+        (bool isActive, ) = staking.getValidatorStatus(validator);
         if (isActive) {
             return true;
         }
@@ -353,7 +353,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         } else if (!this.isValidatorExist(val)) {
             calculatedStatus = Status.NotExist;
         } else {
-            (bool isActive, bool isJailed) = staking.getValidatorStatus(val);
+            (bool isActive, ) = staking.getValidatorStatus(val);
             calculatedStatus = isActive ? Status.Active : Status.NotExist;
         }
 
@@ -395,8 +395,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             validators[i] = validator;
             
             // Get validator info from Staking contract
-            (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, uint256 accumulatedRewards, 
-             bool isJailed, uint256 jailUntilBlock, uint256 totalClaimedRewards, uint256 lastClaimBlock) = 
+            (uint256 selfStake, uint256 totalDelegated, , , , , , ) = 
                 staking.getValidatorInfo(validator);
             
             // Calculate total stake (selfStake + totalDelegated)
@@ -446,7 +445,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Whether validator is active (can participate in consensus)
      */
     function isValidatorActive(address validator) external view returns (bool) {
-        (bool isActive, bool isJailed) = staking.getValidatorStatus(validator);
+        (bool isActive, ) = staking.getValidatorStatus(validator);
         return isActive;
     }
 
@@ -456,8 +455,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Whether validator exists (has staked)
      */
     function isValidatorExist(address validator) external view returns (bool) {
-        (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, uint256 accumulatedRewards, 
-         bool isJailed, uint256 jailUntilBlock, uint256 totalClaimedRewards, uint256 lastClaimBlock) = 
+        (uint256 selfStake, , , , , , , ) = 
             staking.getValidatorInfo(validator);
         return selfStake > 0;
     }

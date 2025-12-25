@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity 0.8.29;
 
 import {console} from "lib/forge-std/src/console.sol";
 import {BaseSetup} from "../test/BaseSetup.t.sol";

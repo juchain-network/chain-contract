@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.29;
 
 import {Params} from './Params.sol';
 import {IValidators} from './IValidators.sol';
@@ -98,11 +98,11 @@ contract Proposal is Params, ReentrancyGuard {
 
     function initialize(
         address[] calldata vals,
-        address _validators
+        address validators_
     ) external onlyNotInitialized {
-        require(_validators != address(0), "Invalid validators address");
+        require(validators_ != address(0), "Invalid validators address");
         
-        validators = IValidators(_validators);
+        validators = IValidators(validators_);
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
             pass[vals[i]] = true;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.29;
 
 import {Params} from './Params.sol';
 import {IProposal} from './IProposal.sol';
@@ -109,19 +109,19 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(!validatorStakes[validator].isJailed, "Validator is jailed");
     }
 
-    function initialize(address _validators, address _proposal) external onlyNotInitialized {
-        require(_validators != address(0), "Invalid validators address");
-        require(_proposal != address(0), "Invalid proposal address");
+    function initialize(address validators_, address proposal_) external onlyNotInitialized {
+        require(validators_ != address(0), "Invalid validators address");
+        require(proposal_ != address(0), "Invalid proposal address");
         
-        validatorsContract = IValidators(_validators);
-        proposalContract = IProposal(_proposal);
+        validatorsContract = IValidators(validators_);
+        proposalContract = IProposal(proposal_);
         initialized = true;
     }
 
     /**
      * @dev Initialize with pre-registered validators (for genesis deployment)
-     * @param _validators Validators contract address
-     * @param _proposal Proposal contract address
+     * @param validators_ Validators contract address
+     * @param proposal_ Proposal contract address
      * @param initialValidators Array of validator addresses to pre-register
      * @param commissionRate Default commission rate for all validators
      * @notice This function automatically performs the same logic as registerValidator for genesis validators
@@ -129,19 +129,19 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @notice They don't need to pass proposal or wait for 7-day window - they are activated immediately
      */
     function initializeWithValidators(
-        address _validators,
-        address _proposal,
+        address validators_,
+        address proposal_,
         address[] calldata initialValidators,
         uint256 commissionRate
     ) external onlyNotInitialized {
-        require(_validators != address(0), "Invalid validators address");
-        require(_proposal != address(0), "Invalid proposal address");
+        require(validators_ != address(0), "Invalid validators address");
+        require(proposal_ != address(0), "Invalid proposal address");
         require(initialValidators.length > 0, "No validators provided");
         require(commissionRate > 0, "Commission rate must be greater than 0");
         require(commissionRate < COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
         
-        validatorsContract = IValidators(_validators);
-        proposalContract = IProposal(_proposal);
+        validatorsContract = IValidators(validators_);
+        proposalContract = IProposal(proposal_);
         
         // Pre-register all initial validators with default stake
         // This automatically performs the same logic as registerValidator for genesis validators
