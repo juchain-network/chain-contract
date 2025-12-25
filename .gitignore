@@ -1,5 +1,6 @@
 .idea/*
 .trae/*
+.vscode/*
 .tool-versions
 ./contracts/output.json
 ./node_modules/*
@@ -11,3 +12,6 @@ artifacts
 out
 broadcast
 tools/ju-cli.exe
+tools/ju-cli
+tools/*.json
+commands.sh
