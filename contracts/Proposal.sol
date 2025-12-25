@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {Params} from './Params.sol';
 import {IValidators} from './IValidators.sol';
@@ -118,7 +118,7 @@ contract Proposal is Params, ReentrancyGuard {
         decreaseRate = 24;
         withdrawProfitPeriod = 86400;
         // Default block reward: 0.2 ether per block (17,280 JU/day ÷ 86,400 blocks/day)
-        blockReward = 200_000_000_000_000_000; // 0.2 ether = 2 * 10^17 wei
+        blockReward = 0.2 ether; // 2 * 10^17 wei
         // Default unbonding period: 7 days in blocks (604800 blocks = 7 days * 24 hours * 3600 seconds / 1 second per block)
         unbondingPeriod = 604800;
         // Default validator unjail period: 24 hours in blocks (86400 blocks = 24 hours * 3600 seconds / 1 second per block)

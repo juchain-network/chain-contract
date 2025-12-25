@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {Params} from './Params.sol';
 import {IProposal} from './IProposal.sol';
@@ -338,21 +338,19 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(msg.value >= MIN_DELEGATION, "Insufficient delegation amount");
         require(validator != msg.sender, "Cannot delegate to yourself");
         
-        // Step 1: Calculate pending rewards (pure view operation, no state changes)
+        // Calculate pending rewards
         uint256 pending = _getPendingRewards(msg.sender, validator);
         
-        // Step 2: Effects - Update all state variables before external calls
+        // Update delegation amount
         delegations[msg.sender][validator].amount += msg.value;
         validatorStakes[validator].totalDelegated += msg.value;
         totalStaked += msg.value;
         
-        // Update reward debt based on new delegation amount
-        delegations[msg.sender][validator].rewardDebt = delegations[msg.sender][validator].amount
-            * rewardPerShare[validator]
-            / 1e18;
+        // Update reward debt
+        delegations[msg.sender][validator].rewardDebt = delegations[msg.sender][validator].amount * rewardPerShare[validator] / 1e18;
 
-        // Step 3: Interactions - Send pending rewards last
-        if (pending >0){
+        // Send pending rewards if any
+        if (pending > 0) {
             _claimPending(msg.sender, validator, pending);
         }
         
