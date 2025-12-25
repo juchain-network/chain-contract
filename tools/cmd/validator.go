@@ -169,13 +169,16 @@ func WithdrawProfitsCmd() *cobra.Command {
 }
 
 func validatorClaimFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("addr", "a", "", "Validator address to claim rewards from")
-	_ = cmd.MarkFlagRequired("addr")
+	cmd.Flags().StringP("caller", "c", "", "Caller address (transaction sender, required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address to claim rewards from (required)")
+	_ = cmd.MarkFlagRequired("caller")
+	_ = cmd.MarkFlagRequired("validator")
 }
 
 func validatorClaim(cmd *cobra.Command, _ []string) {
 	rpc := GetRPCEndpoint(cmd) // Use config-aware function
-	addr, _ := cmd.Flags().GetString("addr")
+	caller, _ := cmd.Flags().GetString("caller")
+	validator, _ := cmd.Flags().GetString("validator")
 
 	// Validate input parameters
 	if err := ValidateRPCURL(rpc); err != nil {
@@ -183,30 +186,30 @@ func validatorClaim(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	if err := ValidateAddress(addr); err != nil {
+	if err := ValidateAddresses(caller, validator); err != nil {
 		PrintValidationError(err)
 		return
 	}
 
-	PrintInfo(fmt.Sprintf("Creating claim transaction for validator: %s", addr))
-	if err := innerValidatorClaim(addr, rpc); err != nil {
+	PrintInfo(fmt.Sprintf("Creating claim transaction: Caller=%s, Validator=%s", caller, validator))
+	if err := innerValidatorClaim(caller, validator, rpc); err != nil {
 		PrintError("Failed to create claim transaction", err)
 		return
 	}
 }
 
-func innerValidatorClaim(addr string, rpc string) error {
+func innerValidatorClaim(caller string, validator string, rpc string) error {
 	validatorAbi, err := abi.JSON(strings.NewReader(contracts.ValidatorsABI))
 	if err != nil {
 		return fmt.Errorf("failed to parse validator ABI: %w", err)
 	}
 
-	abiData, err := validatorAbi.Pack("withdrawProfits", common.HexToAddress(addr))
+	abiData, err := validatorAbi.Pack("withdrawProfits", common.HexToAddress(validator))
 	if err != nil {
 		return fmt.Errorf("failed to pack withdrawProfits data: %w", err)
 	}
 
-	err = CreateRawTx(common.HexToAddress(addr), common.HexToAddress(ValidatorContractAddr), nil, abiData, rpc, WithdrawProfitsFile)
+	err = CreateRawTx(common.HexToAddress(caller), common.HexToAddress(ValidatorContractAddr), nil, abiData, rpc, WithdrawProfitsFile)
 	if err != nil {
 		return fmt.Errorf("failed to create withdraw transaction: %w", err)
 	}

@@ -212,8 +212,9 @@ contract Staking is Params, ReentrancyGuard {
     /**
      * @dev Add more self-stake to existing validator
      */
-    function addValidatorStake() external payable onlyValidValidator(msg.sender) {
+    function addValidatorStake() external payable {
         require(msg.value > 0, "Amount must be positive");
+        require(validatorStakes[msg.sender].isRegistered, "Validator not registered");
         validatorStakes[msg.sender].selfStake = validatorStakes[msg.sender].selfStake + msg.value;
         totalStaked = totalStaked + msg.value;
     }

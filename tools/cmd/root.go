@@ -128,18 +128,19 @@ func init() {
 
 	// Staking commands - staking and delegation operations
 	stakingCmd.AddCommand(
-		RegisterValidatorCmd(),   // register validator staking
-		DelegateCmd(),            // delegate to validator
-		UndelegateCmd(),          // undelegate from validator
-		IncreaseStakeCmd(),       // increase validator stake
-		DecreaseStakeCmd(),       // decrease validator stake
-		SetCommissionCmd(),       // set validator commission rate
-		DeregisterValidatorCmd(), // validator deregistration
-		ValidatorExitCmd(),       // validator complete exit
-		UnjailValidatorCmd(),     // unjail a validator
-		ClaimRewardsCmd(),        // claim staking rewards
-		WithdrawUnbondedCmd(),    // withdraw unbonded stakes
-		QueryDelegationCmd(),     // query delegation information
+		RegisterValidatorCmd(),      // register validator staking
+		DelegateCmd(),               // delegate to validator
+		UndelegateCmd(),             // undelegate from validator
+		IncreaseStakeCmd(),          // increase validator stake
+		DecreaseStakeCmd(),          // decrease validator stake
+		SetCommissionCmd(),          // set validator commission rate
+		DeregisterValidatorCmd(),    // validator deregistration
+		ValidatorExitCmd(),          // validator complete exit
+		UnjailValidatorCmd(),        // unjail a validator
+		ClaimRewardsCmd(),           // claim staking rewards
+		WithdrawUnbondedCmd(),       // withdraw unbonded stakes
+		QueryDelegationCmd(),        // query delegation information
+		QueryAvailableUnbondedCmd(), // query available unbonded amounts
 	)
 
 	// Misc commands
