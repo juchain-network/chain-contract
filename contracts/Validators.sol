@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {Params} from './Params.sol';
 import {IProposal} from './IProposal.sol';
@@ -155,7 +155,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         );
         
         // Check if validator is already active (from Staking contract)
-        (bool isActive, ) = staking.getValidatorStatus(validator);
+        (bool isActive, bool isJailed) = staking.getValidatorStatus(validator);
         if (isActive) {
             return true;
         }
@@ -353,7 +353,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         } else if (!this.isValidatorExist(val)) {
             calculatedStatus = Status.NotExist;
         } else {
-            (bool isActive, ) = staking.getValidatorStatus(val);
+            (bool isActive, bool isJailed) = staking.getValidatorStatus(val);
             calculatedStatus = isActive ? Status.Active : Status.NotExist;
         }
 
@@ -395,7 +395,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             validators[i] = validator;
             
             // Get validator info from Staking contract
-            (uint256 selfStake, uint256 totalDelegated, , , , , , ) = staking.getValidatorInfo(validator);
+            (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, uint256 accumulatedRewards, 
+             bool isJailed, uint256 jailUntilBlock, uint256 totalClaimedRewards, uint256 lastClaimBlock) = 
+                staking.getValidatorInfo(validator);
             
             // Calculate total stake (selfStake + totalDelegated)
             totalStakes[i] = selfStake + totalDelegated;
@@ -444,7 +446,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Whether validator is active (can participate in consensus)
      */
     function isValidatorActive(address validator) external view returns (bool) {
-        (bool isActive, ) = staking.getValidatorStatus(validator);
+        (bool isActive, bool isJailed) = staking.getValidatorStatus(validator);
         return isActive;
     }
 
@@ -454,7 +456,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Whether validator exists (has staked)
      */
     function isValidatorExist(address validator) external view returns (bool) {
-        (uint256 selfStake, , , , , , , ) = staking.getValidatorInfo(validator);
+        (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, uint256 accumulatedRewards, 
+         bool isJailed, uint256 jailUntilBlock, uint256 totalClaimedRewards, uint256 lastClaimBlock) = 
+            staking.getValidatorInfo(validator);
         return selfStake > 0;
     }
 
@@ -596,25 +600,36 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             return;
         }
 
-        uint256 remain;
-        address last = address(0);
-        uint256 per = totalReward / rewardValsLen;
-        remain = totalReward - (per * rewardValsLen);
+        uint256 validValidatorCount = 0;
 
         uint256 currentSetLength = currentValidatorSet.length;
+        // First pass: count valid validators
         for (uint256 i = 0; i < currentSetLength; i++) {
             address val = currentValidatorSet[i];
-            // Exclude the punished validator and jailed validators
-            // Jailed validators remain in currentValidatorSet until next epoch, but should not receive rewards
             if (val != punishedVal && !staking.isValidatorJailed(val)) {
-                validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming + per;
-
-                last = val;
+                validValidatorCount++;
             }
         }
 
-        if (remain > 0 && last != address(0)) {
-            validatorInfo[last].aacIncoming = validatorInfo[last].aacIncoming + remain;
+        if (validValidatorCount == 0) {
+            return;
+        }
+
+        // Calculate per-validator reward without divide-before-multiply
+        uint256 per = totalReward / validValidatorCount;
+        uint256 remainder = totalReward % validValidatorCount;
+
+        // Second pass: distribute rewards
+        for (uint256 i = 0; i < currentSetLength; i++) {
+            address val = currentValidatorSet[i];
+            if (val != punishedVal && !staking.isValidatorJailed(val)) {
+                uint256 reward = per;
+                if (remainder > 0) {
+                    reward += 1;
+                    remainder -= 1;
+                }
+                validatorInfo[val].aacIncoming += reward;
+            }
         }
     }
 
