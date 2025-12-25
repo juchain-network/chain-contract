@@ -593,18 +593,17 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             return;
         }
 
-        uint256 rewardValsLen = getRewardLen(punishedVal);
-        if (rewardValsLen == 0) {
-            return;
-        }
-
-        uint256 validValidatorCount = 0;
-
         uint256 currentSetLength = currentValidatorSet.length;
-        // First pass: count valid validators
+        
+        // Cache jailed status for all validators in a single pass
+        bool[] memory isJailed = new bool[](currentSetLength);
+        uint256 validValidatorCount = 0;
+        
         for (uint256 i = 0; i < currentSetLength; i++) {
             address val = currentValidatorSet[i];
-            if (val != punishedVal && !staking.isValidatorJailed(val)) {
+            bool jailed = staking.isValidatorJailed(val);
+            isJailed[i] = jailed;
+            if (val != punishedVal && !jailed) {
                 validValidatorCount++;
             }
         }
@@ -617,10 +616,10 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         uint256 per = totalReward / validValidatorCount;
         uint256 remainder = totalReward % validValidatorCount;
 
-        // Second pass: distribute rewards
+        // Distribute rewards using cached jailed status
         for (uint256 i = 0; i < currentSetLength; i++) {
             address val = currentValidatorSet[i];
-            if (val != punishedVal && !staking.isValidatorJailed(val)) {
+            if (val != punishedVal && !isJailed[i]) {
                 uint256 reward = per;
                 if (remainder > 0) {
                     reward += 1;
@@ -629,20 +628,6 @@ contract Validators is Params, ReentrancyGuard, IValidators {
                 validatorInfo[val].aacIncoming += reward;
             }
         }
-    }
-
-    function getRewardLen(address punishedVal) private view returns (uint256) {
-        uint256 l = 0;
-        uint256 currentSetLength = currentValidatorSet.length;
-        for (uint256 i = 0; i < currentSetLength; i++) {
-            address val = currentValidatorSet[i];
-            // Exclude the punished validator and jailed validators
-            // Jailed validators remain in currentValidatorSet until next epoch, but should not receive rewards
-            if (val != punishedVal && !staking.isValidatorJailed(val)) {
-                l++;
-            }
-        }
-        return l;
     }
 
     function tryRemoveValidatorInHighestSet(address val) private {

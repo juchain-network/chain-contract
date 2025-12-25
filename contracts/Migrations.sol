@@ -2,7 +2,7 @@
 pragma solidity ^0.8.29;
 
 contract Migrations {
-    address public immutable owner = msg.sender;
+    address public owner = msg.sender;
     uint256 public lastCompletedMigration;
 
     modifier restricted() { _restricted(); _; }
