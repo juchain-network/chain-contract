@@ -143,6 +143,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
         
+        // Cache the minimum validator stake outside the loop
+        uint256 minValidatorStake = proposalContract.minValidatorStake();
+        
         // Pre-register all initial validators with default stake
         // This automatically performs the same logic as registerValidator for genesis validators
         for (uint256 i = 0; i < initialValidators.length; i++) {
@@ -152,7 +155,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             
             // Set up validator stake (same as registerValidator)
             validatorStakes[validator] = ValidatorStake({
-                selfStake: proposalContract.minValidatorStake(),
+                selfStake: minValidatorStake,
                 totalDelegated: 0,
                 commissionRate: commissionRate,
                 accumulatedRewards: 0,
@@ -166,9 +169,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             // Add to validators list (same as registerValidator)
             validatorIndex[validator] = allValidators.length;
             allValidators.push(validator);
-            totalStaked = totalStaked + proposalContract.minValidatorStake();
+            totalStaked = totalStaked + minValidatorStake;
             // Emit event for each validator (more accurate than single event)
-            emit ValidatorRegistered(validator, proposalContract.minValidatorStake(), commissionRate);
+            emit ValidatorRegistered(validator, minValidatorStake, commissionRate);
         }
         
         initialized = true;
@@ -520,25 +523,55 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     }
 
     /**
-     * @dev Claim pending rewards
-     * @param validator Validator address
-     * @notice Validators must wait withdrawProfitPeriod blocks between claims
-     * @notice Tracks total claimed rewards and last claim block for statistics
-     * @notice First claim is always allowed (when lastClaimBlock == 0)
+     * @dev Claim pending rewards for delegators
+     * @param validator Validator address from which to claim rewards
+     * @notice Delegators can claim rewards earned from their delegations
+     * @notice Uses nonReentrant modifier to prevent reentrancy attacks
+     * @notice Follows Checks-Effects-Interactions pattern
      */
     function claimRewards(address validator) external nonReentrant {
-        // Get current commission first
-        uint256 commission = 0;
-        if (msg.sender == validator) {
-            ValidatorStake storage stake = validatorStakes[validator];
-            commission = stake.accumulatedRewards;
-        }
+        // Checks: Verify validator is registered
+        require(validatorStakes[validator].isRegistered, "Validator not registered");
         
-        // Effects: Update all state first before external calls
+        // Checks: Verify caller has delegation to this validator
+        require(delegations[msg.sender][validator].amount > 0, "No delegation found");
+        
+        // Get current pending rewards
+        uint256 pending = _getPendingRewards(msg.sender, validator);
+
+        // Effects: Update state before external call to prevent reentrancy
+        Delegation storage delegation = delegations[msg.sender][validator];
+        if (pending > 0) {
+            delegation.rewardDebt = delegation.amount
+                * rewardPerShare[validator]
+                / 1e18;
+            // Interactions: External call after all state updates
+            _claimPending(msg.sender, validator, pending);
+        }
+    }
+
+
+    /**
+     * @dev Claim accumulated rewards for validators
+     * @notice Validators can claim their accumulated commission rewards
+     * @notice Validators must wait withdrawProfitPeriod blocks between claims
+     * @notice First claim is always allowed (when lastClaimBlock == 0)
+     * @notice Uses nonReentrant modifier to prevent reentrancy attacks
+     * @notice Follows Checks-Effects-Interactions pattern
+     * @notice Emits RewardsClaimed event upon successful claim
+     */
+    function claimValidatorRewards() external nonReentrant {
+        address validator = msg.sender;
+        
+        // Checks: Verify caller is a registered validator
+        require(validatorStakes[validator].isRegistered, "Not a registered validator");
+        
+        // Get current accumulated commission rewards
+        ValidatorStake storage stake = validatorStakes[validator];
+        uint256 commission = stake.accumulatedRewards;
+        
         if (commission > 0) {
-            ValidatorStake storage stake = validatorStakes[validator];
-            
-            // Check withdrawal period restriction (allow first claim when lastClaimBlock == 0)
+            // Checks: Verify withdraw period has passed (if not first claim)
             if (stake.lastClaimBlock > 0) {
                 uint256 withdrawPeriod = proposalContract.withdrawProfitPeriod();
                 require(
@@ -547,21 +580,13 @@ contract Staking is Params, ReentrancyGuard, IStaking {
                 );
             }
             
-            // Clear accumulated rewards first
+            // Effects: Update all state variables before external calls
             stake.accumulatedRewards = 0;
             stake.totalClaimedRewards = stake.totalClaimedRewards + commission;
             stake.lastClaimBlock = block.number;
-        }
-        
-        // Interactions: Now update rewards (which makes external call)
-        _updateRewards(msg.sender, validator);
-        
-        // Interactions: External call for commission after all state updates
-        if (commission > 0) {
-            (bool success, ) = payable(msg.sender).call{value: commission}("");
-            require(success, "Transfer failed");
             
-            emit RewardsClaimed(msg.sender, validator, commission);
+            // Interactions: External call for commission after all state updates
+            _claimPending(msg.sender, validator, commission);
         }
     }
 
@@ -625,13 +650,16 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         uint256[] memory totalStakes = new uint256[](validators.length);
         uint256 candidateCount = 0;
         
+        // Cache the minimum validator stake outside the loop
+        uint256 minValidatorStake = proposalContract.minValidatorStake();
+        
         // Collect validators and their total stakes for sorting
         for (uint256 i = 0; i < validators.length; i++) {
             address validator = validators[i];
             ValidatorStake storage stake = validatorStakes[validator];
             
             // Only include validators with self-stake >= MIN_VALIDATOR_STAKE
-            if (stake.selfStake >= proposalContract.minValidatorStake()) {
+            if (stake.selfStake >= minValidatorStake) {
                 candidateValidators[candidateCount] = validator;
                 totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
                 candidateCount++;
@@ -704,36 +732,6 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             (stakes[i], stakes[largest]) = (stakes[largest], stakes[i]);
             
             heapify(arr, stakes, n, largest);
-        }
-    }
-
-    /**
-     * @dev Update rewards for a delegator
-     * @param delegator Delegator address
-     * @param validator Validator address
-     * @notice This function is internal and called from nonReentrant functions
-     * @notice Uses CEI pattern: calculates pending, updates state, then transfers
-     */
-    function _updateRewards(address delegator, address validator) internal {
-        Delegation storage delegation = delegations[delegator][validator];
-        if (delegation.amount > 0) {
-            uint256 pending = delegation.amount
-                * rewardPerShare[validator]
-                / 1e18
-                - delegation.rewardDebt;
-                
-            if (pending > 0) {
-                // Effects: update state before external call to prevent reentrancy
-                delegation.rewardDebt = delegation.amount
-                    * rewardPerShare[validator]
-                    / 1e18;
-                
-                // Interactions: external call after state update
-                (bool success, ) = payable(delegator).call{value: pending}("");
-                require(success, "Transfer failed");
-                    
-                emit RewardsClaimed(delegator, validator, pending);
-            }
         }
     }
 

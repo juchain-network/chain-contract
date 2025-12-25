@@ -96,18 +96,18 @@ contract Punish is Params, ReentrancyGuard {
             return;
         }
 
+        // Cache external results outside the loop
+        uint256 removeThreshold = proposal.removeThreshold();
+        uint256 decreaseRate = proposal.decreaseRate();
+        uint256 decreaseAmount = removeThreshold / decreaseRate;
+
         uint256 punishValidatorsLength = punishValidators.length;
         for (uint256 i = 0; i < punishValidatorsLength; i++) {
-            if (
-                punishRecords[punishValidators[i]].missedBlocksCounter >
-                proposal.removeThreshold() / proposal.decreaseRate()
-            ) {
-                punishRecords[punishValidators[i]].missedBlocksCounter =
-                    punishRecords[punishValidators[i]].missedBlocksCounter -
-                    proposal.removeThreshold() /
-                    proposal.decreaseRate();
+            address validator = punishValidators[i];
+            if (punishRecords[validator].missedBlocksCounter > decreaseAmount) {
+                punishRecords[validator].missedBlocksCounter -= decreaseAmount;
             } else {
-                punishRecords[punishValidators[i]].missedBlocksCounter = 0;
+                punishRecords[validator].missedBlocksCounter = 0;
             }
         }
 
