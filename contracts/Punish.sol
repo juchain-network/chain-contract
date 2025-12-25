@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.29;
 
 import {Params} from './Params.sol';
 import {IStaking} from './IStaking.sol';
@@ -47,16 +47,16 @@ contract Punish is Params, ReentrancyGuard {
     }
 
     function initialize(
-        address _validators,
-        address _proposal,
-        address _staking
+        address validators_,
+        address proposal_,
+        address staking_
     ) external onlyNotInitialized {
-        require(_validators != address(0), "Invalid validators address");
-        require(_proposal != address(0), "Invalid proposal address");
+        require(validators_ != address(0), "Invalid validators address");
+        require(proposal_ != address(0), "Invalid proposal address");
         
-        validators = IValidators(_validators);
-        proposal = IProposal(_proposal);
-        staking = IStaking(_staking);
+        validators = IValidators(validators_);
+        proposal = IProposal(proposal_);
+        staking = IStaking(staking_);
 
         initialized = true;
     }

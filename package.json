@@ -4,7 +4,7 @@
   "description": "Ju blockchain system contracts",
   "main": "generate-contracts.js",
   "dependencies": {
-    "@openzeppelin/contracts": "^5.4.0",
+    "@openzeppelin/contracts": "^5.5.0",
     "js-sha3": "^0.8.0",
     "nunjucks": "^3.2.2",
     "web3": "^4.16.0"
