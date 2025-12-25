@@ -1,15 +1,12 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
 	"juchain.org/chain/tools/contracts"
 )
@@ -225,6 +222,24 @@ func UnjailValidatorCmd() *cobra.Command {
 
 	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
 
+	_ = cmd.MarkFlagRequired("validator")
+
+	return cmd
+}
+
+// QueryAvailableUnbondedCmd creates command for querying available unbonded stakes
+func QueryAvailableUnbondedCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "query-unbonded",
+		Short: "Query available unbonded stakes",
+		Long:  "Get total available unbonded amount from unbonding delegations",
+		Run:   queryAvailableUnbonded,
+	}
+
+	cmd.Flags().StringP("delegator", "d", "", "Delegator address (required)")
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
+
+	_ = cmd.MarkFlagRequired("delegator")
 	_ = cmd.MarkFlagRequired("validator")
 
 	return cmd
@@ -484,58 +499,22 @@ func queryDelegationInfo(cmd *cobra.Command, args []string) {
 	delegator := common.HexToAddress(delegatorStr)
 	validator := common.HexToAddress(validatorStr)
 
-	// Connect to blockchain
-	client, err := ethclient.Dial(rpc)
+	_, stakingContract, _, err := GetContractInstance(rpc)
 	if err != nil {
-		PrintError("Failed to connect to RPC", err)
+		PrintError("Failed to get contract instance", err)
 		return
 	}
-	defer client.Close()
-
-	// Create call
-	parsedABI, err := abi.JSON(strings.NewReader(contracts.StakingABI))
+	delegationInfo, err := stakingContract.GetDelegationInfo(nil, delegator, validator)
 	if err != nil {
-		PrintError("Failed to parse ABI", err)
-		return
-	}
-
-	data, err := parsedABI.Pack("getDelegationInfo", delegator, validator)
-	if err != nil {
-		PrintError("Failed to pack call data", err)
-		return
-	}
-
-	// Make call
-	msg := ethereum.CallMsg{
-		To:   &common.Address{},
-		Data: data,
-	}
-	stakingAddr := common.HexToAddress(StakingContractAddr)
-	msg.To = &stakingAddr
-
-	result, err := client.CallContract(context.Background(), msg, nil)
-	if err != nil {
-		PrintError("Failed to call contract", err)
-		return
-	}
-
-	// Unpack result
-	unpacked, err := parsedABI.Unpack("getDelegationInfo", result)
-	if err != nil {
-		PrintError("Failed to unpack result", err)
-		return
-	}
-
-	if len(unpacked) != 4 {
-		PrintError("Unexpected result length", fmt.Errorf("got %d, expected 4", len(unpacked)))
+		PrintError("Failed to get delegation info", err)
 		return
 	}
 
 	// Convert wei to JU
-	amount := unpacked[0].(*big.Int)
-	pendingRewards := unpacked[1].(*big.Int)
-	unbondingAmount := unpacked[2].(*big.Int)
-	unbondingBlock := unpacked[3].(*big.Int)
+	amount := delegationInfo.Amount
+	pendingRewards := delegationInfo.PendingRewards
+	unbondingAmount := delegationInfo.UnbondingAmount
+	unbondingBlock := delegationInfo.UnbondingBlock
 
 	amountJU := new(big.Int).Div(amount, big.NewInt(1e18))
 	pendingRewardsJU := new(big.Int).Div(pendingRewards, big.NewInt(1e18))
@@ -548,6 +527,42 @@ func queryDelegationInfo(cmd *cobra.Command, args []string) {
 	fmt.Printf("Pending Rewards: %s JU\n", pendingRewardsJU.String())
 	fmt.Printf("Unbonding Amount: %s JU\n", unbondingAmountJU.String())
 	fmt.Printf("Unbonding Block: %s\n", unbondingBlock.String())
+}
+
+// Query available unbonded amounts implementation
+func queryAvailableUnbonded(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	delegatorStr, _ := cmd.Flags().GetString("delegator")
+	validatorStr, _ := cmd.Flags().GetString("validator")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddresses(delegatorStr, validatorStr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	delegator := common.HexToAddress(delegatorStr)
+	validator := common.HexToAddress(validatorStr)
+
+	_, stakingInstance, _, err := GetContractInstance(rpc)
+	if err != nil {
+		PrintError("Failed to get contract instance", err)
+		return
+	}
+	unbondingEntries, err := stakingInstance.GetUnbondingEntries(nil, delegator, validator)
+	if err != nil {
+		PrintError("Failed to get unbonding entries", err)
+		return
+	}
+	PrintSuccess("Available Unbonded Information")
+	for _, entry := range unbondingEntries {
+		fmt.Printf("Amount: %s JU, Completion Block: %d\n", new(big.Int).Div(entry.Amount, big.NewInt(1e18)).String(), entry.CompletionBlock)
+	}
 }
 
 // Implementation of the missing commands
@@ -640,9 +655,9 @@ func innerCreateIncreaseStakeTx(validatorAddr string, amount *big.Int, rpc strin
 	}
 
 	// Increase stake function name may vary depending on actual contract
-	abiData, err := stakingAbi.Pack("increaseStake")
+	abiData, err := stakingAbi.Pack("addValidatorStake")
 	if err != nil {
-		return fmt.Errorf("failed to pack increaseStake data: %w", err)
+		return fmt.Errorf("failed to pack addValidatorStake data: %w", err)
 	}
 
 	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), amount, abiData, rpc, "increaseStake.json")
@@ -698,17 +713,17 @@ func innerCreateDecreaseStakeTx(validatorAddr string, amount *big.Int, rpc strin
 	}
 
 	// Decrease stake function name may vary depending on actual contract
-	abiData, err := stakingAbi.Pack("decreaseStake", amount)
+	abiData, err := stakingAbi.Pack("decreaseValidatorStake", amount)
 	if err != nil {
-		return fmt.Errorf("failed to pack decreaseStake data: %w", err)
+		return fmt.Errorf("failed to pack decreaseValidatorStake data: %w", err)
 	}
 
 	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), nil, abiData, rpc, "decreaseStake.json")
 	if err != nil {
-		return fmt.Errorf("failed to create decrease stake transaction: %w", err)
+		return fmt.Errorf("failed to create decrease validator stake transaction: %w", err)
 	}
 
-	PrintSuccess("Decrease stake transaction created successfully!")
+	PrintSuccess("Decrease validator stake transaction created successfully!")
 	PrintInfo(fmt.Sprintf("Transaction file: %s", "decreaseStake.json"))
 	PrintInfo(fmt.Sprintf("Amount: %s wei", amount.String()))
 	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
@@ -804,18 +819,18 @@ func innerCreateDeregisterValidatorTx(validatorAddr string, rpc string) error {
 		return fmt.Errorf("failed to parse staking ABI: %w", err)
 	}
 
-	abiData, err := stakingAbi.Pack("deregisterValidator")
+	abiData, err := stakingAbi.Pack("resignValidator")
 	if err != nil {
-		return fmt.Errorf("failed to pack deregisterValidator data: %w", err)
+		return fmt.Errorf("failed to pack resignValidator data: %w", err)
 	}
 
-	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "deregisterValidator.json")
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "resignValidator.json")
 	if err != nil {
-		return fmt.Errorf("failed to create deregister validator transaction: %w", err)
+		return fmt.Errorf("failed to create resign validator transaction: %w", err)
 	}
 
-	PrintSuccess("Deregister validator transaction created successfully!")
-	PrintInfo(fmt.Sprintf("Transaction file: %s", "deregisterValidator.json"))
+	PrintSuccess("Resign validator transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "resignValidator.json"))
 	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
 	return nil
 }
@@ -849,18 +864,18 @@ func innerCreateValidatorExitTx(validatorAddr string, rpc string) error {
 		return fmt.Errorf("failed to parse staking ABI: %w", err)
 	}
 
-	abiData, err := stakingAbi.Pack("validatorExit")
+	abiData, err := stakingAbi.Pack("exitValidator")
 	if err != nil {
-		return fmt.Errorf("failed to pack validatorExit data: %w", err)
+		return fmt.Errorf("failed to pack exitValidator data: %w", err)
 	}
 
-	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "validatorExit.json")
+	err = CreateRawTx(common.HexToAddress(validatorAddr), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "exitValidator.json")
 	if err != nil {
 		return fmt.Errorf("failed to create validator exit transaction: %w", err)
 	}
 
 	PrintSuccess("Validator exit transaction created successfully!")
-	PrintInfo(fmt.Sprintf("Transaction file: %s", "validatorExit.json"))
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "exitValidator.json"))
 	PrintInfo(fmt.Sprintf("Validator: %s", validatorAddr))
 	return nil
 }
@@ -895,7 +910,7 @@ func innerCreateWithdrawUnbondedTx(claimer, validator string, rpc string) error 
 		return fmt.Errorf("failed to parse staking ABI: %w", err)
 	}
 
-	abiData, err := stakingAbi.Pack("withdrawUnbonded", common.HexToAddress(validator))
+	abiData, err := stakingAbi.Pack("withdrawUnbonded", common.HexToAddress(validator), big.NewInt(10))
 	if err != nil {
 		return fmt.Errorf("failed to pack withdrawUnbonded data: %w", err)
 	}
