@@ -151,7 +151,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         for (uint256 i = 0; i < initialValidators.length; i++) {
             address validator = initialValidators[i];
             require(validator != address(0), "Invalid validator address");
-            require(validatorStakes[validator].selfStake == 0, "Validator already exists");
+            require(!validatorStakes[validator].isRegistered, "Validator already exists");
             
             // Set up validator stake (same as registerValidator)
             validatorStakes[validator] = ValidatorStake({
