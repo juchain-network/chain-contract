@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.29;
 
 import {Script, console} from "lib/forge-std/src/Script.sol";
 import {Validators} from "../contracts/Validators.sol";

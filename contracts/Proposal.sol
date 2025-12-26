@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.29;
 
 import {Params} from './Params.sol';
 import {IValidators} from './IValidators.sol';
+import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
-contract Proposal is Params {
+contract Proposal is Params, ReentrancyGuard {
     // How long a proposal will exist
     uint256 public proposalLastingPeriod;
     uint256 public punishThreshold;
@@ -97,11 +98,11 @@ contract Proposal is Params {
 
     function initialize(
         address[] calldata vals,
-        address _validators
+        address validators_
     ) external onlyNotInitialized {
-        require(_validators != address(0), "Invalid validators address");
+        require(validators_ != address(0), "Invalid validators address");
         
-        validators = IValidators(_validators);
+        validators = IValidators(validators_);
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
             pass[vals[i]] = true;
@@ -117,7 +118,7 @@ contract Proposal is Params {
         decreaseRate = 24;
         withdrawProfitPeriod = 86400;
         // Default block reward: 0.2 ether per block (17,280 JU/day ÷ 86,400 blocks/day)
-        blockReward = 200_000_000_000_000_000; // 0.2 ether = 2 * 10^17 wei
+        blockReward = 0.2 ether; // 2 * 10^17 wei
         // Default unbonding period: 7 days in blocks (604800 blocks = 7 days * 24 hours * 3600 seconds / 1 second per block)
         unbondingPeriod = 604800;
         // Default validator unjail period: 24 hours in blocks (86400 blocks = 24 hours * 3600 seconds / 1 second per block)
@@ -146,7 +147,7 @@ contract Proposal is Params {
         require(bytes(details).length <= 3000, 'Details too long');
         require(proposals[id].createTime == 0, 'Proposal already exists');
 
-        ProposalInfo memory proposal;
+        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
         proposal.proposer = msg.sender;
         proposal.dst = dst;
         proposal.flag = flag;
@@ -166,7 +167,7 @@ contract Proposal is Params {
         // forge-lint: disable-next-line(asm-keccak256)
         bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, block.timestamp));
 
-        ProposalInfo memory proposal;
+        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
         proposal.proposer = msg.sender;
         proposal.cid = cid;
         proposal.newValue = newValue;
@@ -178,7 +179,7 @@ contract Proposal is Params {
         return true;
     }
 
-    function voteProposal(bytes32 id, bool auth) external onlyValidator returns (bool) {
+    function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {
         require(proposals[id].createTime != 0, 'Proposal not exist');
         require(votes[msg.sender][id].voteTime == 0, "You can't vote for a proposal twice");
         require(block.timestamp < proposals[id].createTime + proposalLastingPeriod, 'Proposal expired');
@@ -202,7 +203,9 @@ contract Proposal is Params {
         if (results[id].agree >= validators.getActiveValidatorCount() / 2 + 1) {
             results[id].resultExist = true;
 
-            if (proposals[id].proposalType == 1) {
+            // Handle different proposal types with if-else statements
+            uint256 proposalType = proposals[id].proposalType;
+            if (proposalType == 1) {
                 if (proposals[id].flag) {
                     // add to validators
                     pass[proposals[id].dst] = true;
@@ -214,8 +217,10 @@ contract Proposal is Params {
                     proposalPassedTime[proposals[id].dst] = 0; // Clear passed time
                     validators.tryRemoveValidator(proposals[id].dst);
                 }
-            } else if (proposals[id].proposalType == 2) {
+            } else if (proposalType == 2) {
                 updateConfig(proposals[id].cid, proposals[id].newValue);
+            } else {
+                revert("Invalid proposal type");
             }
 
             emit LogPassProposal(id, block.timestamp);
@@ -247,14 +252,16 @@ contract Proposal is Params {
      * @param value New configuration value
      */
     function validateConfig(uint256 cid, uint256 value) internal pure returns (bool) {
-        require(cid >= 0 && cid <= 9, "Invalid config ID");
+        require(cid <= 9, "Invalid config ID");
         
-        // Check specific rules
+        // Use if-else statements for better robustness
         if (cid == 0) {
             require(value >= 1 hours && value <= 30 days, "Invalid proposal period");
-        } else {
+        } else if (cid >= 1 && cid <= 9) {
             // All other configs require positive values
             require(value > 0, "Config value must be positive");
+        } else {
+            revert("Invalid config ID");
         }
         return true;
     }
@@ -267,17 +274,30 @@ contract Proposal is Params {
     function updateConfig(uint256 cid, uint256 value) private {
         validateConfig(cid, value);
         
-        // Since validateConfig already checks cid is between 0-9, no need for else checks
-        if (cid == 0) proposalLastingPeriod = value;
-        if (cid == 1) punishThreshold = value;
-        if (cid == 2) removeThreshold = value;
-        if (cid == 3) decreaseRate = value;
-        if (cid == 4) withdrawProfitPeriod = value;
-        if (cid == 5) blockReward = value;
-        if (cid == 6) unbondingPeriod = value;
-        if (cid == 7) validatorUnjailPeriod = value;
-        if (cid == 8) minValidatorStake = value;
-        if (cid == 9) maxValidators = value;
+        // Use if-else statements for better robustness
+        if (cid == 0) {
+            proposalLastingPeriod = value;
+        } else if (cid == 1) {
+            punishThreshold = value;
+        } else if (cid == 2) {
+            removeThreshold = value;
+        } else if (cid == 3) {
+            decreaseRate = value;
+        } else if (cid == 4) {
+            withdrawProfitPeriod = value;
+        } else if (cid == 5) {
+            blockReward = value;
+        } else if (cid == 6) {
+            unbondingPeriod = value;
+        } else if (cid == 7) {
+            validatorUnjailPeriod = value;
+        } else if (cid == 8) {
+            minValidatorStake = value;
+        } else if (cid == 9) {
+            maxValidators = value;
+        } else {
+            revert("Unknown config ID"); // Fail fast for new config IDs
+        }
     }
 
     /**

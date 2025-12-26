@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.29;
 
 import {Params} from './Params.sol';
 import {IProposal} from './IProposal.sol';
 import {IPunish} from './IPunish.sol';
 import {IStaking} from './IStaking.sol';
 import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import {IValidators} from './IValidators.sol';
 
-contract Validators is Params, ReentrancyGuard {
+contract Validators is Params, ReentrancyGuard, IValidators {
 
     /**
      * @dev Validator status enum
@@ -77,22 +78,22 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     function _onlyNotRewarded() internal view {
-        require(operationsDone[block.number][uint8(Operations.Distribute)] == false, 'Block is already rewarded');
+        require(!operationsDone[block.number][uint8(Operations.Distribute)], 'Block is already rewarded');
     }
 
     function initialize(
         address[] calldata vals,
-        address _proposal,
-        address _punish,
-        address _staking
+        address proposal_,
+        address punish_,
+        address staking_
     ) external onlyNotInitialized {
-        require(_proposal != address(0), "Invalid proposal address");
-        require(_punish != address(0), "Invalid punish address");
-        require(_staking != address(0), "Invalid staking address");
+        require(proposal_ != address(0), "Invalid proposal address");
+        require(punish_ != address(0), "Invalid punish address");
+        require(staking_ != address(0), "Invalid staking address");
         
-        proposal = IProposal(_proposal);
-        punish = IPunish(_punish);
-        staking = IStaking(_staking);
+        proposal = IProposal(proposal_);
+        punish = IPunish(punish_);
+        staking = IStaking(staking_);
 
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
@@ -147,7 +148,7 @@ contract Validators is Params, ReentrancyGuard {
      * @notice This function does NOT check jailed status, only checks if validator is in currentValidatorSet
      * @notice Can be called even if validator is still jailed (e.g., in unjailValidator before state change)
      */
-    function tryActive(address validator) external onlyInitialized returns (bool) {
+    function tryActive(address validator) external onlyInitialized nonReentrant returns (bool) {
         require(
             msg.sender == address(proposal) || msg.sender == address(staking),
             "Only Proposal or Staking contract can call"
@@ -241,7 +242,7 @@ contract Validators is Params, ReentrancyGuard {
         onlyBlockEpoch(epoch)
     {
         // Check if validators have already been updated for this block
-        if (operationsDone[block.number][uint8(Operations.UpdateValidators)] == true) {
+        if (operationsDone[block.number][uint8(Operations.UpdateValidators)]) {
             return; // Silently return to avoid consensus issues
         }
         
@@ -394,7 +395,8 @@ contract Validators is Params, ReentrancyGuard {
             validators[i] = validator;
             
             // Get validator info from Staking contract
-            (uint256 selfStake, uint256 totalDelegated, , , , , , ) = staking.getValidatorInfo(validator);
+            (uint256 selfStake, uint256 totalDelegated, , , , , , ) = 
+                staking.getValidatorInfo(validator);
             
             // Calculate total stake (selfStake + totalDelegated)
             totalStakes[i] = selfStake + totalDelegated;
@@ -418,7 +420,8 @@ contract Validators is Params, ReentrancyGuard {
     }
 
     function isActiveValidator(address who) public view returns (bool) {
-        for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+        uint256 currentSetLength = currentValidatorSet.length;
+        for (uint256 i = 0; i < currentSetLength; i++) {
             if (currentValidatorSet[i] == who) {
                 return true;
             }
@@ -452,12 +455,14 @@ contract Validators is Params, ReentrancyGuard {
      * @return Whether validator exists (has staked)
      */
     function isValidatorExist(address validator) external view returns (bool) {
-        (uint256 selfStake, , , , , , , ) = staking.getValidatorInfo(validator);
+        (uint256 selfStake, , , , , , , ) = 
+            staking.getValidatorInfo(validator);
         return selfStake > 0;
     }
 
     function isTopValidator(address who) public view returns (bool) {
-        for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
+        uint256 highestSetLength = highestValidatorsSet.length;
+        for (uint256 i = 0; i < highestSetLength; i++) {
             if (highestValidatorsSet[i] == who) {
                 return true;
             }
@@ -505,7 +510,8 @@ contract Validators is Params, ReentrancyGuard {
 
     function _tryAddValidatorToHighestSet(address val) internal {
         // do nothing if you are already in highestValidatorsSet set
-        for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
+        uint256 highestSetLength = highestValidatorsSet.length;
+        for (uint256 i = 0; i < highestSetLength; i++) {
             if (highestValidatorsSet[i] == val) {
                 return;
             }
@@ -534,10 +540,11 @@ contract Validators is Params, ReentrancyGuard {
      * @notice This is different from removeValidatorInternal() which calls tryRemoveValidatorIncoming()
      * @notice Ensures at least one validator remains in highestValidatorsSet
      */
-    function removeFromHighestSet(address validator) external onlyStakingContract onlyInitialized {
+    function removeFromHighestSet(address validator) external onlyStakingContract onlyInitialized nonReentrant {
         // Check if validator is in highestValidatorsSet
         bool isInSet = false;
-        for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
+        uint256 highestSetLength = highestValidatorsSet.length;
+        for (uint256 i = 0; i < highestSetLength; i++) {
             if (highestValidatorsSet[i] == validator) {
                 isInSet = true;
                 break;
@@ -586,43 +593,41 @@ contract Validators is Params, ReentrancyGuard {
             return;
         }
 
-        uint256 rewardValsLen = getRewardLen(punishedVal);
-        if (rewardValsLen == 0) {
+        uint256 currentSetLength = currentValidatorSet.length;
+        
+        // Cache jailed status for all validators in a single pass
+        bool[] memory isJailed = new bool[](currentSetLength);
+        uint256 validValidatorCount = 0;
+        
+        for (uint256 i = 0; i < currentSetLength; i++) {
+            address val = currentValidatorSet[i];
+            bool jailed = staking.isValidatorJailed(val);
+            isJailed[i] = jailed;
+            if (val != punishedVal && !jailed) {
+                validValidatorCount++;
+            }
+        }
+
+        if (validValidatorCount == 0) {
             return;
         }
 
-        uint256 remain;
-        address last;
-        uint256 per = totalReward / rewardValsLen;
-        remain = totalReward - (per * rewardValsLen);
+        // Calculate per-validator reward without divide-before-multiply
+        uint256 per = totalReward / validValidatorCount;
+        uint256 remainder = totalReward % validValidatorCount;
 
-        for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+        // Distribute rewards using cached jailed status
+        for (uint256 i = 0; i < currentSetLength; i++) {
             address val = currentValidatorSet[i];
-            // Exclude the punished validator and jailed validators
-            // Jailed validators remain in currentValidatorSet until next epoch, but should not receive rewards
-            if (val != punishedVal && !staking.isValidatorJailed(val)) {
-                validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming + per;
-
-                last = val;
+            if (val != punishedVal && !isJailed[i]) {
+                uint256 reward = per;
+                if (remainder > 0) {
+                    reward += 1;
+                    remainder -= 1;
+                }
+                validatorInfo[val].aacIncoming += reward;
             }
         }
-
-        if (remain > 0 && last != address(0)) {
-            validatorInfo[last].aacIncoming = validatorInfo[last].aacIncoming + remain;
-        }
-    }
-
-    function getRewardLen(address punishedVal) private view returns (uint256) {
-        uint256 l;
-        for (uint256 i = 0; i < currentValidatorSet.length; i++) {
-            address val = currentValidatorSet[i];
-            // Exclude the punished validator and jailed validators
-            // Jailed validators remain in currentValidatorSet until next epoch, but should not receive rewards
-            if (val != punishedVal && !staking.isValidatorJailed(val)) {
-                l++;
-            }
-        }
-        return l;
     }
 
     function tryRemoveValidatorInHighestSet(address val) private {
