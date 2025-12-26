@@ -85,6 +85,7 @@ contract Params {
     }
 
     function _onlyBlockEpoch(uint256 epoch) internal view {
+        // Check if block.number is divisible by epoch, no need for >= check since block.number starts at 0
         require(block.number % epoch == 0, "Block epoch only");
     }
 

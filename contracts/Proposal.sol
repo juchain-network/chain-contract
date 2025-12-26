@@ -203,7 +203,9 @@ contract Proposal is Params, ReentrancyGuard {
         if (results[id].agree >= validators.getActiveValidatorCount() / 2 + 1) {
             results[id].resultExist = true;
 
-            if (proposals[id].proposalType == 1) {
+            // Handle different proposal types with if-else statements
+            uint256 proposalType = proposals[id].proposalType;
+            if (proposalType == 1) {
                 if (proposals[id].flag) {
                     // add to validators
                     pass[proposals[id].dst] = true;
@@ -215,8 +217,10 @@ contract Proposal is Params, ReentrancyGuard {
                     proposalPassedTime[proposals[id].dst] = 0; // Clear passed time
                     validators.tryRemoveValidator(proposals[id].dst);
                 }
-            } else if (proposals[id].proposalType == 2) {
+            } else if (proposalType == 2) {
                 updateConfig(proposals[id].cid, proposals[id].newValue);
+            } else {
+                revert("Invalid proposal type");
             }
 
             emit LogPassProposal(id, block.timestamp);
@@ -250,12 +254,14 @@ contract Proposal is Params, ReentrancyGuard {
     function validateConfig(uint256 cid, uint256 value) internal pure returns (bool) {
         require(cid <= 9, "Invalid config ID");
         
-        // Check specific rules
+        // Use if-else statements for better robustness
         if (cid == 0) {
             require(value >= 1 hours && value <= 30 days, "Invalid proposal period");
-        } else {
+        } else if (cid >= 1 && cid <= 9) {
             // All other configs require positive values
             require(value > 0, "Config value must be positive");
+        } else {
+            revert("Invalid config ID");
         }
         return true;
     }
@@ -268,17 +274,30 @@ contract Proposal is Params, ReentrancyGuard {
     function updateConfig(uint256 cid, uint256 value) private {
         validateConfig(cid, value);
         
-        // Since validateConfig already checks cid is between 0-9, no need for else checks
-        if (cid == 0) proposalLastingPeriod = value;
-        if (cid == 1) punishThreshold = value;
-        if (cid == 2) removeThreshold = value;
-        if (cid == 3) decreaseRate = value;
-        if (cid == 4) withdrawProfitPeriod = value;
-        if (cid == 5) blockReward = value;
-        if (cid == 6) unbondingPeriod = value;
-        if (cid == 7) validatorUnjailPeriod = value;
-        if (cid == 8) minValidatorStake = value;
-        if (cid == 9) maxValidators = value;
+        // Use if-else statements for better robustness
+        if (cid == 0) {
+            proposalLastingPeriod = value;
+        } else if (cid == 1) {
+            punishThreshold = value;
+        } else if (cid == 2) {
+            removeThreshold = value;
+        } else if (cid == 3) {
+            decreaseRate = value;
+        } else if (cid == 4) {
+            withdrawProfitPeriod = value;
+        } else if (cid == 5) {
+            blockReward = value;
+        } else if (cid == 6) {
+            unbondingPeriod = value;
+        } else if (cid == 7) {
+            validatorUnjailPeriod = value;
+        } else if (cid == 8) {
+            minValidatorStake = value;
+        } else if (cid == 9) {
+            maxValidators = value;
+        } else {
+            revert("Unknown config ID"); // Fail fast for new config IDs
+        }
     }
 
     /**
