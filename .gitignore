@@ -11,6 +11,8 @@ cache
 artifacts
 out
 broadcast
+logs/
+test-results/
 tools/ju-cli.exe
 tools/ju-cli
 tools/*.json
