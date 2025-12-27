@@ -134,7 +134,7 @@ contract Proposal is Params, ReentrancyGuard {
         address dst,
         bool flag,
         string calldata details
-    ) external onlyValidator returns (bool) {
+    ) external onlyValidator returns (bytes32) {
         // can't add an already exist dst or remove a not exist dst
         require(
             (!pass[dst] && flag) || (pass[dst] && !flag),
@@ -157,10 +157,10 @@ contract Proposal is Params, ReentrancyGuard {
 
         proposals[id] = proposal;
         emit LogCreateProposal(id, msg.sender, dst, flag, block.timestamp);
-        return true;
+        return id;
     }
 
-    function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bool) {
+    function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bytes32) {
         // Validate config parameters before creating proposal
         require(validateConfig(cid, newValue), "Config validation failed");
         
@@ -176,7 +176,7 @@ contract Proposal is Params, ReentrancyGuard {
 
         proposals[id] = proposal;
         emit LogCreateConfigProposal(id, msg.sender, cid, newValue, block.timestamp);
-        return true;
+        return id;
     }
 
     function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {

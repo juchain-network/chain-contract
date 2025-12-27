@@ -15,7 +15,7 @@ import {IStaking} from './IStaking.sol';
 contract Staking is Params, ReentrancyGuard, IStaking {
 
     // Minimum delegation amount
-    uint256 public constant MIN_DELEGATION = 10 ether; // 10 JU
+    uint256 public constant MIN_DELEGATION = 1 ether; // 1 JU
     
     // Commission rate precision (10000 = 100%)
     uint256 public constant COMMISSION_RATE_BASE = 10000;    

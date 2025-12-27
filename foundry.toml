@@ -1,7 +1,7 @@
 [profile.default]
 solc_version = "0.8.29"
 src = "contracts"
-test = "test"
+test = "script/test"
 out = "out"
 libs = ["lib", "node_modules"]
 optimizer = true

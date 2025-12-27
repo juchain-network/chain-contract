@@ -13,9 +13,8 @@ NC = \033[0m # No Color
 
 .PHONY: help clean build test fmt security coverage gas-test all update version addresses generate-contracts generate-contracts-mock generate-go-client
 
-# Default target
 help:
-	@echo "$(YELLOW)Available targets:$(NC)"
+# Available targets:
 	@echo "  $(GREEN)build$(NC)         - Compile contracts"
 	@echo "  $(GREEN)test$(NC)          - Run all tests"
 	@echo "  $(GREEN)clean$(NC)         - Clean build artifacts"
@@ -31,11 +30,26 @@ help:
 	@echo "  $(GREEN)generate-contracts-mock$(NC) - Generate mock contracts for testing"
 	@echo "  $(GREEN)generate-go-client$(NC) - Generate Go client code using abigen"
 	@echo ""
+	@echo "$(YELLOW)Anvil Test Environment:$(NC)"
+	@echo "  $(GREEN)anvil-start$(NC)    - Start Anvil test node"
+	@echo "  $(GREEN)anvil-stop$(NC)     - Stop Anvil test node"
+	@echo "  $(GREEN)anvil-status$(NC)   - Check Anvil node status"
+	@echo "  $(GREEN)anvil-clean$(NC)    - Clean Anvil logs and temporary files"
+	@echo ""
+	@echo "$(YELLOW)PoSA Integration Tests:$(NC)"
+	@echo "  $(GREEN)test-all$(NC)       - Run comprehensive PoSA test suite (includes all test scenarios, report generation, and environment management)"
+	@echo ""
+	@echo "$(YELLOW)Test Utilities:$(NC)"
+	@echo "  $(GREEN)load-env$(NC)       - Load environment variables from .env file"
+	@echo ""
 
 # Clean build artifacts
 clean:
 	@echo "$(YELLOW)Cleaning build artifacts...$(NC)"
 	forge clean
+	@make anvil-stop
+	@make anvil-clean
+	@make test-env-clean
 
 # Build contracts
 build:
@@ -196,3 +210,173 @@ generate-go-client: build
 	@ls -la $(GO_CLIENT_DIR)/ 2>/dev/null || echo "$(RED)No files generated$(NC)"
 	
 	@echo "$(GREEN)✅ Go client code generation completed!$(NC)"
+
+# =========================
+# Anvil Test Environment
+# =========================
+
+# Start Anvil test node
+anvil-start:
+	@echo "$(YELLOW)Starting Anvil test node...$(NC)"
+	@./anvil-setup.sh --start
+
+# Stop Anvil test node
+anvil-stop:
+	@echo "$(YELLOW)Stopping Anvil test node...$(NC)"
+	@./anvil-setup.sh --stop
+
+# Check Anvil node status
+anvil-status:
+	@./anvil-setup.sh --status
+
+# Clean Anvil logs and temporary files
+anvil-clean:
+	@echo "$(YELLOW)Cleaning Anvil logs and temporary files...$(NC)"
+	@./anvil-setup.sh --clean
+
+# =========================
+# PoSA Integration Tests
+# =========================
+
+# Generate mock contracts before running tests
+test-env:
+	@echo "$(YELLOW)Setting up test environment with mock contracts...$(NC)"
+	@make generate-contracts-mock
+	@echo "$(GREEN)✅ Test environment set up successfully$(NC)"
+
+# Clean test environment and regenerate production contracts
+test-env-clean:
+	@echo "$(YELLOW)Cleaning test environment...$(NC)"
+	@make generate-contracts
+	@echo "$(GREEN)✅ Test environment cleaned$(NC)"
+
+
+# Run all tests in one comprehensive task
+# This task includes: test-env setup, anvil start/stop for each test, test-env-clean
+test-debug:
+	@make clean
+	@echo "$(YELLOW)Starting comprehensive PoSA test suite...$(NC)"
+	
+	# Step 1: Set up test environment with mock contracts
+	@make test-env
+	@make load-env
+	
+	# Run Validator Management test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running Validator Management tests...$(NC)"
+	@make anvil-start
+	@sleep 3
+	@forge script script/integration/ValidatorManagement.s.sol:ValidatorManagementScript --fork-url http://localhost:8545 --broadcast --skip-simulation -vvv
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Step 6: Clean test environment
+	@make test-env-clean
+	
+	@echo "\n$(GREEN)✅ All tests completed successfully!$(NC)"
+
+# Run all tests in one comprehensive task
+# This task includes: test-env setup, anvil start/stop for each test, test-env-clean
+test-all:
+	@echo "$(YELLOW)Starting comprehensive PoSA test suite...$(NC)"
+	
+	# Step 1: Set up test environment with mock contracts
+	@make test-env
+	
+	# Run Deployment test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running Deployment tests...$(NC)"
+	@make anvil-start
+	@forge script script/tools/Deployment.s.sol:DeploymentScript --fork-url http://localhost:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --gas-limit 100000000 --gas-price 1
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Run Validator Management test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running Validator Management tests...$(NC)"
+	@make anvil-start
+	@forge script script/integration/ValidatorManagement.s.sol:ValidatorManagementScript --fork-url http://localhost:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --gas-limit 100000000 --gas-price 1
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Run Validator Lifecycle test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running Validator Lifecycle tests...$(NC)"
+	@make anvil-start
+	@forge script script/integration/ValidatorLifecycleTest.s.sol:ValidatorLifecycleTest --fork-url http://localhost:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --gas-limit 100000000 --gas-price 1
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Run Delegator Lifecycle test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running Delegator Lifecycle tests...$(NC)"
+	@make anvil-start
+	@forge script script/integration/DelegatorLifecycleTest.s.sol:DelegatorLifecycleTest --fork-url http://localhost:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --gas-limit 100000000 --gas-price 1
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Run Staking Mechanism test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running Staking Mechanism tests...$(NC)"
+	@make anvil-start
+	@forge script script/integration/StakingMechanism.s.sol:StakingMechanismScript --fork-url http://localhost:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --gas-limit 100000000 --gas-price 1
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Run Proposal System test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running Proposal System tests...$(NC)"
+	@make anvil-start
+	@forge script script/tools/ProposalSystem.s.sol:ProposalSystemScript --fork-url http://localhost:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --gas-limit 100000000 --gas-price 1
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Run Punishment Mechanism test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running Punishment Mechanism tests...$(NC)"
+	@make anvil-start
+	@forge script script/integration/PunishmentMechanism.s.sol:PunishmentMechanismScript --fork-url http://localhost:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --gas-limit 100000000 --gas-price 1
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Run PoSA Integration test with fresh Anvil instance
+	@echo "\n$(YELLOW)Running PoSA Integration tests...$(NC)"
+	@make anvil-start
+	@forge script script/integration/PoSAIntegrationTest.s.sol:PoSAIntegrationTest --fork-url http://localhost:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --gas-limit 100000000 --gas-price 1
+	@make anvil-stop
+	@make anvil-clean
+	
+	# Step 6: Clean test environment
+	@make test-env-clean
+	
+	@echo "\n$(GREEN)✅ All tests completed successfully!$(NC)"
+
+test-report:
+	@echo "$(YELLOW)Starting comprehensive PoSA test suite with report generation...$(NC)"
+	
+	# Step 1: Set up test environment with mock contracts
+	@make test-env
+	
+	# Step 2: Start Anvil test node
+	@make anvil-start
+
+	# Step 3: Run test-report to generate comprehensive test results
+	@echo "$(YELLOW)Running tests and generating reports...$(NC)"
+	@python3 test-report.py --broadcast
+	
+	# Step 4: Stop Anvil test node
+	@make anvil-stop
+	
+	# Step 5: Clean Anvil logs and temporary files
+	@make anvil-clean
+	
+	# Step 6: Clean test environment
+	@make test-env-clean
+	
+	@echo "$(GREEN)✅ All tests completed successfully!$(NC)"
+	@echo "$(GREEN)Test reports generated in ./test-results directory$(NC)"
+# =========================
+# Test Utilities
+# =========================
+
+# Load environment variables from .env file
+load-env:
+	@echo "$(YELLOW)Loading environment variables from .env file...$(NC)"
+	@if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | xargs); \
+		echo "$(GREEN)✅ Environment variables loaded successfully!$(NC)"; \
+	else \
+		echo "$(YELLOW)Warning: .env file not found. Using default values.$(NC)"; \
+	fi
