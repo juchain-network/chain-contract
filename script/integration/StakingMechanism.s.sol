@@ -12,6 +12,7 @@ contract StakingMechanismScript is BaseTestScript {
     // Test accounts
     address public validator;
     address public delegator;
+    uint256 public delegatorKey;
     
     function run() public override {
         console.log("Starting Staking Mechanism Tests...");
@@ -38,16 +39,16 @@ contract StakingMechanismScript is BaseTestScript {
     }
     
     function createTestAccounts() internal override {
-        // Call base class method to create initial validators
+        // Call base class method to create initial validators and delegators
         super.createTestAccounts();
         
         // Create test accounts for this script
         validator = vm.addr(uint256(keccak256(abi.encodePacked("testStakingValidator"))));
-        delegator = vm.addr(uint256(keccak256(abi.encodePacked("testDelegator"))));
+        delegator = validatorAccounts[10];
+        delegatorKey = validatorKeys[10];
         
         // Fund new validator with 110k ETH (100k stake + 10k fees)
         fundNewValidator(uint256(keccak256(abi.encodePacked("testStakingValidator"))));
-        vm.deal(delegator, 5000 ether);
         
         console.log("Additional test accounts created:");
         console.log("Validator:", validator);
@@ -60,20 +61,21 @@ contract StakingMechanismScript is BaseTestScript {
         console.log("\n=== Testing Validator Self-Staking ===");
         
         // Create and pass proposal for new validator
-        vm.prank(validatorAccounts[0]);
-        
+        vm.startBroadcast(validatorKeys[0]);
         // Create proposal
         bytes32 proposalId = proposal.createProposal(validator, true, "Add validator for staking test");
         require(proposalId != bytes32(0), "Proposal creation failed");
+        vm.stopBroadcast();
         
         // Vote for the proposal from all validators
         for (uint256 i = 0; i < validatorAccounts.length; i++) {
-            vm.prank(validatorAccounts[i]);
+            vm.startBroadcast(validatorKeys[i]);
             proposal.voteProposal(proposalId, true);
+            vm.stopBroadcast();
         }
         
         // Register validator with self-stake and commission rate (10%)
-        vm.startBroadcast(validator);
+        vm.startBroadcast(uint256(keccak256(abi.encodePacked("testStakingValidator"))));
         staking.registerValidator{value: VALIDATOR_STAKE}(1000); // 1000 = 10%
         vm.stopBroadcast();
         
@@ -90,7 +92,7 @@ contract StakingMechanismScript is BaseTestScript {
         uint256 initialDelegatorBalance = delegator.balance;
         
         // Delegate to validator
-        vm.startBroadcast(delegator);
+        vm.startBroadcast(delegatorKey);
         staking.delegate{value: DELEGATION_AMOUNT}(validator);
         vm.stopBroadcast();
         
@@ -112,7 +114,7 @@ contract StakingMechanismScript is BaseTestScript {
         (uint256 initialDelegatedAmount, , , ) = staking.getDelegationInfo(delegator, validator);
         
         // Increase delegation
-        vm.startBroadcast(delegator);
+        vm.startBroadcast(delegatorKey);
         staking.delegate{value: additionalDelegation}(validator);
         vm.stopBroadcast();
         
@@ -129,7 +131,7 @@ contract StakingMechanismScript is BaseTestScript {
         (uint256 delegatedAmount, , , ) = staking.getDelegationInfo(delegator, validator);
         
         // Request unstaking (undelegate)
-        vm.startBroadcast(delegator);
+        vm.startBroadcast(delegatorKey);
         staking.undelegate(validator, delegatedAmount);
         vm.stopBroadcast();
         
@@ -142,7 +144,7 @@ contract StakingMechanismScript is BaseTestScript {
         
         // Withdraw unstaked amount
         uint256 initialBalance = delegator.balance;
-        vm.startBroadcast(delegator);
+        vm.startBroadcast(delegatorKey);
         staking.withdrawUnbonded(validator, 1);
         vm.stopBroadcast();
         

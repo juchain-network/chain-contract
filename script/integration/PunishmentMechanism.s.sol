@@ -39,16 +39,17 @@ contract PunishmentMechanismScript is BaseTestScript {
         console.log("\nRegistering and activating validator...");
         
         // Create and pass proposal for test validator
-        vm.prank(validatorAccounts[0]);
-        
+        vm.startBroadcast(validatorKeys[0]);
         // Create proposal
         bytes32 proposalId = proposal.createProposal(testValidator, true, "Add validator for punishment test");
         require(proposalId != bytes32(0), "Proposal creation failed");
+        vm.stopBroadcast();
         
         // Vote for the proposal from all validators
         for (uint256 i = 0; i < validatorAccounts.length; i++) {
-            vm.prank(validatorAccounts[i]);
+            vm.startBroadcast(validatorKeys[i]);
             proposal.voteProposal(proposalId, true);
+            vm.stopBroadcast();
         }
         
         // Get private key for the new validator

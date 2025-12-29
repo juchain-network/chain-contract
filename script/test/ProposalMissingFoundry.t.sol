@@ -47,10 +47,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         address candidate = makeAddr("candidate");
         
-        vm.warp(2_000_000);
-        bytes32 id = keccak256(abi.encodePacked(v1, candidate, true, "test", block.timestamp));
         vm.prank(v1);
-        p.createProposal(candidate, true, "test");
+        bytes32 id = p.createProposal(candidate, true, "test");
         
         // 2 votes agree
         vm.prank(v1); p.voteProposal(id, true);
@@ -78,10 +76,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         address proposer = v1; // Use validator v1 as proposer
         
         vm.warp(3_000_000);
-        bytes32 id = keccak256(abi.encodePacked(proposer, candidate, true, "test details", block.timestamp));
-        
         vm.prank(proposer);
-        p.createProposal(candidate, true, "test details");
+        bytes32 id = p.createProposal(candidate, true, "test details");
         
         // Vote passes
         vm.prank(v1); p.voteProposal(id, true);
@@ -131,9 +127,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         // In actual tests, this is automatically triggered through punishment process or removal proposals
         // We test this functionality through removing validator proposals
         vm.warp(4_000_000);
-        bytes32 id = keccak256(abi.encodePacked(v1, candidate, false, "", block.timestamp));
         vm.prank(v1);
-        Proposal(PROPOSAL).createProposal(candidate, false, "");
+        bytes32 id = Proposal(PROPOSAL).createProposal(candidate, false, "");
         
         // Vote to remove
         vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
@@ -154,10 +149,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         uint256 validValue = 86400; // 1 day in seconds
         
         vm.prank(v1);
-        bytes32 proposalId = p.createUpdateConfigProposal(0, validValue); // cid=0, value=86400 seconds (valid)
-        require(proposalId != bytes32(0), "should create valid proposal");
-        
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(0), validValue, uint256(timestamp)));
+        bytes32 id = p.createUpdateConfigProposal(0, validValue); // cid=0, value=86400 seconds (valid)
+        require(id != bytes32(0), "should create valid proposal");
         
         vm.prank(v1); p.voteProposal(id, true);
         vm.prank(v2); p.voteProposal(id, true);
@@ -195,9 +188,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         
         // Test creating a configuration proposal
         vm.prank(v1); // Use validator v1 as proposer
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(0), uint256(24 hours), block.timestamp));
-        bytes32 proposalId = p.createUpdateConfigProposal(0, 24 hours);
-        assert(proposalId != bytes32(0));
+        bytes32 id = p.createUpdateConfigProposal(0, 24 hours);
+        assert(id != bytes32(0));
         
         // Vote on the proposal
         vm.prank(v1);
@@ -235,8 +227,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         
         // Create a proposal
         vm.prank(v1); // Use validator v1 as proposer
-        bytes32 id = keccak256(abi.encodePacked(v1, newValidator, true, "Add new validator", block.timestamp));
-        p.createProposal(newValidator, true, "Add new validator");
+        bytes32 id = p.createProposal(newValidator, true, "Add new validator");
         
         // Warp time to after the proposal period
         vm.warp(block.timestamp + p.proposalLastingPeriod() + 1);
@@ -253,8 +244,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         
         // Create a proposal
         vm.prank(v1); // Use validator v1 as proposer
-        bytes32 id = keccak256(abi.encodePacked(v1, newValidator, true, "Add new validator", block.timestamp));
-        p.createProposal(newValidator, true, "Add new validator");
+        bytes32 id = p.createProposal(newValidator, true, "Add new validator");
         
         // First vote
         vm.prank(v1);
@@ -282,8 +272,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         
         // Create a proposal
         vm.prank(v1); // Use validator v1 as proposer
-        bytes32 id = keccak256(abi.encodePacked(v1, newValidator, true, "Add new validator", block.timestamp));
-        p.createProposal(newValidator, true, "Add new validator");
+        bytes32 id = p.createProposal(newValidator, true, "Add new validator");
         
         // Vote on the proposal
         vm.prank(v1);
@@ -317,9 +306,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         uint256 validValue = 48; // New punish threshold
         
         // Create config proposal
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(1), validValue, block.timestamp));
         vm.prank(v1);
-        p.createUpdateConfigProposal(1, validValue);
+        bytes32 id = p.createUpdateConfigProposal(1, validValue);
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);
@@ -343,13 +331,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         
         // Create a proposal and vote for it
         vm.prank(v1); // Use validator v1 as proposer
-        p.createProposal(newValidator, true, "Add validator");
-        
-        // Get the proposal ID correctly by recreating it
-        bytes32 id;
-        uint256 createTime = block.timestamp;
-        string memory details = "Add validator";
-        id = keccak256(abi.encodePacked(v1, newValidator, true, details, createTime));
+        bytes32 id = p.createProposal(newValidator, true, "Add validator");
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);
@@ -415,24 +397,21 @@ contract ProposalMissingFoundryTest is BaseSetup {
         address candidate = makeAddr("candidate");
         
         // Create first proposal
-        vm.warp(1_000_000);
-        bytes32 id1 = keccak256(abi.encodePacked(v1, candidate, true, "test details", block.timestamp));
         vm.prank(v1); // Use validator v1 as proposer
         bytes32 proposalId1 = p.createProposal(candidate, true, "test details");
         require(proposalId1 != bytes32(0), "should create first proposal");
         
-        // Create second proposal with different timestamp (should succeed)
-        vm.warp(1_000_001);
-        bytes32 id2 = keccak256(abi.encodePacked(v1, candidate, true, "test details", block.timestamp));
+        // Create second proposal with different nonce (should succeed)
         vm.prank(v1); // Use validator v1 as proposer
         bytes32 proposalId2 = p.createProposal(candidate, true, "test details");
-        require(proposalId2 != bytes32(0), "should create second proposal with different timestamp");
+        require(proposalId2 != bytes32(0), "should create second proposal with different nonce");
+        require(proposalId1 != proposalId2, "proposal IDs should be different");
         
         // Verify both proposals exist
-        (, uint256 createTime1, , , , , , ) = p.proposals(id1);
-        (, uint256 createTime2, , , , , , ) = p.proposals(id2);
-        require(createTime1 == 1_000_000, "first proposal should exist");
-        require(createTime2 == 1_000_001, "second proposal should exist");
+        (, uint256 createTime1, , , , , , ) = p.proposals(proposalId1);
+        (, uint256 createTime2, , , , , , ) = p.proposals(proposalId2);
+        require(createTime1 > 0, "first proposal should exist");
+        require(createTime2 > 0, "second proposal should exist");
 
     }
 
@@ -441,9 +420,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         uint256 validValue = 96; // New remove threshold
         
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(2), validValue, block.timestamp));
         vm.prank(v1);
-        p.createUpdateConfigProposal(2, validValue);
+        bytes32 id = p.createUpdateConfigProposal(2, validValue);
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);
@@ -459,9 +437,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         uint256 validValue = 48; // New decrease rate
         
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(3), validValue, block.timestamp));
         vm.prank(v1);
-        p.createUpdateConfigProposal(3, validValue);
+        bytes32 id = p.createUpdateConfigProposal(3, validValue);
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);
@@ -477,9 +454,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         uint256 validValue = 172800; // New withdraw profit period (2 days)
         
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(4), validValue, block.timestamp));
         vm.prank(v1);
-        p.createUpdateConfigProposal(4, validValue);
+        bytes32 id = p.createUpdateConfigProposal(4, validValue);
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);
@@ -495,9 +471,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         uint256 validValue = 400_000_000_000_000_000; // New block reward (0.4 ether)
         
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(5), validValue, block.timestamp));
         vm.prank(v1);
-        p.createUpdateConfigProposal(5, validValue);
+        bytes32 id = p.createUpdateConfigProposal(5, validValue);
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);
@@ -513,9 +488,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         uint256 validValue = 1209600; // New unbonding period (14 days)
         
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(6), validValue, block.timestamp));
         vm.prank(v1);
-        p.createUpdateConfigProposal(6, validValue);
+        bytes32 id = p.createUpdateConfigProposal(6, validValue);
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);
@@ -531,9 +505,8 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         uint256 validValue = 172800; // New validator unjail period (2 days)
         
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(7), validValue, block.timestamp));
         vm.prank(v1);
-        p.createUpdateConfigProposal(7, validValue);
+        bytes32 id = p.createUpdateConfigProposal(7, validValue);
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);
@@ -545,22 +518,21 @@ contract ProposalMissingFoundryTest is BaseSetup {
     }
 
     function testCreateProposalWithSameID() public {
-        // Test creating proposal with same ID (same parameters and timestamp)
+        // Test creating proposal with same parameters - should succeed with different IDs due to nonce
         Proposal p = Proposal(PROPOSAL);
         address candidate = makeAddr("candidate");
         string memory details = "test proposal";
         
-        vm.warp(5_000_000);
-        
         // Create first proposal
         vm.prank(v1);
-        bytes32 proposalId = p.createProposal(candidate, true, details);
-        require(proposalId != bytes32(0), "should create proposal successfully");
+        bytes32 proposalId1 = p.createProposal(candidate, true, details);
+        require(proposalId1 != bytes32(0), "should create first proposal successfully");
         
-        // Try to create identical proposal with same timestamp
-        vm.expectRevert("Proposal already exists");
+        // Try to create identical proposal again - should succeed with different ID due to nonce increment
         vm.prank(v1);
-        p.createProposal(candidate, true, details);
+        bytes32 proposalId2 = p.createProposal(candidate, true, details);
+        require(proposalId2 != bytes32(0), "should create second proposal successfully");
+        require(proposalId1 != proposalId2, "proposal IDs should be different due to nonce increment");
     }
 
     function testUpdateConfigCID0Invalid() public {
@@ -666,8 +638,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         // Create and pass a proposal to add the validator
         vm.warp(6_000_000);
         vm.prank(v1);
-        p.createProposal(candidate, true, "add validator");
-        bytes32 id = keccak256(abi.encodePacked(v1, candidate, true, "add validator", block.timestamp));
+        bytes32 id = p.createProposal(candidate, true, "add validator");
         
         // Vote to pass
         vm.prank(v1); p.voteProposal(id, true);

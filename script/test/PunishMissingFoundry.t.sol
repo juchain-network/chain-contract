@@ -64,11 +64,9 @@ contract PunishMissingFoundryTest is BaseSetup {
         require(jailUntilBlock > 0, "v1 should have jailUntilBlock set");
         
         // Create proposal to reactivate validator
-        vm.warp(5_000_000);
         vm.prank(v2);
-        bytes32 id = keccak256(abi.encodePacked(v2, v1, true, "", block.timestamp));
-        bytes32 proposalId = Proposal(PROPOSAL).createProposal(v1, true, "");
-        require(proposalId != bytes32(0), "should create proposal");
+        bytes32 id = Proposal(PROPOSAL).createProposal(v1, true, "");
+        require(id != bytes32(0), "should create proposal");
         
         // Vote to pass proposal
         vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
@@ -161,8 +159,7 @@ contract PunishMissingFoundryTest is BaseSetup {
         // So at least 2 votes are needed to pass proposal
         vm.warp(6_000_000);
         vm.prank(v3); // v3 is the only unjailed validator
-        bytes32 id = keccak256(abi.encodePacked(v3, v1, true, "", block.timestamp));
-        Proposal(PROPOSAL).createProposal(v1, true, "");
+        bytes32 id = Proposal(PROPOSAL).createProposal(v1, true, "");
         
         // v3 votes (1 vote)
         vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);

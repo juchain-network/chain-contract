@@ -3,10 +3,10 @@ pragma solidity ^0.8.29;
 
 import {Script} from "forge-std/Script.sol";
 import {Test, console} from "forge-std/Test.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
-import {Punish} from "../../contracts/Punish.sol";
-import {Staking} from "../../contracts/Staking.sol";
-import {Validators} from "../../contracts/Validators.sol";
+import {Proposal} from "./generated/Proposal.sol";
+import {Punish} from "./generated/Punish.sol";
+import {Staking} from "./generated/Staking.sol";
+import {Validators} from "./generated/Validators.sol";
 
 // Base class for all test scripts, providing common functionality
 contract BaseTestScript is Script, Test {
@@ -124,38 +124,44 @@ contract BaseTestScript is Script, Test {
         }
         
         deployer = vm.addr(deployerKey);
+        // Fund deployer with sufficient ETH
+        fundAddress(deployer, 100000000 ether);
         
+        vm.startBroadcast(deployerKey);
         // Create initial validator accounts
-        for (uint256 i = 0; i < INITIAL_VALIDATORS; i++) {
+        for (uint256 i = 0; i < 10; i++) {
             uint256 validatorKey;
+            uint256 delegatorKey;
+            // Use vm.toString() to convert uint to string and then concatenate
+            string memory minerVarName = string.concat("VALIDATOR_PRIVATE_KEY_", vm.toString(i));
+            string memory delegatorVarName = string.concat("DELEGATOR_PRIVATE_KEY_", vm.toString(i));
             
-            // Try to get validator private key from environment variables
-            // Construct environment variable name using switch case for numbers 1-9
-            string memory envVarName;
-            if (i + 1 == 1) envVarName = "VALIDATOR_PRIVATE_KEY_1";
-            else if (i + 1 == 2) envVarName = "VALIDATOR_PRIVATE_KEY_2";
-            else if (i + 1 == 3) envVarName = "VALIDATOR_PRIVATE_KEY_3";
-            else if (i + 1 == 4) envVarName = "VALIDATOR_PRIVATE_KEY_4";
-            else if (i + 1 == 5) envVarName = "VALIDATOR_PRIVATE_KEY_5";
-            
-            try vm.envUint(envVarName) returns (uint256 key) {
+            try vm.envUint(minerVarName) returns (uint256 key) {
                 validatorKey = key;
             } catch {
                 // Fall back to generated key if environment variable not found
                 validatorKey = uint256(keccak256(abi.encodePacked("validator", i)));
             }
+            try vm.envUint(delegatorVarName) returns (uint256 key) {
+                delegatorKey = key;
+            } catch {
+                // Fall back to generated key if environment variable not found
+                delegatorKey = uint256(keccak256(abi.encodePacked("delegator", i)));
+            }
             
             address validatorAddr = vm.addr(validatorKey);
             validatorAccounts.push(validatorAddr);
             validatorKeys.push(validatorKey);
-            
             // Give validator enough ETH for transactions
-            fundAddress(validatorAddr, VALIDATOR_MIN_BALANCE);
-            
+            fundInitAccounts(validatorAddr, 110000);
+
+            address delegatorAddr = vm.addr(delegatorKey);
+            validatorAccounts.push(delegatorAddr);
+            validatorKeys.push(delegatorKey);
+            // Give validator enough ETH for transactions
+            fundInitAccounts(delegatorAddr, 10000);
         }
-        
-        // Fund deployer with sufficient ETH
-        fundAddress(deployer, 100000000 ether);
+        vm.stopBroadcast();
         
         console.log(unicode"✓ Test accounts created");
         console.log("Deployer address:", deployer);
@@ -168,6 +174,11 @@ contract BaseTestScript is Script, Test {
             uint256 balanceEth = validatorAccounts[i].balance / 1 ether;
             console.log("Validator", i+1, "balance:", balanceEth);
         }
+    }
+
+    function fundInitAccounts(address to, uint256 amountEth) internal {
+        (bool success, ) = payable(to).call{value: amountEth * 1 ether}("");
+        require(success, "fundAddress: transfer failed");
     }
     
     // Deploy and initialize all contracts
@@ -200,9 +211,36 @@ contract BaseTestScript is Script, Test {
             initialValidators,
             COMMISSION_RATE // Commission rate from environment variable
         );
-        
 
+        // Set contract addresses for all contracts
+        validators.setContracts(
+            address(validators),
+            address(punish),
+            address(proposal),
+            address(staking)
+        );
         
+        staking.setContracts(
+            address(validators),
+            address(punish),
+            address(proposal),
+            address(staking)
+        );
+        
+        punish.setContracts(
+            address(validators),
+            address(punish),
+            address(proposal),
+            address(staking)
+        );
+        
+        proposal.setContracts(
+            address(validators),
+            address(punish),
+            address(proposal),
+            address(staking)
+        );
+
         // Initial validators are automatically staked with minValidatorStake() during initializeWithValidators
         // No need to transfer ETH directly to Staking contract
         
@@ -232,6 +270,11 @@ contract BaseTestScript is Script, Test {
     function getValidatorKey(uint256 index) internal view returns (uint256) {
         require(index < validatorKeys.length, "Validator index out of bounds");
         return validatorKeys[index];
+    }
+    // Get validator address by index
+    function getValidatorAddr(uint256 index) internal view returns (address) {
+        require(index < validatorKeys.length, "Validator index out of bounds");
+        return vm.addr(validatorKeys[index]);
     }
     
     // Helper function to convert bytes32 to hex string
@@ -265,7 +308,28 @@ contract BaseTestScript is Script, Test {
         vm.stopBroadcast();
 
         console.log("Funded address:", to);
-        console.log("Amount:", amountWei, "wei");
+        console.log("Amount:", amountWei / 1 ether, "ETH");
+    }
+
+    // Simulate waiting for specified number of blocks by sending transactions
+    function simulateBlocks(uint256 numBlocks) public {
+        require(numBlocks > 0, "simulateBlocks: numBlocks must be greater than 0");
+        
+        console.log("Simulating", numBlocks, "blocks...");
+        
+        // Use deployer to send transactions to itself
+        address recipient = deployer;
+        uint256 amount = 1 wei; // Minimal amount to create a transaction
+        
+        for (uint256 i = 0; i < numBlocks; i++) {
+            vm.startBroadcast(deployerKey);
+            payable(recipient).transfer(amount);
+            vm.stopBroadcast();
+            
+            console.log("Block", i + 1, "simulated");
+        }
+        
+        console.log("Completed simulating", numBlocks, "blocks");
     }
 
 }

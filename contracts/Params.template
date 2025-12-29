@@ -6,24 +6,26 @@ contract Params {
     bool public initialized ;
 
     {% if mock %}
-    address public VALIDATOR_CONTRACT_ADDR;
-    address public PUNISH_CONTRACT_ADDR;
-    address public PROPOSAL_ADDR;
-    address public STAKING_CONTRACT_ADDR;
+    // Test version: mutable variables use mixedCase
+    address public validatorAddr;
+    address public punishAddr;
+    address public proposalAddr;
+    address public stakingAddr;
 
     // only for test
     address public miner;
 
     {% else %}
+    // Production version: constants use SCREAMING_SNAKE_CASE
     // System contracts (POSA addresses)
     address
-        public constant VALIDATOR_CONTRACT_ADDR = 0x000000000000000000000000000000000000F010;
+        public constant VALIDATOR_ADDR = 0x000000000000000000000000000000000000F010;
     address
-        public constant PUNISH_CONTRACT_ADDR = 0x000000000000000000000000000000000000F011;
+        public constant PUNISH_ADDR = 0x000000000000000000000000000000000000F011;
     address
         public constant PROPOSAL_ADDR = 0x000000000000000000000000000000000000F012;
     address
-        public constant STAKING_CONTRACT_ADDR = 0x000000000000000000000000000000000000F013;
+        public constant STAKING_ADDR = 0x000000000000000000000000000000000000F013;
 
     {% endif %}
 
@@ -75,12 +77,13 @@ contract Params {
     function _onlyMiner() internal view {
         {% if mock %}
         require(
-            // just for test
-            msg.sender == miner,
+            // For test environments, use the miner variable or block.coinbase
+            msg.sender == miner || miner == address(0) && msg.sender == block.coinbase,
             "Miner only"
         );
         {% else %}
         require(
+            // For production, strictly use block.coinbase
             msg.sender == block.coinbase,
             "Miner only"
         );
@@ -96,7 +99,11 @@ contract Params {
     }
 
     function _onlyPunishContract() internal view {
-        require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
+        {% if mock %}
+        require(msg.sender == punishAddr, "Punish contract only");
+        {% else %}
+        require(msg.sender == PUNISH_ADDR, "Punish contract only");
+        {% endif %}
     }
 
     function _onlyBlockEpoch(uint256 epoch) internal view {
@@ -106,38 +113,54 @@ contract Params {
 
     function _onlyValidatorsContract() internal view {
         require(
-            msg.sender == VALIDATOR_CONTRACT_ADDR,
+            {% if mock %}
+            msg.sender == validatorAddr,
+            {% else %}
+            msg.sender == VALIDATOR_ADDR,
+            {% endif %}
             "Validators contract only"
         );
     }
 
     function _onlyProposalContract() internal view {
         require(
+            {% if mock %}
+            msg.sender == proposalAddr,
+            {% else %}
             msg.sender == PROPOSAL_ADDR,
+            {% endif %}
             "Proposal contract only"
         );
     }
 
     function _onlyStakingContract() internal view {
         require(
-            msg.sender == STAKING_CONTRACT_ADDR,
+            {% if mock %}
+            msg.sender == stakingAddr,
+            {% else %}
+            msg.sender == STAKING_ADDR,
+            {% endif %}
             "Staking contract only"
         );
     }
 
     function _onlyPunishOrValidatorsContract() internal view {
         require(
-            msg.sender == PUNISH_CONTRACT_ADDR || msg.sender == VALIDATOR_CONTRACT_ADDR,
+            {% if mock %}
+            msg.sender == punishAddr || msg.sender == validatorAddr,
+            {% else %}
+            msg.sender == PUNISH_ADDR || msg.sender == VALIDATOR_ADDR,
+            {% endif %}
             "Only punish or validators contract can call this function"
         );
     }
 
     {% if mock %}
     function setContracts(address val, address punish, address proposal, address staking) public {
-        VALIDATOR_CONTRACT_ADDR = val;
-        PUNISH_CONTRACT_ADDR = punish;
-        PROPOSAL_ADDR = proposal;
-        STAKING_CONTRACT_ADDR = staking;
+        validatorAddr = val;
+        punishAddr = punish;
+        proposalAddr = proposal;
+        stakingAddr = staking;
     }
 
     function setMiner(address miner_) public {

@@ -56,8 +56,7 @@ contract ValidatorsFoundryTest is BaseSetup {
         
         // Create proposal from v1 (active validator) instead of address(this)
         vm.prank(v1);
-        id = keccak256(abi.encodePacked(v1, uint256(4), uint256(2), block.timestamp));
-        p.createUpdateConfigProposal(4, 2);
+        id = p.createUpdateConfigProposal(4, 2);
         vm.prank(v1); p.voteProposal(id, true);
         vm.prank(v2); p.voteProposal(id, true);
         vm.prank(v3); p.voteProposal(id, true);

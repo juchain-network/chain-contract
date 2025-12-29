@@ -4,6 +4,7 @@
 .tool-versions
 ./contracts/output.json
 ./node_modules/*
+script/integration/generated/
 .DS_Store
 node_modules
 build

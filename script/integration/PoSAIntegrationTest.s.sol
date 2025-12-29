@@ -21,13 +21,7 @@ contract PoSAIntegrationTest is BaseTestScript {
         createTestAccounts();
         deployAndInitializeContracts();
         
-        // Create delegator accounts (specific to this test)
-        for (uint256 i = 0; i < 10; i++) {
-            uint256 delegatorKey = uint256(keccak256(abi.encodePacked("delegator", i)));
-            delegatorKeys.push(delegatorKey);
-            delegatorAccounts.push(vm.addr(delegatorKey));
-            fundAddress(delegatorAccounts[i], 1000000 ether);
-        }
+        // Use delegator accounts from BaseTestScript (index 10-19)
 
         // Run individual test modules
         testValidatorManagement();
@@ -65,12 +59,12 @@ contract PoSAIntegrationTest is BaseTestScript {
         console.log("\n=== Testing Staking Mechanism ===");
         
         address validator = validatorAccounts[0];
-        address delegator = delegatorAccounts[0];
+        address delegator = validatorAccounts[10];
         uint256 delegationAmount = 100 ether;
         
         printBalance(delegator);
         // Test 1: Delegation to validator
-        vm.startBroadcast(delegatorKeys[0]);
+        vm.startBroadcast(validatorKeys[10]);
         staking.delegate{value: delegationAmount}(validator);
         vm.stopBroadcast();
         
@@ -83,7 +77,7 @@ contract PoSAIntegrationTest is BaseTestScript {
         uint256 additionalDelegation = 50 ether;
         uint256 initialDelegatedAmount = delegatorStake; // Save current delegation amount
         printBalance(delegator);
-        vm.startBroadcast(delegatorKeys[0]);
+        vm.startBroadcast(validatorKeys[10]);
         staking.delegate{value: additionalDelegation}(validator);
         vm.stopBroadcast();
         
@@ -103,8 +97,7 @@ contract PoSAIntegrationTest is BaseTestScript {
         address miner = validatorAccounts[0];
         setMinerTemporarily(miner);
         
-        // Give miner enough funds to perform the transaction
-        fundAddress(miner, 1000 ether);
+        // Miner already has funds from BaseTestScript;
         
         // Simulate miner calling distributeBlockReward
         vm.startBroadcast(validatorKeys[0]);
@@ -156,7 +149,6 @@ contract PoSAIntegrationTest is BaseTestScript {
         // Use first validator as miner temporarily
         address miner = validatorAccounts[0];
         setMinerTemporarily(miner);
-        fundAddress(miner, 1000 ether);
         
         // Test 1: Initial validators should be active
         for (uint256 i = 0; i < INITIAL_VALIDATORS; i++) {
@@ -231,7 +223,6 @@ contract PoSAIntegrationTest is BaseTestScript {
         // Use second validator as miner temporarily
         address miner = validatorAccounts[1];
         setMinerTemporarily(miner);
-        fundAddress(miner, 1000 ether);
         
         // Test 1: Punish validator for missed blocks
         vm.startBroadcast(validatorKeys[1]);
@@ -256,7 +247,6 @@ contract PoSAIntegrationTest is BaseTestScript {
         // Use first validator as miner temporarily
         address miner = validatorAccounts[0];
         setMinerTemporarily(miner);
-        fundAddress(miner, 1000 ether);
         
         // Test 1: Get current active validators
         address[] memory initialActiveValidators = validators.getActiveValidators();
