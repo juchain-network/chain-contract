@@ -31,6 +31,8 @@ contract Proposal is Params, ReentrancyGuard {
     mapping(address => uint256) public proposalPassedTime;
     // Period for validator to stake after proposal passed (7 days)
     uint256 public constant STAKING_DEADLINE_PERIOD = 7 days;
+    // Proposal nonce per proposer to ensure unique proposal IDs
+    mapping(address => uint256) public proposerNonces;
 
     struct ProposalInfo {
         // who propose this proposal
@@ -134,18 +136,24 @@ contract Proposal is Params, ReentrancyGuard {
         address dst,
         bool flag,
         string calldata details
-    ) external onlyValidator returns (bool) {
+    ) external onlyValidator returns (bytes32) {
         // can't add an already exist dst or remove a not exist dst
         require(
             (!pass[dst] && flag) || (pass[dst] && !flag),
             "Can't add an already exist dst or Can't remove a not passed dst"
         );
 
-        // generate proposal id
+        // Get current nonce for the proposer
+        uint256 currentNonce = proposerNonces[msg.sender];
+        
+        // generate proposal id using nonce instead of block.timestamp
         // forge-lint: disable-next-line(asm-keccak256)
-        bytes32 id = keccak256(abi.encodePacked(msg.sender, dst, flag, details, block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(msg.sender, dst, flag, details, currentNonce));
         require(bytes(details).length <= 3000, 'Details too long');
         require(proposals[id].createTime == 0, 'Proposal already exists');
+
+        // Increment nonce for the proposer
+        proposerNonces[msg.sender]++;
 
         ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
         proposal.proposer = msg.sender;
@@ -157,15 +165,22 @@ contract Proposal is Params, ReentrancyGuard {
 
         proposals[id] = proposal;
         emit LogCreateProposal(id, msg.sender, dst, flag, block.timestamp);
-        return true;
+        return id;
     }
 
-    function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bool) {
+    function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bytes32) {
         // Validate config parameters before creating proposal
         require(validateConfig(cid, newValue), "Config validation failed");
         
+        // Get current nonce for the proposer
+        uint256 currentNonce = proposerNonces[msg.sender];
+        
+        // generate proposal id using nonce instead of block.timestamp
         // forge-lint: disable-next-line(asm-keccak256)
-        bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, block.timestamp));
+        bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, currentNonce));
+
+        // Increment nonce for the proposer
+        proposerNonces[msg.sender]++;
 
         ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
         proposal.proposer = msg.sender;
@@ -176,7 +191,7 @@ contract Proposal is Params, ReentrancyGuard {
 
         proposals[id] = proposal;
         emit LogCreateConfigProposal(id, msg.sender, cid, newValue, block.timestamp);
-        return true;
+        return id;
     }
 
     function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {

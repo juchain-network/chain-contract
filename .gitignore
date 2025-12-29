@@ -4,6 +4,7 @@
 .tool-versions
 ./contracts/output.json
 ./node_modules/*
+script/integration/generated/
 .DS_Store
 node_modules
 build
@@ -11,6 +12,8 @@ cache
 artifacts
 out
 broadcast
+logs/
+test-results/
 tools/ju-cli.exe
 tools/ju-cli
 tools/*.json
