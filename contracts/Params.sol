@@ -6,15 +6,16 @@ contract Params {
     bool public initialized ;
 
     
+    // Production version: constants use SCREAMING_SNAKE_CASE
     // System contracts (POSA addresses)
     address
-        public constant VALIDATOR_CONTRACT_ADDR = 0x000000000000000000000000000000000000F010;
+        public constant VALIDATOR_ADDR = 0x000000000000000000000000000000000000F010;
     address
-        public constant PUNISH_CONTRACT_ADDR = 0x000000000000000000000000000000000000F011;
+        public constant PUNISH_ADDR = 0x000000000000000000000000000000000000F011;
     address
         public constant PROPOSAL_ADDR = 0x000000000000000000000000000000000000F012;
     address
-        public constant STAKING_CONTRACT_ADDR = 0x000000000000000000000000000000000000F013;
+        public constant STAKING_ADDR = 0x000000000000000000000000000000000000F013;
 
     
 
@@ -66,6 +67,7 @@ contract Params {
     function _onlyMiner() internal view {
         
         require(
+            // For production, strictly use block.coinbase
             msg.sender == block.coinbase,
             "Miner only"
         );
@@ -81,7 +83,9 @@ contract Params {
     }
 
     function _onlyPunishContract() internal view {
-        require(msg.sender == PUNISH_CONTRACT_ADDR, "Punish contract only");
+        
+        require(msg.sender == PUNISH_ADDR, "Punish contract only");
+        
     }
 
     function _onlyBlockEpoch(uint256 epoch) internal view {
@@ -91,28 +95,36 @@ contract Params {
 
     function _onlyValidatorsContract() internal view {
         require(
-            msg.sender == VALIDATOR_CONTRACT_ADDR,
+            
+            msg.sender == VALIDATOR_ADDR,
+            
             "Validators contract only"
         );
     }
 
     function _onlyProposalContract() internal view {
         require(
+            
             msg.sender == PROPOSAL_ADDR,
+            
             "Proposal contract only"
         );
     }
 
     function _onlyStakingContract() internal view {
         require(
-            msg.sender == STAKING_CONTRACT_ADDR,
+            
+            msg.sender == STAKING_ADDR,
+            
             "Staking contract only"
         );
     }
 
     function _onlyPunishOrValidatorsContract() internal view {
         require(
-            msg.sender == PUNISH_CONTRACT_ADDR || msg.sender == VALIDATOR_CONTRACT_ADDR,
+            
+            msg.sender == PUNISH_ADDR || msg.sender == VALIDATOR_ADDR,
+            
             "Only punish or validators contract can call this function"
         );
     }

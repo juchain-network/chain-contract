@@ -11,9 +11,14 @@ DEFAULT_BLOCK_TIME=1
 DEFAULT_BASE_FEE=0
 
 # Load environment variables from .env file if exists
-if [ -f ".env" ]; then
+if [ -f "$(dirname "$0")/../../.env" ]; then
+    echo "Loading environment variables from .env file..."
+    export $(grep -v '^#' "$(dirname "$0")/../../.env" | xargs)
+elif [ -f ".env" ]; then
     echo "Loading environment variables from .env file..."
     export $(grep -v '^#' .env | xargs)
+else
+    echo "No .env file found, using default values"
 fi
 
 # Use environment variables or default values

@@ -25,14 +25,8 @@ contract DelegatorLifecycleTest is BaseTestScript {
     }
     
     function createTestAccounts() internal override {
-        // Call base class method to create initial validators
+        // Call base class method to create initial validators and delegators
         super.createTestAccounts();
-        
-        // Create delegator accounts
-        for (uint256 i = 0; i < 5; i++) {
-            delegatorAccounts.push(vm.addr(uint256(keccak256(abi.encodePacked("delegator", i)))));
-            vm.deal(delegatorAccounts[i], 1000000 ether);
-        }
         
         // Create new validator account with 110k ETH (100k stake + 10k fees)
         newValidator = fundNewValidator(uint256(keccak256(abi.encodePacked("newValidator1"))));
@@ -65,46 +59,52 @@ contract DelegatorLifecycleTest is BaseTestScript {
         // Set a random validator as miner temporarily
         address miner = validatorAccounts[0];
         setMinerTemporarily(miner);
-        vm.deal(miner, 1000 ether);
-        address delegator = delegatorAccounts[0];
+        // Use existing delegator account from base class (index 10-19)
+        address delegator = validatorAccounts[10];
         uint256 delegateAmount = 100 ether;
         
         // Test 1: Delegate to active validator
         address activeValidator = validatorAccounts[0];
-        vm.prank(delegator);
+        vm.startBroadcast(validatorKeys[10]);
         staking.delegate{value: delegateAmount}(activeValidator);
+        vm.stopBroadcast();
         
         (uint256 stake, , , ) = staking.getDelegationInfo(delegator, activeValidator);
         require(stake == delegateAmount, "Delegation to active validator should succeed");
         
         // Test 2: Delegate to new proposal-passed validator (not yet registered)
         // Create and pass proposal for new validator
-        vm.prank(validatorAccounts[0]);
+        vm.startBroadcast(validatorKeys[0]);
         bytes32 proposalId = proposal.createProposal(newValidator, true, "Add new validator for delegation test");
         require(proposalId != bytes32(0), "Proposal creation failed");
         require(proposalId != bytes32(0), "Proposal ID should be non-zero");
+        vm.stopBroadcast();
         
         // Vote for the proposal from all validators
         for (uint256 i = 0; i < validatorAccounts.length; i++) {
-            vm.prank(validatorAccounts[i]);
+            vm.startBroadcast(validatorKeys[i]);
             proposal.voteProposal(proposalId, true);
+            vm.stopBroadcast();
         }
         
-        vm.prank(delegator);
+        vm.startBroadcast(validatorKeys[10]);
         try staking.delegate{value: delegateAmount}(newValidator) {
             // Should fail because validator is not registered yet
             revert("Delegation to unregistered validator should fail");
         } catch {
             console.log("Expected failure: Delegation to unregistered validator");
         }
+        vm.stopBroadcast();
         
         // Register the new validator
-        vm.prank(newValidator);
+        vm.startBroadcast(uint256(keccak256(abi.encodePacked("newValidator1"))));
         staking.registerValidator{value: INITIAL_STAKE}(1500); // 15% commission rate
+        vm.stopBroadcast();
         
         // Now delegation should succeed
-        vm.prank(delegator);
+        vm.startBroadcast(validatorKeys[10]);
         staking.delegate{value: delegateAmount}(newValidator);
+        vm.stopBroadcast();
         
         (stake, , , ) = staking.getDelegationInfo(delegator, newValidator);
         require(stake == delegateAmount, "Delegation to registered validator should succeed");
@@ -118,8 +118,8 @@ contract DelegatorLifecycleTest is BaseTestScript {
         // Set a different validator as miner temporarily
         address miner = validatorAccounts[1];
         setMinerTemporarily(miner);
-        vm.deal(miner, 1000 ether);
-        address delegator = delegatorAccounts[1];
+        // Use existing delegator account from base class (index 10-19)
+        address delegator = validatorAccounts[11];
         address validator = validatorAccounts[1];
         
         // Test 1: Multiple partial delegations to same validator
@@ -127,14 +127,13 @@ contract DelegatorLifecycleTest is BaseTestScript {
         uint256 secondDelegate = 75 ether;
         uint256 thirdDelegate = 100 ether;
         
-        vm.prank(delegator);
+        vm.startBroadcast(validatorKeys[11]);
         staking.delegate{value: firstDelegate}(validator);
         
-        vm.prank(delegator);
         staking.delegate{value: secondDelegate}(validator);
         
-        vm.prank(delegator);
         staking.delegate{value: thirdDelegate}(validator);
+        vm.stopBroadcast();
         
         (uint256 totalStake, , , ) = staking.getDelegationInfo(delegator, validator);
         uint256 expectedStake = firstDelegate + secondDelegate + thirdDelegate;
@@ -144,8 +143,9 @@ contract DelegatorLifecycleTest is BaseTestScript {
         address validator2 = validatorAccounts[2];
         uint256 delegateToSecond = 60 ether;
         
-        vm.prank(delegator);
+        vm.startBroadcast(validatorKeys[11]);
         staking.delegate{value: delegateToSecond}(validator2);
+        vm.stopBroadcast();
         
         (uint256 stake2, , , ) = staking.getDelegationInfo(delegator, validator2);
         require(stake2 == delegateToSecond, "Delegation to second validator should succeed");
@@ -162,35 +162,37 @@ contract DelegatorLifecycleTest is BaseTestScript {
         // Test 1: Delegate and claim reward after block production
         uint256 delegateAmount = 200 ether;
         
-        vm.prank(delegator);
+        vm.startBroadcast(validatorKeys[12]);
         staking.delegate{value: delegateAmount}(validator);
+        vm.stopBroadcast();
         
         // Test 3: Simulate block reward distribution - set miner temporarily
         address miner = validatorAccounts[0];
         setMinerTemporarily(miner);
-        vm.deal(miner, 1000 ether);
         
-        vm.prank(miner);
+        vm.startBroadcast(getValidatorKey(0));
         validators.distributeBlockReward{value: 0.1 ether}();
         
-        vm.prank(miner);
         staking.distributeRewards{value: BLOCK_REWARD}();
+        vm.stopBroadcast();
         
         // Claim rewards
-        vm.prank(delegator);
+        vm.startBroadcast(validatorKeys[12]);
         staking.claimRewards(validator);
+        vm.stopBroadcast();
         console.log("Delegator claimed reward successfully");
         
         // Test 2: Claim rewards after multiple blocks - miner should still be set
+        vm.startBroadcast(getValidatorKey(0));
         for (uint i = 0; i < 5; i++) {
-            vm.prank(miner);
             validators.distributeBlockReward{value: 0.1 ether}();
-            vm.prank(miner);
             staking.distributeRewards{value: BLOCK_REWARD}();
         }
+        vm.stopBroadcast();
         
-        vm.prank(delegator);
+        vm.startBroadcast(validatorKeys[12]);
         staking.claimRewards(validator);
+        vm.stopBroadcast();
         console.log("Delegator claimed accumulated reward successfully");
         
         console.log(unicode"✓ Delegate Reward Claiming test passed");

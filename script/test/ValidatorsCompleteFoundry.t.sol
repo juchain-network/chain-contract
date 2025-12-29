@@ -202,8 +202,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // Create proposal from v1 (active validator) instead of address(this)
         vm.prank(v1);
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(4), uint256(10), block.timestamp));
-        Proposal(PROPOSAL).createUpdateConfigProposal(4, 10);
+        bytes32 id = Proposal(PROPOSAL).createUpdateConfigProposal(4, 10);
         
         vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
         vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
@@ -290,8 +289,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // Create proposal from v1 (active validator) instead of address(this)
         vm.prank(v1);
-        bytes32 id = keccak256(abi.encodePacked(v1, target, flag, "", block.timestamp));
-        Proposal(PROPOSAL).createProposal(target, flag, "");
+        bytes32 id = Proposal(PROPOSAL).createProposal(target, flag, "");
         
         vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
         vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);
@@ -299,12 +297,9 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     }
 
     function _updateWithdrawPeriod(uint256 period) internal {
-        vm.warp(block.timestamp + 1000000);
-        
         // Create proposal from v1 (active validator) instead of address(this)
         vm.prank(v1);
-        bytes32 id = keccak256(abi.encodePacked(v1, uint256(4), period, block.timestamp));
-        Proposal(PROPOSAL).createUpdateConfigProposal(4, period);
+        bytes32 id = Proposal(PROPOSAL).createUpdateConfigProposal(4, period);
         
         vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
         vm.prank(v2); Proposal(PROPOSAL).voteProposal(id, true);

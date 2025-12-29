@@ -31,7 +31,6 @@ contract EndToEndProposalScript is BaseTestScript {
         // Set a random validator as temporary miner
         address miner = validatorAccounts[0];
         setMinerTemporarily(miner);
-        vm.deal(miner, 1000 ether);
         
         // Directly call internal function to execute validator addition process
         bool success = _runProposalFlow(
@@ -82,8 +81,9 @@ contract EndToEndProposalScript is BaseTestScript {
         bytes32 id = keccak256(abi.encodePacked(validatorAccounts[0], configId, newValue, timestamp));
         
         // Create configuration update proposal
-        vm.prank(validatorAccounts[0]);
+        vm.startBroadcast(validatorKeys[0]);
         proposal.createUpdateConfigProposal(configId, newValue);
+        vm.stopBroadcast();
         
         // Validator voting
         uint256 yesVotes = 0;
@@ -91,8 +91,9 @@ contract EndToEndProposalScript is BaseTestScript {
             // Check if active validator
             if (validators.isActiveValidator(voters[i])) {
                 // All votes are yes for demonstration purposes
-                vm.prank(voters[i]);
+                vm.startBroadcast(getValidatorKey(i));
                 proposal.voteProposal(id, true);
+                vm.stopBroadcast();
                 yesVotes++;
                 
                 emit VoteCast(id, voters[i], true);
@@ -116,8 +117,9 @@ contract EndToEndProposalScript is BaseTestScript {
         address[] memory voters
     ) internal returns (bool success) {
         // Create proposal from first validator
-        vm.prank(validatorAccounts[0]);
+        vm.startBroadcast(validatorKeys[0]);
         proposal.createProposal(target, isAdd, details);
+        vm.stopBroadcast();
         
         // Note: In actual environments, we need to get the real proposal ID from event logs
         // Here for demonstration, we use a simplified ID calculation
@@ -131,8 +133,9 @@ contract EndToEndProposalScript is BaseTestScript {
             // Check if active validator
             if (validators.isActiveValidator(voters[i])) {
                 // Here simplified handling, assuming all votes are yes
-                vm.prank(voters[i]);
+                vm.startBroadcast(getValidatorKey(i));
                 proposal.voteProposal(id, true);
+                vm.stopBroadcast();
                 yesVotes++;
                 
                 emit VoteCast(id, voters[i], true);
@@ -149,7 +152,7 @@ contract EndToEndProposalScript is BaseTestScript {
                 require(proposal.pass(target), "Target should be marked as passed");
                 
                 // After proposal passes, validator needs to stake to become active
-                vm.startBroadcast(target);
+                vm.startBroadcast(uint256(keccak256(abi.encodePacked("newValidatorEndToEnd"))));
                 staking.registerValidator{value: proposal.minValidatorStake()}(100); // 1% commission rate
                 vm.stopBroadcast();
                 

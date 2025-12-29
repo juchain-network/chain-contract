@@ -51,10 +51,10 @@ contract ParamsTest is Test {
     }
     
     function testConstants() public view {
-        assertEq(params.VALIDATOR_CONTRACT_ADDR(), 0x000000000000000000000000000000000000F010);
-        assertEq(params.PUNISH_CONTRACT_ADDR(), 0x000000000000000000000000000000000000F011);
+        assertEq(params.VALIDATOR_ADDR(), 0x000000000000000000000000000000000000F010);
+        assertEq(params.PUNISH_ADDR(), 0x000000000000000000000000000000000000F011);
         assertEq(params.PROPOSAL_ADDR(), 0x000000000000000000000000000000000000F012);
-        assertEq(params.STAKING_CONTRACT_ADDR(), 0x000000000000000000000000000000000000F013);
+        assertEq(params.STAKING_ADDR(), 0x000000000000000000000000000000000000F013);
     }
     
     function testInitialState() public view {
@@ -96,7 +96,7 @@ contract ParamsTest is Test {
     }
     
     function testOnlyPunishContractModifier() public {
-        vm.prank(params.PUNISH_CONTRACT_ADDR());
+        vm.prank(params.PUNISH_ADDR());
         assertTrue(params.callOnlyPunishContract());
         
         vm.prank(address(0x123));
@@ -105,7 +105,7 @@ contract ParamsTest is Test {
     }
     
     function testOnlyValidatorsContractModifier() public {
-        vm.prank(params.VALIDATOR_CONTRACT_ADDR());
+        vm.prank(params.VALIDATOR_ADDR());
         assertTrue(params.callOnlyValidatorsContract());
         
         vm.prank(address(0x123));
@@ -123,7 +123,7 @@ contract ParamsTest is Test {
     }
     
     function testOnlyStakingContractModifier() public {
-        vm.prank(params.STAKING_CONTRACT_ADDR());
+        vm.prank(params.STAKING_ADDR());
         assertTrue(params.callOnlyStakingContract());
         
         vm.prank(address(0x123));

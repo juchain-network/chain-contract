@@ -31,16 +31,11 @@ contract ValidatorManagementScript is BaseTestScript {
         console.log("Initial balance:", newValidator.balance / 1 ether, "ETH");
         
         // Create and pass proposal for new validator
-        // Record logs to capture the proposal ID from the event
-        vm.recordLogs();
-        
-        // vm.prank(validatorAccounts[0]);
         vm.startBroadcast(validatorKeys[0]);
         bytes32 proposalId = proposal.createProposal(newValidator, true, "Add new validator");
         vm.stopBroadcast();
         require(proposalId != bytes32(0), "Proposal creation failed");
         
-        // Proposal ID is already obtained from the createProposal return value
         // No need to extract from logs
         // Convert bytes32 to string for logging (Solidity console doesn't support bytes32 directly)
         console.log("Proposal created with ID:", toHexString(proposalId));
@@ -52,10 +47,6 @@ contract ValidatorManagementScript is BaseTestScript {
             proposal.voteProposal(proposalId, true);
             vm.stopBroadcast();
         }
-        
-        // Simulate miner behavior when needed (setMiner should be called before reward distribution)
-        // Example: If we were distributing rewards, we would set the miner temporarily here
-        // setMinerTemporarily(newValidator);
         
         // Register validator using the new validator's private key
         console.log("Registering validator:", newValidator);
