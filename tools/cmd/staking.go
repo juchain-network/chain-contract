@@ -71,12 +71,12 @@ func UndelegateCmd() *cobra.Command {
 	return cmd
 }
 
-// ClaimRewardsCmd creates command for claiming rewards
+// ClaimRewardsCmd creates command for claiming rewards (for delegators)
 func ClaimRewardsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "claim-rewards",
-		Short: "Create claim rewards transaction",
-		Long:  "Create a transaction to claim accumulated staking rewards",
+		Short: "Create claim rewards transaction (for delegators)",
+		Long:  "Create a transaction to claim accumulated staking rewards as a delegator",
 		Run:   createClaimRewardsTx,
 	}
 
@@ -84,6 +84,22 @@ func ClaimRewardsCmd() *cobra.Command {
 	cmd.Flags().StringP("validator", "v", "", "Validator address to claim rewards from (required)")
 
 	_ = cmd.MarkFlagRequired("claimer")
+	_ = cmd.MarkFlagRequired("validator")
+
+	return cmd
+}
+
+// ClaimValidatorRewardsCmd creates command for validators to claim their own rewards
+func ClaimValidatorRewardsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "claim-validator-rewards",
+		Short: "Create claim validator rewards transaction (for validators)",
+		Long:  "Create a transaction for validators to claim their accumulated rewards",
+		Run:   createClaimValidatorRewardsTx,
+	}
+
+	cmd.Flags().StringP("validator", "v", "", "Validator address (required)")
+
 	_ = cmd.MarkFlagRequired("validator")
 
 	return cmd
@@ -450,10 +466,33 @@ func createClaimRewardsTx(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	PrintInfo("Creating claim rewards transaction")
+	PrintInfo("Creating claim rewards transaction for delegator")
 
 	if err := innerCreateClaimRewardsTx(claimer, validatorStr, rpc); err != nil {
 		PrintError("Failed to create claim rewards transaction", err)
+		return
+	}
+}
+
+func createClaimValidatorRewardsTx(cmd *cobra.Command, args []string) {
+	rpc := GetRPCEndpoint(cmd)
+	validatorStr, _ := cmd.Flags().GetString("validator")
+
+	// Validate inputs
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateAddress(validatorStr); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo("Creating claim validator rewards transaction")
+
+	if err := innerCreateClaimValidatorRewardsTx(validatorStr, rpc); err != nil {
+		PrintError("Failed to create claim validator rewards transaction", err)
 		return
 	}
 }
@@ -476,6 +515,29 @@ func innerCreateClaimRewardsTx(claimer, validator string, rpc string) error {
 
 	PrintSuccess("Claim rewards transaction created successfully!")
 	PrintInfo(fmt.Sprintf("Transaction file: %s", ClaimRewardsFile))
+	PrintInfo(fmt.Sprintf("Validator: %s", validator))
+	return nil
+}
+
+func innerCreateClaimValidatorRewardsTx(validator string, rpc string) error {
+	stakingAbi, err := abi.JSON(strings.NewReader(contracts.StakingABI))
+	if err != nil {
+		return fmt.Errorf("failed to parse staking ABI: %w", err)
+	}
+
+	// Use the new claimValidatorRewards() method that doesn't require parameters
+	abiData, err := stakingAbi.Pack("claimValidatorRewards")
+	if err != nil {
+		return fmt.Errorf("failed to pack claimValidatorRewards data: %w", err)
+	}
+
+	err = CreateRawTx(common.HexToAddress(validator), common.HexToAddress(StakingContractAddr), big.NewInt(0), abiData, rpc, "claimValidatorRewards.json")
+	if err != nil {
+		return fmt.Errorf("failed to create raw transaction: %w", err)
+	}
+
+	PrintSuccess("Claim validator rewards transaction created successfully!")
+	PrintInfo(fmt.Sprintf("Transaction file: %s", "claimValidatorRewards.json"))
 	PrintInfo(fmt.Sprintf("Validator: %s", validator))
 	return nil
 }
