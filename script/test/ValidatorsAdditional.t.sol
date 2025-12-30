@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Validators} from "../../contracts/Validators.sol";
+import {Staking} from "../../contracts/Staking.sol";
 
 contract ValidatorsAdditionalTest is BaseSetup {
     address v1; address v2; address v3;
@@ -26,6 +27,11 @@ contract ValidatorsAdditionalTest is BaseSetup {
         address nonExistent = makeAddr("nonExistent");
         bool isNonActive = Validators(VALIDATORS).isValidatorActive(nonExistent);
         assertFalse(isNonActive, "nonExistent should not be active validator");
+        
+        // For testing purposes, we can directly test the Staking contract's isValidatorJailed function
+        // since isValidatorActive relies on it
+        bool isJailed = Staking(STAKING).isValidatorJailed(v1);
+        assertFalse(isJailed, "v1 should not be jailed initially");
     }
 
     // Test validateDescription function

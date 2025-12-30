@@ -7,6 +7,18 @@ import {IValidators} from './IValidators.sol';
 import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
 contract Proposal is Params, ReentrancyGuard {
+    // Default configuration constants
+    uint256 private constant DEFAULT_PROPOSAL_LASTING_PERIOD = 604800; // 7 days in blocks
+    uint256 private constant DEFAULT_PUNISH_THRESHOLD = 24; // blocks
+    uint256 private constant DEFAULT_REMOVE_THRESHOLD = 48; // blocks
+    uint256 private constant DEFAULT_DECREASE_RATE = 24; // %
+    uint256 private constant DEFAULT_WITHDRAW_PROFIT_PERIOD = 86400; // 1 day in blocks
+    uint256 private constant DEFAULT_BLOCK_REWARD = 0.2 ether; // 2 * 10^17 wei
+    uint256 private constant DEFAULT_UNBONDING_PERIOD = 604800; // 7 days in blocks
+    uint256 private constant DEFAULT_VALIDATOR_UNJAIL_PERIOD = 86400; // 1 day in blocks
+    uint256 private constant DEFAULT_MIN_VALIDATOR_STAKE = 100000 ether; // Minimum validator stake
+    uint256 private constant DEFAULT_MAX_VALIDATORS = 21; // Maximum active validators
+
     // How many blocks a proposal will exist
     uint256 public proposalLastingPeriod;
     uint256 public punishThreshold;
@@ -114,21 +126,16 @@ contract Proposal is Params, ReentrancyGuard {
             proposalPassedHeight[vals[i]] = block.number;
         }
 
-        proposalLastingPeriod = 604800;
-        punishThreshold = 24;
-        removeThreshold = 48;
-        decreaseRate = 24;
-        withdrawProfitPeriod = 86400;
-        // Default block reward: 0.2 ether per block (17,280 JU/day ÷ 86,400 blocks/day)
-        blockReward = 0.2 ether; // 2 * 10^17 wei
-        // Default unbonding period: 7 days in blocks (604800 blocks = 7 days * 24 hours * 3600 seconds / 1 second per block)
-        unbondingPeriod = 604800;
-        // Default validator unjail period: 24 hours in blocks (86400 blocks = 24 hours * 3600 seconds / 1 second per block)
-        validatorUnjailPeriod = 86400;
-        // Default minimum staking amount to become a validator: 100000 ether
-        minValidatorStake = 100000 ether;
-        // Default maximum number of validators in active set: 21
-        maxValidators = 21;
+        proposalLastingPeriod = DEFAULT_PROPOSAL_LASTING_PERIOD;
+        punishThreshold = DEFAULT_PUNISH_THRESHOLD;
+        removeThreshold = DEFAULT_REMOVE_THRESHOLD;
+        decreaseRate = DEFAULT_DECREASE_RATE;
+        withdrawProfitPeriod = DEFAULT_WITHDRAW_PROFIT_PERIOD;
+        blockReward = DEFAULT_BLOCK_REWARD;
+        unbondingPeriod = DEFAULT_UNBONDING_PERIOD;
+        validatorUnjailPeriod = DEFAULT_VALIDATOR_UNJAIL_PERIOD;
+        minValidatorStake = DEFAULT_MIN_VALIDATOR_STAKE;
+        maxValidators = DEFAULT_MAX_VALIDATORS;
         initialized = true;
     }
 

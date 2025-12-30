@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Punish} from "../../contracts/Punish.sol";
@@ -60,7 +60,7 @@ contract PunishMissingFoundryTest is BaseSetup {
         require(punish.getPunishRecord(v1) == 0, "v1 punish record should be reset after removal");
         
         // Get jailUntilBlock, ensure jail period has passed
-        (, , , , , uint256 jailUntilBlock, , ) = Staking(STAKING).getValidatorInfo(v1);
+        (, , , , , uint256 jailUntilBlock, , , ) = Staking(STAKING).getValidatorInfo(v1);
         require(jailUntilBlock > 0, "v1 should have jailUntilBlock set");
         
         // Create proposal to reactivate validator

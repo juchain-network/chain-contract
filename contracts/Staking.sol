@@ -747,6 +747,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     }
     function _claimPending(address delegator, address validator, uint256 pending) internal {
         if (pending > 0) {
+            // Check if contract has enough balance before transfer
+            require(address(this).balance >= pending, "Insufficient contract balance");
             // Interactions: external call after state update
             (bool success, ) = payable(delegator).call{value: pending}("");
             require(success, "Transfer failed");
@@ -792,6 +794,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @return jailUntilBlock Block until which validator is jailed
      * @return totalClaimedRewards Total claimed rewards (cumulative)
      * @return lastClaimBlock Block number of last reward claim
+     * @return isRegistered Whether validator is registered
      */
     function getValidatorInfo(address validator) external view returns (
         uint256 selfStake,
@@ -801,7 +804,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         bool isJailed,
         uint256 jailUntilBlock,
         uint256 totalClaimedRewards,
-        uint256 lastClaimBlock
+        uint256 lastClaimBlock,
+        bool isRegistered
     ) {
         ValidatorStake storage stake = validatorStakes[validator];
         return (
@@ -812,7 +816,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             stake.isJailed,
             stake.jailUntilBlock,
             stake.totalClaimedRewards,
-            stake.lastClaimBlock
+            stake.lastClaimBlock,
+            stake.isRegistered
         );
     }
 

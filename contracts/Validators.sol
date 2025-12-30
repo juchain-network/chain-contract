@@ -154,21 +154,15 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             "Only Proposal or Staking contract can call"
         );
         
-        // Check if validator is already active (from Staking contract)
-        (bool isActive, ) = staking.getValidatorStatus(validator);
-        if (isActive) {
-            return true;
-        }
-
         // Add validator to highest validators set if not already there
         _tryAddValidatorToHighestSet(validator);
         
-        // Clean punish record if validator was previously jailed
-        // This clears any missed blocks counter from previous punishments
-        require(punish.cleanPunishRecord(validator), "Punish record clean failed");
+        // Only clean punish record if validator was previously jailed
+        (, , , , bool isJailed, , , , ) = staking.getValidatorInfo(validator);
+        if (isJailed) {
+            require(punish.cleanPunishRecord(validator), "Punish record clean failed");
+        }
         
-        // Note: Status is now managed by Staking contract, we don't set it here
-
         emit LogActive(validator, block.timestamp);
 
         return true;
@@ -349,15 +343,16 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         
         // Calculate status from Staking contract for backward compatibility
         Status calculatedStatus;
-        // Priority: Check jailed status first, even if validator doesn't exist in Staking
-        // This ensures that jailed validators (including those without stake) are correctly identified
-        if (staking.isValidatorJailed(val)) {
-            calculatedStatus = Status.Jailed;
-        } else if (!this.isValidatorExist(val)) {
+        // Check if validator has staked
+        (uint256 selfStake, , , , , , , , bool isRegistered) = staking.getValidatorInfo(val);
+        
+        // Check if validator is not registered or has no stake
+        if (!isRegistered || selfStake == 0) {
             calculatedStatus = Status.NotExist;
+        } else if (staking.isValidatorJailed(val)) {
+            calculatedStatus = Status.Jailed;
         } else {
-            (bool isActive, ) = staking.getValidatorStatus(val);
-            calculatedStatus = isActive ? Status.Active : Status.NotExist;
+            calculatedStatus = Status.Active;
         }
 
         return (v.feeAddr, calculatedStatus, v.aacIncoming, v.totalJailedHb, v.lastWithdrawProfitsBlock);
@@ -398,7 +393,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             validators[i] = validator;
             
             // Get validator info from Staking contract
-            (uint256 selfStake, uint256 totalDelegated, , , , , , ) = 
+            (uint256 selfStake, uint256 totalDelegated, , , , , , , ) = 
                 staking.getValidatorInfo(validator);
             
             // Calculate total stake (selfStake + totalDelegated)
@@ -446,10 +441,20 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @dev Check if validator is active (query from Staking contract)
      * @param validator Validator address
      * @return Whether validator is active (can participate in consensus)
+     * @notice Active means validator is in currentValidatorSet and not jailed
+     * @notice Validators in currentValidatorSet remain there until next epoch even if jailed
+     * @notice This function checks both current participation and jail status
      */
     function isValidatorActive(address validator) external view returns (bool) {
-        (bool isActive, ) = staking.getValidatorStatus(validator);
-        return isActive;
+        // Check if validator is in currentValidatorSet (actively participating in consensus)
+        if (!isActiveValidator(validator)) {
+            return false;
+        }
+        
+        // Check if validator is jailed
+        // Jailed validators can still be in currentValidatorSet until next epoch
+        // but should not be considered active for most purposes
+        return !staking.isValidatorJailed(validator);
     }
 
     /**
@@ -458,7 +463,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Whether validator exists (has staked)
      */
     function isValidatorExist(address validator) external view returns (bool) {
-        (uint256 selfStake, , , , , , , ) = 
+        (uint256 selfStake, , , , , , , , ) = 
             staking.getValidatorInfo(validator);
         return selfStake > 0;
     }

@@ -21,3 +21,4 @@ tools/ju-cli.exe
 tools/ju-cli
 tools/*.json
 commands.sh
+lcov.info

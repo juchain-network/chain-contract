@@ -17,7 +17,7 @@ contract ValidatorUtils is BaseTestUtils {
         vm.stopBroadcast();
         
         // Verify registration status
-        (uint256 selfStake, , , , , , , ) = staking.getValidatorInfo(validatorAddr);
+        (uint256 selfStake, , , , , , , , ) = staking.getValidatorInfo(validatorAddr);
         require(selfStake == initialStake, "Validator should have correct self-stake");
         
         console.log("Validator registered successfully!");
@@ -36,7 +36,7 @@ contract ValidatorUtils is BaseTestUtils {
         console.log("Validator exit transaction completed");
         
         // Verify exit status
-        (uint256 selfStake, uint256 totalDelegated, , , bool isJailed, , , ) = staking.getValidatorInfo(validatorAddr);
+        (uint256 selfStake, uint256 totalDelegated, , , bool isJailed, , , , ) = staking.getValidatorInfo(validatorAddr);
         console.log("Validator self stake:", selfStake / 1 ether, "ETH");
         console.log("Validator total delegated:", totalDelegated / 1 ether, "ETH");
         console.log("Validator is jailed:", isJailed);
@@ -55,7 +55,7 @@ contract ValidatorUtils is BaseTestUtils {
         console.log("Validator unjail transaction completed");
         
         // Check if validator is unjailed
-        (, , , , bool isJailed, , , ) = staking.getValidatorInfo(validatorAddr);
+        (, , , , bool isJailed, , , , ) = staking.getValidatorInfo(validatorAddr);
         console.log("Validator is jailed after unjail:", isJailed);
     }
     
@@ -166,7 +166,7 @@ contract ValidatorUtils is BaseTestUtils {
         
         // Verify registration
         console.log("Verifying validator registration...");
-        (uint256 selfStake, , , , , , , ) = staking.getValidatorInfo(newValidator);
+        (uint256 selfStake, , , , , , , , ) = staking.getValidatorInfo(newValidator);
         require(selfStake == initialStake, "Validator should have correct self-stake");
         
         console.log("Validator registered successfully with stake:", selfStake / 1 ether, "ETH");

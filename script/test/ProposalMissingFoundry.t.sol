@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Proposal} from "../../contracts/Proposal.sol";

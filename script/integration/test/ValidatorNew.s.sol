@@ -64,7 +64,7 @@ contract ValidatorNew is ValidatorUtils {
         
         // Verify registration
         console.log("Verifying validator registration...");
-        (uint256 selfStake, , , , , , , ) = staking.getValidatorInfo(newValidator);
+        (uint256 selfStake, , , , , , , , ) = staking.getValidatorInfo(newValidator);
         require(selfStake == initialStake, "Validator should have correct self-stake");
         
         // After registration, check top validators list includes new validator
@@ -90,7 +90,7 @@ contract ValidatorNew is ValidatorUtils {
         
         // Check new validator's commission rate equals set rate
         console.log("Checking validator commission rate...");
-        (, , uint256 commissionRate, , , , , ) = staking.getValidatorInfo(newValidator);
+        (, , uint256 commissionRate, , , , , , ) = staking.getValidatorInfo(newValidator);
         require(commissionRate == 2000, "Validator commission rate should equal set rate (2000 = 20%)");
         console.log(unicode"✓ Validator commission rate correctly set to 20%");
         
