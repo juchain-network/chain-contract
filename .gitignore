@@ -5,6 +5,7 @@
 ./contracts/output.json
 ./node_modules/*
 state
+coverage-report
 script/integration/generated/
 .DS_Store
 node_modules
