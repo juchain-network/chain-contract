@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Validators} from "../../contracts/Validators.sol";
 import {Proposal} from "../../contracts/Proposal.sol";
+import {Staking} from "../../contracts/Staking.sol";
 
 contract ValidatorsFoundryTest is BaseSetup {
 
@@ -78,5 +79,30 @@ contract ValidatorsFoundryTest is BaseSetup {
     Validators(VALIDATORS).withdrawProfits(miner);
     uint256 balAfter = miner.balance;
         require(balAfter > balBefore, "profits withdrawn");
+    }
+
+    function testAddProfitsToActiveValidatorsWithRemainder() public {
+        // Jail v1 (miner), so rewards will be distributed to other validators
+        // Use Staking contract's jailValidator function
+        vm.prank(VALIDATORS); // Validators contract is allowed to call jailValidator
+        Staking(STAKING).jailValidator(v1, 100);
+
+        // Send 3 wei as reward - this won't be divisible by 2 (v2 and v3 are active)
+        vm.startPrank(miner);
+        (bool ok, ) = address(Validators(VALIDATORS)).call{value: 3 wei}(
+            abi.encodeWithSelector(Validators.distributeBlockReward.selector)
+        );
+        vm.stopPrank();
+        require(ok, "distribute failed");
+
+        // Check validator profits (aacIncoming)
+        // v1 should get 0 (jailed), v2 should get 2 wei, v3 should get 1 wei
+        ( , , uint256 a1,,) = Validators(VALIDATORS).getValidatorInfo(v1);
+        ( , , uint256 a2,,) = Validators(VALIDATORS).getValidatorInfo(v2);
+        ( , , uint256 a3,,) = Validators(VALIDATORS).getValidatorInfo(v3);
+
+        require(a1 == 0, "v1 (jailed) should get no reward");
+        require(a2 == 2 wei, "v2 should get 2 wei");
+        require(a3 == 1 wei, "v3 should get 1 wei");
     }
 }

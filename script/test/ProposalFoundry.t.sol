@@ -251,4 +251,49 @@ contract ProposalFoundryTest is BaseSetup {
         vm.expectRevert("Config value must be positive");
         p.createUpdateConfigProposal(0, 0); // Zero value is invalid
     }
+
+    function testSetUnpassed() public {
+        Proposal p = Proposal(PROPOSAL);
+        Validators v = Validators(VALIDATORS);
+        
+        // Test that only Validators contract can call setUnpassed
+        vm.prank(v1);
+        vm.expectRevert();
+        p.setUnpassed(v1);
+        
+        // Now test with Validators contract as caller
+        vm.startPrank(address(v));
+        bool result = p.setUnpassed(v1);
+        vm.stopPrank();
+        
+        require(result, "setUnpassed should return true");
+        require(!p.pass(v1), "validator should be unpassed");
+    }
+
+    function testIsProposalValidForStakingWithInvalidValidator() public {
+        Proposal p = Proposal(PROPOSAL);
+        
+        // Test with invalid validator (pass is false)
+        address invalidValidator = makeAddr("invalidValidator");
+        bool result = p.isProposalValidForStaking(invalidValidator);
+        require(!result, "should return false for invalid validator");
+        
+        // Test with valid validator that passed proposal and is within period
+        address validValidator = makeAddr("validValidator");
+        vm.warp(7_000_000);
+        vm.prank(v1);
+        bytes32 id = p.createProposal(validValidator, true, "");
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+        
+        result = p.isProposalValidForStaking(validValidator);
+        require(result, "should return true for valid validator within period");
+        
+        // Test with valid validator that passed proposal and is outside period
+        uint256 proposalLastingPeriod = p.proposalLastingPeriod();
+        vm.roll(block.number + proposalLastingPeriod + 1);
+        result = p.isProposalValidForStaking(validValidator);
+        require(!result, "should return false for valid validator outside period");
+    }
 }

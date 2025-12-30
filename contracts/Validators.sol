@@ -219,6 +219,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         uint256 hb = msg.value;
 
         // Check if validator exists (has staked) from Staking contract
+        // Note: This branch should be unreachable in normal operation
+        // as block producers must be validators according to consensus rules
+        // This check is added for code robustness
         if (!this.isValidatorExist(val)) {
             return;
         }
@@ -608,6 +611,10 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             }
         }
 
+        // Check if there are any valid validators to distribute rewards to
+        // Note: This branch should be unreachable in normal operation
+        // as there should always be at least one active validator in the network
+        // This check is added for code robustness to prevent division by zero
         if (validValidatorCount == 0) {
             return;
         }

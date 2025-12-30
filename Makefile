@@ -12,7 +12,7 @@ RED = \033[0;31m
 NC = \033[0m # No Color
 
 # Define all phony targets
-.PHONY: help clean build test fmt security coverage gas-test all update version addresses \n        generate-contracts generate-go-client test-by-forge test-by-shell test-all \n        anvil-start anvil-stop anvil-status anvil-clean get-system-params load-env
+.PHONY: help clean build test fmt security coverage coverage-html gas-test all update version addresses generate-contracts generate-go-client test-by-forge test-by-shell test-all anvil-start anvil-stop anvil-status anvil-clean get-system-params load-env
 
 help:
 	@echo "$(YELLOW)Available targets:$(NC)"
@@ -27,6 +27,7 @@ help:
 	@echo "$(YELLOW)Testing & Analysis:$(NC)"
 	@echo "  $(GREEN)security$(NC)            - Run security analysis with Slither (if installed)"
 	@echo "  $(GREEN)coverage$(NC)            - Generate test coverage report"
+	@echo "  $(GREEN)coverage-html$(NC)       - Generate HTML test coverage report"
 	@echo "  $(GREEN)gas-test$(NC)            - Run gas optimization tests with report"
 	@echo "  $(GREEN)test-by-forge$(NC)        - Run PoSA integration tests using forge"
 	@echo "  $(GREEN)test-by-shell$(NC)        - Run shell-based test scenarios"
@@ -92,7 +93,21 @@ gas-test:
 # Coverage report
 coverage:
 	@echo "$(YELLOW)Generating coverage report...$(NC)"
-	forge coverage
+	@forge coverage
+
+# HTML Coverage report
+coverage-html:
+	@echo "$(YELLOW)Generating HTML coverage report...$(NC)"
+	@echo "$(YELLOW)Step 1: Installing lcov if not present...$(NC)"
+# 	@brew install lcov >/dev/null 2>&1 || true
+	@echo "$(YELLOW)Step 2: Generating lcov report...$(NC)"
+	@forge coverage --report lcov
+	@echo "$(YELLOW)Step 3: Converting lcov to HTML...$(NC)"
+	@genhtml lcov.info -o coverage-report
+	@echo "$(YELLOW)Step 4: Cleaning up temporary files...$(NC)"
+	@rm -f lcov.info
+	@echo "$(GREEN)✅ HTML coverage report generated successfully at ./coverage-report$(NC)"
+	@echo "$(YELLOW)To view the report: open coverage-report/index.html$(NC)"
 
 # Security check with slither (if installed)
 security:
