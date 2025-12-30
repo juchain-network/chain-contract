@@ -91,7 +91,8 @@ contract ProposalFoundryTest is BaseSetup {
         require(result, "should return true for valid proposal within deadline");
         
         // Test after deadline has passed
-        vm.warp(block.timestamp + p.STAKING_DEADLINE_PERIOD() + 1);
+        uint256 proposalLastingPeriod = p.proposalLastingPeriod();
+        vm.roll(block.number + proposalLastingPeriod + 1);
         result = p.isProposalValidForStaking(testValidator);
         require(!result, "should return false for proposal after deadline");
     }
@@ -185,9 +186,9 @@ contract ProposalFoundryTest is BaseSetup {
         (bool ok1, ) = address(p).call(abi.encodeWithSelector(p.voteProposal.selector, id, true));
         require(!ok1, "double vote should fail");
 
-        // expire
+        // expire by increasing block number
         uint256 lasting = p.proposalLastingPeriod();
-        vm.warp(block.timestamp + lasting + 1);
+        vm.roll(block.number + lasting + 1);
         vm.prank(v2);
         (bool ok2, ) = address(p).call(abi.encodeWithSelector(p.voteProposal.selector, id, true));
         require(!ok2, "expired vote should fail");
@@ -245,9 +246,54 @@ contract ProposalFoundryTest is BaseSetup {
         
         // Test that the validation checks work during proposal creation
         
-        // CID 0 - Invalid proposal period (too small)
+        // CID 0 - Invalid proposal period (zero value)
         vm.prank(v1);
-        vm.expectRevert("Invalid proposal period");
-        p.createUpdateConfigProposal(0, 100); // Less than 1 hour
+        vm.expectRevert("Config value must be positive");
+        p.createUpdateConfigProposal(0, 0); // Zero value is invalid
+    }
+
+    function testSetUnpassed() public {
+        Proposal p = Proposal(PROPOSAL);
+        Validators v = Validators(VALIDATORS);
+        
+        // Test that only Validators contract can call setUnpassed
+        vm.prank(v1);
+        vm.expectRevert();
+        p.setUnpassed(v1);
+        
+        // Now test with Validators contract as caller
+        vm.startPrank(address(v));
+        bool result = p.setUnpassed(v1);
+        vm.stopPrank();
+        
+        require(result, "setUnpassed should return true");
+        require(!p.pass(v1), "validator should be unpassed");
+    }
+
+    function testIsProposalValidForStakingWithInvalidValidator() public {
+        Proposal p = Proposal(PROPOSAL);
+        
+        // Test with invalid validator (pass is false)
+        address invalidValidator = makeAddr("invalidValidator");
+        bool result = p.isProposalValidForStaking(invalidValidator);
+        require(!result, "should return false for invalid validator");
+        
+        // Test with valid validator that passed proposal and is within period
+        address validValidator = makeAddr("validValidator");
+        vm.warp(7_000_000);
+        vm.prank(v1);
+        bytes32 id = p.createProposal(validValidator, true, "");
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+        
+        result = p.isProposalValidForStaking(validValidator);
+        require(result, "should return true for valid validator within period");
+        
+        // Test with valid validator that passed proposal and is outside period
+        uint256 proposalLastingPeriod = p.proposalLastingPeriod();
+        vm.roll(block.number + proposalLastingPeriod + 1);
+        result = p.isProposalValidForStaking(validValidator);
+        require(!result, "should return false for valid validator outside period");
     }
 }

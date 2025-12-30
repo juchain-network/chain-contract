@@ -1511,28 +1511,30 @@ function getValidatorInfo(address val) external view returns (
 #### Proposal Management Functions
 
 ```solidity
-// Create proposal
+// Create proposal for adding/removing validators
 function createProposal(
     address dst,              // Target validator address
     bool flag,               // true: Add, false: Remove
     string calldata details  // Proposal description
 ) external returns (bytes32);
 
-// Vote
+// Create proposal for updating configuration parameters
+function createUpdateConfigProposal(
+    uint256 cid,           // Configuration parameter ID
+    uint256 newValue       // New parameter value
+) external returns (bytes32);
+
+// Vote on a proposal
 function voteProposal(
     bytes32 id,    // Proposal ID
     bool auth      // true: Support, false: Oppose
-) external;
+) external returns (bool);
 
-// Get proposal information
-function getProposalInfo(bytes32 id) external view returns (
-    address proposer,
-    address dst,
-    string memory details,
-    uint256 createTime,
-    uint256 voteCount,
-    bool finished
-);
+// Check if a proposal passed for a validator
+function pass(address validator) external view returns (bool);
+
+// Check if a proposal is valid for staking registration
+function isProposalValidForStaking(address validator) external view returns (bool);
 ```
 
 ### Staking Contract Interface
@@ -1541,23 +1543,41 @@ function getProposalInfo(bytes32 id) external view returns (
 
 ```solidity
 // Register validator and stake
-function register(uint256 commissionRate) external payable;
+function registerValidator(uint256 commissionRate) external payable;
 
-// Delegate stake
+// Add more self-stake to existing validator
+function addValidatorStake() external payable;
+
+// Delegate stake to a validator
 function delegate(address validator) external payable;
 
-// Undelegate
+// Undelegate stake from a validator
 function undelegate(address validator, uint256 amount) external;
+
+// Complete unbonding and withdraw tokens
+function withdrawUnbonded(address validator, uint256 maxEntries) external;
 
 // Get validator staking information
 function getValidatorInfo(address validator) external view returns (
     uint256 selfStake,
     uint256 totalDelegated,
-    uint256 totalStake,
     uint256 commissionRate,
+    uint256 accumulatedRewards,
     bool isJailed,
-    uint256 jailUntilBlock
+    uint256 jailUntilBlock,
+    uint256 totalClaimedRewards,
+    uint256 lastClaimBlock
 );
+```
+
+#### Reward Management Functions
+
+```solidity
+// Claim pending rewards for delegators
+function claimRewards(address validator) external;
+
+// Claim accumulated rewards for validators
+function claimValidatorRewards() external;
 ```
 
 ## 📋 Best Practices Summary

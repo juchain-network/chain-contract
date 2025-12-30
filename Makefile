@@ -11,35 +11,49 @@ YELLOW = \033[1;33m
 RED = \033[0;31m
 NC = \033[0m # No Color
 
-.PHONY: help clean build test fmt security coverage gas-test all update version addresses generate-contracts  generate-go-client
+# Define all phony targets
+.PHONY: help clean build test fmt security coverage coverage-html gas-test all update version addresses generate-contracts generate-go-client test-by-forge test-by-shell test-all anvil-start anvil-stop anvil-status anvil-clean get-system-params load-env
 
 help:
-# Available targets:
-	@echo "  $(GREEN)build$(NC)         - Compile contracts"
-	@echo "  $(GREEN)test$(NC)          - Run all tests"
-	@echo "  $(GREEN)clean$(NC)         - Clean build artifacts"
-	@echo "  $(GREEN)fmt$(NC)           - Format Solidity code"
-	@echo "  $(GREEN)security$(NC)      - Run security analysis (requires slither)"
-	@echo "  $(GREEN)coverage$(NC)      - Generate coverage report"
-	@echo "  $(GREEN)gas-test$(NC)      - Run gas optimization tests"
-	@echo "  $(GREEN)all$(NC)           - Clean + build + test"
-	@echo "  $(GREEN)update$(NC)        - Update dependencies"
-	@echo "  $(GREEN)version$(NC)       - Show forge version and dependencies"
-	@echo "  $(GREEN)addresses$(NC)     - Show system contract addresses"
-	@echo "  $(GREEN)generate-contracts$(NC) - Generate production contracts from templates"
-	@echo "  $(GREEN)generate-go-client$(NC) - Generate Go client code using abigen"
+	@echo "$(YELLOW)Available targets:$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Core Tasks:$(NC)"
+	@echo "  $(GREEN)build$(NC)               - Compile contracts and generate artifacts"
+	@echo "  $(GREEN)test$(NC)                - Run all tests using forge"
+	@echo "  $(GREEN)clean$(NC)               - Clean build artifacts and test environment"
+	@echo "  $(GREEN)fmt$(NC)                 - Format Solidity code"
+	@echo "  $(GREEN)all$(NC)                 - Run clean + build + test"
+	@echo ""
+	@echo "$(YELLOW)Testing & Analysis:$(NC)"
+	@echo "  $(GREEN)security$(NC)            - Run security analysis with Slither (if installed)"
+	@echo "  $(GREEN)coverage$(NC)            - Generate test coverage report"
+	@echo "  $(GREEN)coverage-html$(NC)       - Generate HTML test coverage report"
+	@echo "  $(GREEN)gas-test$(NC)            - Run gas optimization tests with report"
+	@echo "  $(GREEN)test-by-forge$(NC)        - Run PoSA integration tests using forge"
+	@echo "  $(GREEN)test-by-shell$(NC)        - Run shell-based test scenarios"
+	@echo "  $(GREEN)test-all$(NC)             - Run all tests (forge + shell)"
+	@echo ""
+	@echo "$(YELLOW)Development Utilities:$(NC)"
+	@echo "  $(GREEN)update$(NC)              - Update dependencies"
+	@echo "  $(GREEN)version$(NC)             - Show forge version and dependencies"
+	@echo "  $(GREEN)addresses$(NC)           - Show system contract addresses"
+	@echo "  $(GREEN)generate-contracts$(NC)   - Generate production contracts from templates"
+	@echo "  $(GREEN)generate-go-client$(NC)   - Generate Go client code using abigen"
+	@echo "  $(GREEN)get-system-params$(NC)    - Get system configuration parameters from deployed contracts"
 	@echo ""
 	@echo "$(YELLOW)Anvil Test Environment:$(NC)"
-	@echo "  $(GREEN)anvil-start$(NC)    - Start Anvil test node"
-	@echo "  $(GREEN)anvil-stop$(NC)     - Stop Anvil test node"
-	@echo "  $(GREEN)anvil-status$(NC)   - Check Anvil node status"
-	@echo "  $(GREEN)anvil-clean$(NC)    - Clean Anvil logs and temporary files"
+	@echo "  $(GREEN)anvil-start$(NC)          - Start Anvil test node"
+	@echo "  $(GREEN)anvil-stop$(NC)           - Stop Anvil test node"
+	@echo "  $(GREEN)anvil-status$(NC)         - Check Anvil node status"
+	@echo "  $(GREEN)anvil-clean$(NC)          - Clean Anvil logs and temporary files"
 	@echo ""
-	@echo "$(YELLOW)PoSA Integration Tests:$(NC)"
-	@echo "  $(GREEN)test-all$(NC)       - Run comprehensive PoSA test suite (includes all test scenarios, report generation, and environment management)"
+	@echo "$(YELLOW)Environment Management:$(NC)"
+	@echo "  $(GREEN)load-env$(NC)             - Load environment variables from .env file"
 	@echo ""
-	@echo "$(YELLOW)Test Utilities:$(NC)"
-	@echo "  $(GREEN)load-env$(NC)       - Load environment variables from .env file"
+	@echo "Usage examples:"
+	@echo "  make build       - Build all contracts"
+	@echo "  make test-all    - Run comprehensive test suite"
+	@echo "  make clean build - Clean and then build"
 	@echo ""
 
 # Clean build artifacts
@@ -48,6 +62,7 @@ clean:
 	@forge clean
 	@make anvil-stop
 	@make anvil-clean
+	@rm -fr state
 
 # Build contracts
 build:generate-contracts
@@ -78,7 +93,21 @@ gas-test:
 # Coverage report
 coverage:
 	@echo "$(YELLOW)Generating coverage report...$(NC)"
-	forge coverage
+	@forge coverage
+
+# HTML Coverage report
+coverage-html:
+	@echo "$(YELLOW)Generating HTML coverage report...$(NC)"
+	@echo "$(YELLOW)Step 1: Installing lcov if not present...$(NC)"
+# 	@brew install lcov >/dev/null 2>&1 || true
+	@echo "$(YELLOW)Step 2: Generating lcov report...$(NC)"
+	@forge coverage --report lcov
+	@echo "$(YELLOW)Step 3: Converting lcov to HTML...$(NC)"
+	@genhtml lcov.info -o coverage-report
+	@echo "$(YELLOW)Step 4: Cleaning up temporary files...$(NC)"
+	@rm -f lcov.info
+	@echo "$(GREEN)✅ HTML coverage report generated successfully at ./coverage-report$(NC)"
+	@echo "$(YELLOW)To view the report: open coverage-report/index.html$(NC)"
 
 # Security check with slither (if installed)
 security:
@@ -124,6 +153,7 @@ generate-go-client: build
 
 # Start Anvil test node
 anvil-start:
+	@mkdir -p state
 	@echo "$(YELLOW)Starting Anvil test node...$(NC)"
 	@./anvil-setup.sh --start
 
@@ -145,134 +175,50 @@ anvil-clean:
 # PoSA Integration Tests
 # =========================
 
-# Run all tests in one comprehensive task
-# This task includes:  setup, anvil start/stop for each test
-test-debug:
-	@make clean
-	@make build
-	@echo "$(YELLOW)Starting comprehensive PoSA test suite...$(NC)"
-	
-	# Step 1: Set up test environment with mock contracts
-	@make load-env
-	
-	# Run Validator Management test with fresh Anvil instance
-	@echo "\n$(YELLOW)Running Validator Management tests...$(NC)"
-	@make anvil-start
-	@sleep 3
-	@forge script script/integration/ValidatorLifecycleTest.s.sol:ValidatorLifecycleTest --rpc-url http://localhost:8545 --broadcast --skip-simulation -vvv
-	@make anvil-stop
-	@make anvil-clean
-	
-	@echo "\n$(GREEN)✅ All tests completed successfully!$(NC)"
+test-all: test-by-forge test-by-shell
+	@echo "$(GREEN)✅ All tests completed successfully!$(NC)"
 
 # Run all tests in one comprehensive task
 # This task includes:  setup, anvil start/stop for each test
-test-all:
+test-by-forge:
 	@echo "$(YELLOW)Starting comprehensive PoSA test suite...$(NC)"
 	# Step 1: Set up test environment with mock contracts
 	@make clean
 	@make build
 	@make load-env
 	
-	# Run each test case
-	@for test_script in \
-		"Deployment tests;script/tools/Deployment.s.sol:DeploymentScript" \
-		"Validator Management tests;script/integration/ValidatorManagement.s.sol:ValidatorManagementScript" \
-		"Validator Lifecycle tests;script/integration/ValidatorLifecycleTest.s.sol:ValidatorLifecycleTest" \
-		"Delegator Lifecycle tests;script/integration/DelegatorLifecycleTest.s.sol:DelegatorLifecycleTest" \
-		"Staking Mechanism tests;script/integration/StakingMechanism.s.sol:StakingMechanismScript" \
-		"Proposal System tests;script/tools/ProposalSystem.s.sol:ProposalSystemScript" \
-		"Punishment Mechanism tests;script/integration/PunishmentMechanism.s.sol:PunishmentMechanismScript" \
-		"PoSA Integration tests;script/integration/PoSAIntegrationTest.s.sol:PoSAIntegrationTest"; do \
-		TEST_NAME="$$(echo $$test_script | cut -d ';' -f 1)"; \
-		SCRIPT="$$(echo $$test_script | cut -d ';' -f 2)"; \
-		echo "\n$(YELLOW)Running $$TEST_NAME...$(NC)"; \
+	# Run all test scripts in script/integration/test directory
+	@for script_file in $$(find script/integration/test -name "*.s.sol"); do \
+		TEST_NAME=$$(basename $$script_file .s.sol); \
+		CONTRACT_NAME=$$TEST_NAME; \
+		echo "\n$(YELLOW)Running $$TEST_NAME tests...$(NC)"; \
 		make anvil-start; \
-		forge script $$SCRIPT --rpc-url http://localhost:8545 --broadcast --skip-simulation -vvv; \
+		forge script $$script_file:$$CONTRACT_NAME --rpc-url http://localhost:8545 --broadcast --skip-simulation -vvv; \
 		make anvil-stop; \
 		make anvil-clean; \
-	done
+done
 	
 	@echo "\n$(GREEN)✅ All tests completed successfully!$(NC)"
 
-test-report:
-	@echo "$(YELLOW)Starting comprehensive PoSA test suite with report generation...$(NC)"
-	@make clean
-	@make build
-	@make load-env
-	# Step 2: Start Anvil test node
-	@make anvil-start
-
-	# Step 3: Run test-report to generate comprehensive test results
-	@echo "$(YELLOW)Running tests and generating reports...$(NC)"
-	@python3 test-report.py --broadcast
-	
-	# Step 4: Stop Anvil test node
-	@make anvil-stop
-	
-	# Step 5: Clean Anvil logs and temporary files
-	@make anvil-clean
-	
-	@echo "$(GREEN)✅ All tests completed successfully!$(NC)"
-	@echo "$(GREEN)Test reports generated in ./test-results directory$(NC)"
-
-# =========================
-# New Test Framework
-# =========================
-
-# 运行特定测试场景
-test-scenario:
-	@if [ -z "$(SCENARIO)" ]; then \
-		echo "$(RED)Error: Please specify test scenario with SCENARIO=script/ci/your-test.sh$(NC)"; \
-		exit 1; \
-	fi
-	@make test-env-stop
-	@echo "$(YELLOW)Running test scenario: $(SCENARIO)$(NC)"
-	@make test-env-start
-	@bash $(SCENARIO)
-	@make test-env-stop
-
-# 运行所有测试场景
-test-all-scenarios:
+test-by-shell:
 	@echo "$(YELLOW)Running all test scenarios...$(NC)"
-	@make test-env-start
-	@for scenario in script/ci/*.sh; do \
+	@make clean
+	@make anvil-start
+	@for scenario in script/ci/*-test.sh; do \
 		echo "\n$(YELLOW)=== Running: $$scenario ===$(NC)"; \
 		bash $$scenario; \
 		echo "$(YELLOW)=== Completed: $$scenario ===$(NC)"; \
 	done
-	@make test-env-stop
+	@make anvil-stop
+	@make anvil-clean
 
-# 快速运行单个原子脚本
-test-atomic:
-	@if [ -z "$(SCRIPT)" ]; then \
-		echo "$(RED)Error: Please specify atomic script with SCRIPT=script/path/YourScript.s.sol:YourScript$(NC)"; \
-		exit 1; \
-	fi
-	@echo "$(YELLOW)Running atomic script: $(SCRIPT)$(NC)"
-	@make test-env-start
-	@forge script $(SCRIPT) --rpc-url http://localhost:8545 --broadcast --skip-simulation -vvv
-	@make test-env-stop
-
-# 获取系统配置参数
+# Get system configuration parameters
 get-system-params:
 	@echo "$(YELLOW)System Configuration Parameters$(NC)"
-	@echo -n "Epoch Duration: "; cast call 0x000000000000000000000000000000000000f010 "getEpochDuration()(uint256)" | grep -oE '[0-9]+'; echo -n " seconds"
-	@echo -n "Unbonding Period: "; cast call 0x000000000000000000000000000000000000F013 "getUnbondingPeriod()(uint256)" | grep -oE '[0-9]+'; echo -n " seconds"
-	@echo -n "Validator Unjail Period: "; cast call 0x000000000000000000000000000000000000F013 "getValidatorUnjailPeriod()(uint256)" | grep -oE '[0-9]+'; echo -n " seconds"
-	@echo -n "Proposal Lasting Period: "; cast call 0x000000000000000000000000000000000000F012 "getProposalLastingPeriod()(uint256)" | grep -oE '[0-9]+'; echo -n " seconds"
-
-# 启动单个Anvil实例用于所有测试
-test-env-start:
-	@echo "$(YELLOW)Starting Anvil test node for test suite...$(NC)"
-	@./script/ci/anvil-setup.sh --start
-	@sleep 3
-
-# 停止测试环境
-test-env-stop:
-	@echo "$(YELLOW)Stopping Anvil test node...$(NC)"
-	@./script/ci/anvil-setup.sh --stop
-	@./script/ci/anvil-setup.sh --clean
+	@echo -n "Epoch Duration: "; cast call 0x000000000000000000000000000000000000f010 "getEpochDuration()(uint256)" | grep -oE '[0-9]+'; echo -n " blocks"
+	@echo -n "Unbonding Period: "; cast call 0x000000000000000000000000000000000000F013 "getUnbondingPeriod()(uint256)" | grep -oE '[0-9]+'; echo -n " blocks"
+	@echo -n "Validator Unjail Period: "; cast call 0x000000000000000000000000000000000000F013 "getValidatorUnjailPeriod()(uint256)" | grep -oE '[0-9]+'; echo -n " blocks"
+	@echo -n "Proposal Lasting Period: "; cast call 0x000000000000000000000000000000000000F012 "getProposalLastingPeriod()(uint256)" | grep -oE '[0-9]+'; echo -n " blocks"
 
 # =========================
 # Test Utilities

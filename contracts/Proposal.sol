@@ -7,7 +7,7 @@ import {IValidators} from './IValidators.sol';
 import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
 contract Proposal is Params, ReentrancyGuard {
-    // How long a proposal will exist
+    // How many blocks a proposal will exist
     uint256 public proposalLastingPeriod;
     uint256 public punishThreshold;
     uint256 public removeThreshold;
@@ -28,9 +28,7 @@ contract Proposal is Params, ReentrancyGuard {
     // record
     mapping(address => bool) public pass;
     // Record when proposal passed (for 7-day staking requirement)
-    mapping(address => uint256) public proposalPassedTime;
-    // Period for validator to stake after proposal passed (7 days)
-    uint256 public constant STAKING_DEADLINE_PERIOD = 7 days;
+    mapping(address => uint256) public proposalPassedHeight;
     // Proposal nonce per proposer to ensure unique proposal IDs
     mapping(address => uint256) public proposerNonces;
 
@@ -39,6 +37,8 @@ contract Proposal is Params, ReentrancyGuard {
         address proposer;
         // time create proposal
         uint256 createTime;
+        // block number when proposal was created
+        uint256 createBlock;
         uint256 proposalType;
         // validator proposal
         // propose who to be a validator
@@ -108,13 +108,13 @@ contract Proposal is Params, ReentrancyGuard {
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), 'Invalid validator address');
             pass[vals[i]] = true;
-            // Set proposalPassedTime for genesis validators (no 7-day limit for genesis)
+            // Set proposalPassedHeight for genesis validators (uses proposalLastingPeriod for block-based validation)
             // This ensures consistency with normal proposal flow, even though genesis validators
             // don't need to pass isProposalValidForStaking() check (they use initializeWithValidators)
-            proposalPassedTime[vals[i]] = block.timestamp;
+            proposalPassedHeight[vals[i]] = block.number;
         }
 
-        proposalLastingPeriod = 7 days;
+        proposalLastingPeriod = 604800;
         punishThreshold = 24;
         removeThreshold = 48;
         decreaseRate = 24;
@@ -148,19 +148,20 @@ contract Proposal is Params, ReentrancyGuard {
         
         // generate proposal id using nonce instead of block.timestamp
         // forge-lint: disable-next-line(asm-keccak256)
-        bytes32 id = keccak256(abi.encodePacked(msg.sender, dst, flag, details, currentNonce));
+        bytes32 id = keccak256(abi.encode(msg.sender, dst, flag, details, currentNonce));
         require(bytes(details).length <= 3000, 'Details too long');
         require(proposals[id].createTime == 0, 'Proposal already exists');
 
         // Increment nonce for the proposer
         proposerNonces[msg.sender]++;
 
-        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
+        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, createBlock: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
         proposal.proposer = msg.sender;
         proposal.dst = dst;
         proposal.flag = flag;
         proposal.details = details;
         proposal.createTime = block.timestamp;
+        proposal.createBlock = block.number;
         proposal.proposalType = 1;
 
         proposals[id] = proposal;
@@ -177,16 +178,17 @@ contract Proposal is Params, ReentrancyGuard {
         
         // generate proposal id using nonce instead of block.timestamp
         // forge-lint: disable-next-line(asm-keccak256)
-        bytes32 id = keccak256(abi.encodePacked(msg.sender, cid, newValue, currentNonce));
+        bytes32 id = keccak256(abi.encode(msg.sender, cid, newValue, currentNonce));
 
         // Increment nonce for the proposer
         proposerNonces[msg.sender]++;
 
-        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
+        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, createBlock: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
         proposal.proposer = msg.sender;
         proposal.cid = cid;
         proposal.newValue = newValue;
         proposal.createTime = block.timestamp;
+        proposal.createBlock = block.number;
         proposal.proposalType = 2;
 
         proposals[id] = proposal;
@@ -197,7 +199,7 @@ contract Proposal is Params, ReentrancyGuard {
     function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {
         require(proposals[id].createTime != 0, 'Proposal not exist');
         require(votes[msg.sender][id].voteTime == 0, "You can't vote for a proposal twice");
-        require(block.timestamp < proposals[id].createTime + proposalLastingPeriod, 'Proposal expired');
+        require(block.number < proposals[id].createBlock + proposalLastingPeriod, 'Proposal expired');
 
         votes[msg.sender][id].voteTime = block.timestamp;
         votes[msg.sender][id].voter = msg.sender;
@@ -224,12 +226,12 @@ contract Proposal is Params, ReentrancyGuard {
                 if (proposals[id].flag) {
                     // add to validators
                     pass[proposals[id].dst] = true;
-                    // Record proposal passed time for 7-day staking requirement
-                    proposalPassedTime[proposals[id].dst] = block.timestamp;
+                    // Record proposal passed height for 7-day staking requirement
+                    proposalPassedHeight[proposals[id].dst] = block.number;
                     // Validator needs to stake first, then will be activated at next epoch
                 } else {
                     pass[proposals[id].dst] = false;
-                    proposalPassedTime[proposals[id].dst] = 0; // Clear passed time
+                    proposalPassedHeight[proposals[id].dst] = 0; // Clear passed height
                     validators.tryRemoveValidator(proposals[id].dst);
                 }
             } else if (proposalType == 2) {
@@ -254,7 +256,7 @@ contract Proposal is Params, ReentrancyGuard {
     /**
      * @dev Validate configuration parameters
      * @param cid Configuration ID:
-     *   - 0: proposalLastingPeriod (1 hour - 30 days)
+     *   - 0: proposalLastingPeriod (must > 0)
      *   - 1: punishThreshold (must > 0)
      *   - 2: removeThreshold (must > 0)
      *   - 3: decreaseRate (must > 0, prevents division by zero)
@@ -268,16 +270,7 @@ contract Proposal is Params, ReentrancyGuard {
      */
     function validateConfig(uint256 cid, uint256 value) internal pure returns (bool) {
         require(cid <= 9, "Invalid config ID");
-        
-        // Use if-else statements for better robustness
-        if (cid == 0) {
-            require(value >= 1 hours && value <= 30 days, "Invalid proposal period");
-        } else if (cid >= 1 && cid <= 9) {
-            // All other configs require positive values
-            require(value > 0, "Config value must be positive");
-        } else {
-            revert("Invalid config ID");
-        }
+        require(value > 0, "Config value must be positive");
         return true;
     }
 
@@ -324,15 +317,15 @@ contract Proposal is Params, ReentrancyGuard {
     function setUnpassed(address val) external onlyValidatorsContract returns (bool) {
         // set validator unpass
         pass[val] = false;
-        proposalPassedTime[val] = 0; // Clear passed time
+        proposalPassedHeight[val] = 0; // Clear passed height
         
         emit LogSetUnpassed(val, block.timestamp);
         return true;
     }
 
     /**
-     * @dev Check if proposal passed time is still valid (within 7 days) for NEW registration
-     * @notice This function is ONLY used to check if a NEW validator can register within 7 days
+     * @dev Check if proposal passed height is still valid (within proposalLastingPeriod blocks) for NEW registration
+     * @notice This function is ONLY used to check if a NEW validator can register within the specified block period
      * @notice Once a validator is registered (has selfStake >= MIN_VALIDATOR_STAKE), 
      *         this check is no longer applied. Validators are removed by setUnpassed() when punished.
      * @param validator Validator address
@@ -342,8 +335,8 @@ contract Proposal is Params, ReentrancyGuard {
         if (!pass[validator]) {
             return false;
         }
-        uint256 passedTime = proposalPassedTime[validator];
-        // Check if within 7 days - only applies to NEW registrations
-        return block.timestamp <= passedTime + STAKING_DEADLINE_PERIOD;
+        uint256 passedHeight = proposalPassedHeight[validator];
+        // Check if within 7 days (604800 blocks) - only applies to NEW registrations
+        return block.number <= passedHeight + proposalLastingPeriod;
     }
 }
