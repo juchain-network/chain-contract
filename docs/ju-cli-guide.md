@@ -235,7 +235,9 @@ Vote on an existing proposal:
 
 **Output:** `undelegate.json`
 
-### 3.4 Claim Rewards
+### 3.4 Claim Rewards (for Delegators)
+
+Used by delegators to claim rewards from staking to a specific validator.
 
 ```bash
 ./build/ju-cli staking claim-rewards \
@@ -245,11 +247,27 @@ Vote on an existing proposal:
 ```
 
 **Parameters:**
-- `-c, --claimer` - Claimer address
-- `-v, --validator` - Validator address
+- `-c, --claimer` - Delegator address (required)
+- `-v, --validator` - Validator address to claim rewards from (required)
 - `-r, --rpc` - RPC endpoint URL
 
 **Output:** `claimRewards.json`
+
+### 3.5 Claim Validator Rewards (for Validators)
+
+Used by validators to claim their own accumulated rewards.
+
+```bash
+./build/ju-cli staking claim-validator-rewards \
+  -v 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
+  -r https://testnet-rpc.juchain.org
+```
+
+**Parameters:**
+- `-v, --validator` - Validator address (required)
+- `-r, --rpc` - RPC endpoint URL
+
+**Output:** `claimValidatorRewards.json`
 
 ### 3.5 Withdraw Unbonded Stakes
 

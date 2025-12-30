@@ -33,7 +33,7 @@ func validateGlobalFlags(cmd *cobra.Command, args []string) {
 	requiresRPC := []string{
 		"list", "query", "create", "config", "vote", "withdraw_profits",
 		"send", "register-validator", "edit-validator", "delegate", "undelegate",
-		"claim-rewards", "query-validator", "query-delegation", "list-top-validators",
+		"claim-rewards", "claim-validator-rewards", "query-validator", "query-delegation", "list-top-validators",
 		"increase-stake", "decrease-stake", "set-commission", "deregister", "exit",
 		"claim-unbonding-rewards",
 	}
@@ -128,19 +128,20 @@ func init() {
 
 	// Staking commands - staking and delegation operations
 	stakingCmd.AddCommand(
-		RegisterValidatorCmd(),      // register validator staking
-		DelegateCmd(),               // delegate to validator
-		UndelegateCmd(),             // undelegate from validator
-		IncreaseStakeCmd(),          // increase validator stake
-		DecreaseStakeCmd(),          // decrease validator stake
-		SetCommissionCmd(),          // set validator commission rate
-		DeregisterValidatorCmd(),    // validator deregistration
-		ValidatorExitCmd(),          // validator complete exit
-		UnjailValidatorCmd(),        // unjail a validator
-		ClaimRewardsCmd(),           // claim staking rewards
-		WithdrawUnbondedCmd(),       // withdraw unbonded stakes
-		QueryDelegationCmd(),        // query delegation information
-		QueryAvailableUnbondedCmd(), // query available unbonded amounts
+		RegisterValidatorCmd(),          // register validator staking
+		DelegateCmd(),                   // delegate to validator
+		UndelegateCmd(),                 // undelegate from validator
+		IncreaseStakeCmd(),              // increase validator stake
+		DecreaseStakeCmd(),              // decrease validator stake
+		SetCommissionCmd(),              // set validator commission rate
+		DeregisterValidatorCmd(),        // validator deregistration
+		ValidatorExitCmd(),              // validator complete exit
+		UnjailValidatorCmd(),            // unjail a validator
+		ClaimRewardsCmd(),               // claim staking rewards (delegators)
+		ClaimValidatorRewardsCmd(),      // claim validator rewards (validators)
+		WithdrawUnbondedCmd(),           // withdraw unbonded stakes
+		QueryDelegationCmd(),            // query delegation information
+		QueryAvailableUnbondedCmd(),     // query available unbonded amounts
 	)
 
 	// Misc commands
