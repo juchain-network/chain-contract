@@ -1,51 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
-import {BaseTestScript} from "./BaseTestScript.s.sol";
+import {ProposalUtils} from "../utils/ProposalUtils.s.sol";
 import {console} from "forge-std/Test.sol";
 
 // End-to-end script: Create proposal + multiple validator voting + check results
-contract EndToEndProposalScript is BaseTestScript {
+contract ProposalFlow is ProposalUtils {
     
 
     
     event ProposalCreated(bytes32 indexed id, address proposer, address target, bool flag);
     event VoteCast(bytes32 indexed id, address voter, bool vote);
     event ProposalResult(bytes32 indexed id, bool passed, address[] topValidators);
-    
-    function run() public override {
-        console.log("Starting End-to-End Proposal Tests...");
-        
-        // Create test accounts
-        createTestAccounts();
-        
-        // Deploy and initialize contracts
-        deployAndInitializeContracts();
-        
-        // Create a new validator for testing
-        address newValidator = fundNewValidator(uint256(keccak256(abi.encodePacked("newValidatorEndToEnd"))));
-        
-        // Use initial validators as voters
-        address[] memory voters = validatorAccounts;
-        
-        // Set a random validator as temporary miner
-        address miner = validatorAccounts[0];
-        setMinerTemporarily(miner);
-        
-        // Directly call internal function to execute validator addition process
-        bool success = _runProposalFlow(
-            newValidator,
-            true, // Add validator
-            "End-to-end test: Adding validator",
-            voters
-        );
-        
-        if (success) {
-            emit ProposalResult(bytes32(uint256(uint160(newValidator))), true, validators.getTopValidators());
-        }
-        
-        console.log("End-to-End Proposal Tests completed!");
-    }
     
     struct ProposalInfo {
         bytes32 id;
@@ -75,14 +41,10 @@ contract EndToEndProposalScript is BaseTestScript {
         uint256 configId,
         uint256 newValue,
         address[] memory voters
-    ) external returns (bool success) {
-        // Freeze timestamp to ensure deterministic ID
-        uint256 timestamp = block.timestamp;
-        bytes32 id = keccak256(abi.encodePacked(validatorAccounts[0], configId, newValue, timestamp));
-        
+    ) public returns (bool success) {
         // Create configuration update proposal
         vm.startBroadcast(validatorKeys[0]);
-        proposal.createUpdateConfigProposal(configId, newValue);
+        bytes32 id = proposal.createUpdateConfigProposal(configId, newValue);
         vm.stopBroadcast();
         
         // Validator voting
@@ -108,6 +70,48 @@ contract EndToEndProposalScript is BaseTestScript {
         emit ProposalResult(id, success, topValidators);
         
         return success;
+    }
+    
+    function run() public override {
+        console.log("Starting Governance Parameter Update Tests...");
+        
+        // Create test accounts
+        createTestAccounts();
+        
+        // Deploy and initialize contracts
+        deployAndInitializeContracts();
+        
+        // Use initial validators as voters
+        address[] memory voters = validatorAccounts;
+        
+        // Set a random validator as temporary miner
+        address miner = validatorAccounts[0];
+        setMinerTemporarily(miner);
+        
+        // Define new values for each governance parameter
+        // Each config ID corresponds to a parameter in Proposal.sol
+        // Config IDs: 0-9 (10 parameters total)
+        uint256[] memory newValues = new uint256[](10);
+        newValues[0] = 3600;          // 0: proposalLastingPeriod (blocks)
+        newValues[1] = 30;             // 1: punishThreshold (blocks)
+        newValues[2] = 60;             // 2: removeThreshold (blocks)
+        newValues[3] = 50;             // 3: decreaseRate (percentage * 100)
+        newValues[4] = 86400;          // 4: withdrawProfitPeriod (blocks)
+        newValues[5] = 0.1 ether;      // 5: blockReward (wei)
+        newValues[6] = 7200;           // 6: unbondingPeriod (blocks)
+        newValues[7] = 1000;           // 7: validatorUnjailPeriod (blocks)
+        newValues[8] = 200000 ether;   // 8: minValidatorStake (wei)
+        newValues[9] = 25;             // 9: maxValidators (number)
+        
+        // Update each governance parameter through proposal
+        for (uint256 i = 0; i < 10; i++) {
+            console.log("\n=== Updating Governance Parameter %d ===", i);
+            bool success = runConfigUpdateFlow(i, newValues[i], voters);
+            require(success, string(abi.encodePacked("Failed to update parameter ", vm.toString(i))));
+            console.log("Parameter %d updated successfully!", i);
+        }
+        
+        console.log("\nAll Governance Parameter Update Tests completed successfully!");
     }
     
     function _runProposalFlow(

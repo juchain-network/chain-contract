@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
-import {BaseTestScript} from "./BaseTestScript.s.sol";
+import {BaseTestUtils} from "../utils/BaseTestUtils.s.sol";
 import {console} from "forge-std/Test.sol";
 
-contract PoSAIntegrationTest is BaseTestScript {
+contract BaseIntegration is BaseTestUtils {
     // Additional configuration specific to this test
     uint256 public constant BLOCK_REWARD = 0.2 ether;
-    uint256 public constant PROPOSAL_LASTING_PERIOD = 7 days;
+    uint256 public constant PROPOSAL_LASTING_PERIOD = 604800; // 7 days in blocks
     uint256 public constant PUNISH_THRESHOLD = 24;
     
     // Additional test accounts
-    address[] public delegatorAccounts;
-    uint256[] public delegatorKeys;
+    // Using delegatorAccounts and delegatorKeys from BaseTestScript
     
     // Main test function
     function run() public override{
@@ -42,7 +41,7 @@ contract PoSAIntegrationTest is BaseTestScript {
         console.log("\n=== Testing Validator Management ===");
         
         // Test 1: Check initial validators are registered
-        for (uint256 i = 0; i < INITIAL_VALIDATORS; i++) {
+        for (uint256 i = 0; i < initialValidators; i++) {
             address validator = validatorAccounts[i];
             (uint256 selfStake, , , , , , , ) = staking.getValidatorInfo(validator);
             require(selfStake >= 100000 ether, "Validator should have correct self-stake");
@@ -52,19 +51,19 @@ contract PoSAIntegrationTest is BaseTestScript {
         (bool isActive, ) = staking.getValidatorStatus(validatorAccounts[0]);
         require(isActive == true, "Validator should be active");
         
-        console.log(unicode"✓ Validator Management tests passed");
+        console.log("Validator Management tests passed");
     }
     
     function testStakingMechanism() internal {
         console.log("\n=== Testing Staking Mechanism ===");
         
         address validator = validatorAccounts[0];
-        address delegator = validatorAccounts[10];
+        address delegator = validatorAccounts[1]; // Use validator 2 as delegator for testing
         uint256 delegationAmount = 100 ether;
         
         printBalance(delegator);
         // Test 1: Delegation to validator
-        vm.startBroadcast(validatorKeys[10]);
+        vm.startBroadcast(validatorKeys[1]);
         staking.delegate{value: delegationAmount}(validator);
         vm.stopBroadcast();
         
@@ -77,14 +76,14 @@ contract PoSAIntegrationTest is BaseTestScript {
         uint256 additionalDelegation = 50 ether;
         uint256 initialDelegatedAmount = delegatorStake; // Save current delegation amount
         printBalance(delegator);
-        vm.startBroadcast(validatorKeys[10]);
+        vm.startBroadcast(validatorKeys[1]);
         staking.delegate{value: additionalDelegation}(validator);
         vm.stopBroadcast();
         
         (delegatorStake, , , ) = staking.getDelegationInfo(delegator, validator);
         require(delegatorStake == initialDelegatedAmount + additionalDelegation, "Delegator should have increased stake");
         
-        console.log(unicode"✓ Staking Mechanism tests passed");
+        console.log("Staking Mechanism tests passed");
     }
     
     function testBlockRewardDistribution() internal {
@@ -95,12 +94,12 @@ contract PoSAIntegrationTest is BaseTestScript {
         
         // Use first validator as miner temporarily
         address miner = validatorAccounts[0];
-        setMinerTemporarily(miner);
         
         // Miner already has funds from BaseTestScript;
         
         // Simulate miner calling distributeBlockReward
         vm.startBroadcast(validatorKeys[0]);
+        setMinerTemporarily(miner);
         validators.distributeBlockReward{value: feeAmount}();
         vm.stopBroadcast();
         
@@ -111,13 +110,14 @@ contract PoSAIntegrationTest is BaseTestScript {
         // Simulate block reward - this might also need to be called by miner
         // Check if distributeRewards also has miner-only restriction
         vm.startBroadcast(validatorKeys[0]);
+        setMinerTemporarily(miner);
         staking.distributeRewards{value: BLOCK_REWARD}();
         vm.stopBroadcast();
         
         // Verify reward distribution function was called successfully
         // We'll skip the exact reward check for now
         
-        console.log(unicode"✓ Block Reward Distribution tests passed");
+        console.log("Block Reward Distribution tests passed");
     }
     
     function testProposalSystem() internal {
@@ -131,7 +131,7 @@ contract PoSAIntegrationTest is BaseTestScript {
         vm.stopBroadcast();
         require(proposalId != bytes32(0), "Proposal creation should succeed");
         
-        console.log(unicode"✓ Proposal System tests passed");
+        console.log("Proposal System tests passed");
     }
     
     function testPunishmentMechanism() internal view {
@@ -140,26 +140,25 @@ contract PoSAIntegrationTest is BaseTestScript {
         // Test missed block recording is accessible
         require(address(punish) != address(0), "Punish contract should be deployed");
         
-        console.log(unicode"✓ Punishment Mechanism tests passed");
+        console.log("Punishment Mechanism tests passed");
     }
     
     function testInitialValidatorLifecycle() internal {
         console.log("\n=== Testing Initial Validator Lifecycle ===");
         
-        // Use first validator as miner temporarily
-        address miner = validatorAccounts[0];
-        setMinerTemporarily(miner);
-        
         // Test 1: Initial validators should be active
-        for (uint256 i = 0; i < INITIAL_VALIDATORS; i++) {
+        for (uint256 i = 0; i < initialValidators; i++) {
             address validator1 = validatorAccounts[i];
             (bool isActive, ) = staking.getValidatorStatus(validator1);
             require(isActive == true, "Initial validator should be active");
         }
         
         // Test 2: Simulate epoch switch - Get top validators first
+        // updateActiveValidatorSet may require miner permission
+        address miner = validatorAccounts[0];
         address[] memory topValidators = validators.getTopValidators();
         vm.startBroadcast(validatorKeys[0]);
+        setMinerTemporarily(miner);
         validators.updateActiveValidatorSet(topValidators, 1);
         vm.stopBroadcast();
         
@@ -169,19 +168,19 @@ contract PoSAIntegrationTest is BaseTestScript {
         vm.stopBroadcast();
         console.log("Validator claimed rewards successfully");
         
-        console.log(unicode"✓ Initial Validator Lifecycle tests passed");
+        console.log("Initial Validator Lifecycle tests passed");
     }
     
     function testDelegateCompleteLifecycle() internal {
         console.log("\n=== Testing Delegate Complete Lifecycle ===");
         
         address validator = validatorAccounts[1]; // Use a different validator
-        address delegator = delegatorAccounts[1]; // Use a different delegator
+        address delegator = validatorAccounts[2]; // Use validator 3 as delegator for testing
         uint256 initialDelegateAmount = 100 ether;
         uint256 additionalDelegateAmount = 50 ether;
         
         // Test 1: Delegate to validator
-        vm.startBroadcast(delegatorKeys[1]);
+        vm.startBroadcast(validatorKeys[2]);
         staking.delegate{value: initialDelegateAmount}(validator);
         vm.stopBroadcast();
         
@@ -189,7 +188,7 @@ contract PoSAIntegrationTest is BaseTestScript {
         require(delegatorStake == initialDelegateAmount, "Delegator should have correct stake");
         
         // Test 2: Additional delegation
-        vm.startBroadcast(delegatorKeys[1]);
+        vm.startBroadcast(validatorKeys[2]);
         staking.delegate{value: additionalDelegateAmount}(validator);
         vm.stopBroadcast();
         
@@ -197,23 +196,23 @@ contract PoSAIntegrationTest is BaseTestScript {
         require(delegatorStake == initialDelegateAmount + additionalDelegateAmount, "Delegator should have increased stake");
         
         // Test 3: Claim rewards
-        vm.startBroadcast(delegatorKeys[1]);
+        vm.startBroadcast(validatorKeys[2]);
         staking.claimRewards(validator);
         vm.stopBroadcast();
         console.log("Delegator claimed rewards successfully");
         
         // Test 4: Undelegate part of the stake
         uint256 undelegateAmount = 75 ether;
-        vm.startBroadcast(delegatorKeys[1]);
+        vm.startBroadcast(validatorKeys[2]);
         staking.undelegate(validator, undelegateAmount);
         vm.stopBroadcast();
         
         // Test 5: Undelegate all remaining stake
-        vm.startBroadcast(delegatorKeys[1]);
+        vm.startBroadcast(validatorKeys[2]);
         staking.undelegate(validator, delegatorStake - undelegateAmount);
         vm.stopBroadcast();
         
-        console.log(unicode"✓ Delegate Complete Lifecycle tests passed");
+        console.log("Delegate Complete Lifecycle tests passed");
     }
     
     function testValidatorPunishmentPath() internal {
@@ -222,10 +221,12 @@ contract PoSAIntegrationTest is BaseTestScript {
         address validator = validatorAccounts[0];
         // Use second validator as miner temporarily
         address miner = validatorAccounts[1];
-        setMinerTemporarily(miner);
+        
         
         // Test 1: Punish validator for missed blocks
+        // punish.punish may require miner permission
         vm.startBroadcast(validatorKeys[1]);
+        setMinerTemporarily(miner);
         punish.punish(validator); // Missed blocks punishment
         vm.stopBroadcast();
         
@@ -234,27 +235,28 @@ contract PoSAIntegrationTest is BaseTestScript {
         console.log("Validator jailed status after punishment:", isJailed);
         
         // Test 3: Decrease missed blocks counter for all validators
+        // decreaseMissedBlocksCounter may require miner permission
         vm.startBroadcast(validatorKeys[1]);
+        setMinerTemporarily(miner);
         punish.decreaseMissedBlocksCounter(1);
         vm.stopBroadcast();
         
-        console.log(unicode"✓ Validator Punishment Path tests passed");
+        console.log("Validator Punishment Path tests passed");
     }
     
     function testEpochTransitionPath() internal {
         console.log("\n=== Testing Epoch Transition Path ===");
-        
-        // Use first validator as miner temporarily
-        address miner = validatorAccounts[0];
-        setMinerTemporarily(miner);
         
         // Test 1: Get current active validators
         address[] memory initialActiveValidators = validators.getActiveValidators();
         console.log("Initial active validators:", initialActiveValidators.length);
         
         // Test 2: Simulate epoch transition
+        // updateActiveValidatorSet requires miner permission
+        address miner = validatorAccounts[0];
         address[] memory topValidators = validators.getTopValidators();
         vm.startBroadcast(validatorKeys[0]);
+        setMinerTemporarily(miner);
         validators.updateActiveValidatorSet(topValidators, 1);
         vm.stopBroadcast();
         
@@ -266,6 +268,6 @@ contract PoSAIntegrationTest is BaseTestScript {
         address[] memory stakingTopValidators = staking.getTopValidators(initialActiveValidators);
         console.log("Top validators from staking:", stakingTopValidators.length);
         
-        console.log(unicode"✓ Epoch Transition Path tests passed");
+        console.log("Epoch Transition Path tests passed");
     }
 }

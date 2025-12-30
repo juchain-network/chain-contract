@@ -1151,19 +1151,14 @@ contract StakingTest is Test {
     }
 
     function testRegisterValidator_RevertWhen_ProposalExpired() public {
-        // Advance time to have a valid timestamp
+        // Advance block height
         vm.roll(block.number + 100);
-        vm.warp(10 days);
         
         // Set up validator with passed proposal
         _setupValidatorPass(VALIDATOR1);
         
-        // Set proposalPassedTime to long ago (expired)
-        vm.store(
-            PROPOSAL,
-            keccak256(abi.encode(VALIDATOR1, uint256(13))), // proposalPassedTime mapping slot (correct slot is 13)
-            bytes32(uint256(block.timestamp - 8 days)) // 8 days ago, expired
-        );
+        // Fast forward block height by proposalLastingPeriod + 1
+        vm.roll(block.number + Proposal(PROPOSAL).proposalLastingPeriod() + 1);
         
         // Try to register with expired proposal (should revert)
         vm.startPrank(VALIDATOR1);

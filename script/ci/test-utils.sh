@@ -75,3 +75,203 @@ verify_result() {
     echo "🔍 Verifying: $description"
     run_script $script
 }
+
+# Read contract address from test state JSON file
+read_contract_address() {
+    local contract_name=$1
+    local state_file=${2:-"$(dirname "$0")/../../state/test_state.json"}
+    
+    if [ ! -f "$state_file" ]; then
+        echo "❌ State file not found: $state_file"
+        return 1
+    fi
+    
+    # Use jq to parse JSON and extract contract address
+    local address=$(jq -r ".contracts.$contract_name" "$state_file")
+    
+    if [ -z "$address" ] || [ "$address" = "null" ]; then
+        echo "❌ Contract address not found for: $contract_name"
+        return 1
+    fi
+    
+    echo "$address"
+    return 0
+}
+
+# Read deployer address from test state JSON file
+read_deployer_address() {
+    local state_file=${1:-"$(dirname "$0")/../../state/test_state.json"}
+    
+    if [ ! -f "$state_file" ]; then
+        echo "❌ State file not found: $state_file"
+        return 1
+    fi
+    
+    local address=$(jq -r ".deployer.address" "$state_file")
+    
+    if [ -z "$address" ] || [ "$address" = "null" ]; then
+        echo "❌ Deployer address not found"
+        return 1
+    fi
+    
+    echo "$address"
+    return 0
+}
+
+# Read account from test state JSON file
+read_account() {
+    local account_type=$1  # validatorAccounts or delegatorAccounts
+    local index=$2
+    local state_file=${3:-"$(dirname "$0")/../../state/test_state.json"}
+    
+    if [ ! -f "$state_file" ]; then
+        echo "❌ State file not found: $state_file"
+        return 1
+    fi
+    
+    local address=$(jq -r ".accounts.$account_type[$index]" "$state_file")
+    
+    if [ -z "$address" ] || [ "$address" = "null" ]; then
+        echo "❌ Account not found for: $account_type[$index]"
+        return 1
+    fi
+    
+    echo "$address"
+    return 0
+}
+
+# Get validator private key from environment variables
+# Usage: get_validator_private_key <index> (1-based)
+get_validator_private_key() {
+    local index=$1
+    local key_var="VALIDATOR_PRIVATE_KEY_$index"
+    
+    if [ -z "${!key_var}" ]; then
+        echo "❌ Validator private key not found for index $index: $key_var"
+        return 1
+    fi
+    
+    echo "${!key_var}"
+    return 0
+}
+
+# Get validator address from private key
+# Usage: get_validator_address <index> (1-based)
+get_validator_address() {
+    local index=$1
+    local private_key=$(get_validator_private_key $index)
+    
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    cast wallet address $private_key
+    return 0
+}
+
+# Get delegator private key from environment variables
+# Usage: get_delegator_private_key <index> (1-based)
+get_delegator_private_key() {
+    local index=$1
+    local key_var="DELEGATOR_PRIVATE_KEY_$index"
+    
+    if [ -z "${!key_var}" ]; then
+        echo "❌ Delegator private key not found for index $index: $key_var"
+        return 1
+    fi
+    
+    echo "${!key_var}"
+    return 0
+}
+
+# Get delegator address from private key
+# Usage: get_delegator_address <index> (1-based)
+get_delegator_address() {
+    local index=$1
+    local private_key=$(get_delegator_private_key $index)
+    
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    cast wallet address $private_key
+    return 0
+}
+
+# Get all validator private keys as an array
+# Usage: get_all_validator_private_keys
+# Returns: Array of validator private keys
+get_all_validator_private_keys() {
+    local keys=()
+    local i=1
+    
+    # Loop through validator private keys up to VALIDATOR_COUNT
+    # Using VALIDATOR_COUNT from environment variables for safety
+    local max_validators=${VALIDATOR_COUNT:-9}  # Default to 9 if not set
+    
+    for ((i=1; i<=max_validators; i++)); do
+        local key_var="VALIDATOR_PRIVATE_KEY_$i"
+        local key="${!key_var}"
+        
+        if [ -n "$key" ]; then
+            keys+=($key)
+        else
+            # Stop at the first missing key
+            break
+        fi
+    done
+    
+    echo "${keys[@]}"
+    return 0
+}
+
+# Get all delegator private keys as an array
+# Usage: get_all_delegator_private_keys
+# Returns: Array of delegator private keys
+get_all_delegator_private_keys() {
+    local keys=()
+    local i=1
+    
+    # Loop through delegator private keys up to DELEGATOR_COUNT
+    # Using DELEGATOR_COUNT from environment variables for safety
+    local max_delegators=${DELEGATOR_COUNT:-9}  # Default to 9 if not set
+    
+    for ((i=1; i<=max_delegators; i++)); do
+        local key_var="DELEGATOR_PRIVATE_KEY_$i"
+        local key="${!key_var}"
+        
+        if [ -n "$key" ]; then
+            keys+=($key)
+        else
+            # Stop at the first missing key
+            break
+        fi
+    done
+    
+    echo "${keys[@]}"
+    return 0
+}
+
+# Compare two wei integers using bc
+# Usage: wei_gt <a> <b>
+# Return: 0 (true) / 1 (false)
+wei_gt() {
+    local a="$1"
+    local b="$2"
+
+    # Ensure both are pure integers
+    if ! [[ "$a" =~ ^[0-9]+$ && "$b" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: wei_gt expects integer values, got '$a' and '$b'" >&2
+        return 2
+    fi
+
+    # bc returns 1 if true, 0 if false
+    (( $(echo "$a > $b" | bc) ))
+}
+
+wei_is_zero() {
+    local v="$1"
+
+    [[ "$v" =~ ^[0-9]+$ ]] || return 1
+    (( $(echo "$v == 0" | bc) ))
+}

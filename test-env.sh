@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 加载.env文件中的环境变量
+# load environment variables from .env file
 if [ -f ".env" ]; then
     export $(grep -v '^#' ".env" | xargs)
     echo "✅ Environment variables loaded from .env file"
