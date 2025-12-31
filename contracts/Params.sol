@@ -3,17 +3,32 @@
 pragma solidity ^0.8.29;
 
 contract Params {
+    /**
+     * @dev Indicates whether the contract has been initialized.
+     */
     bool public initialized ;
 
     
     // Production version: constants use SCREAMING_SNAKE_CASE
     // System contracts (POSA addresses)
+    /**
+     * @dev Address of the Validators contract.
+     */
     address
         public constant VALIDATOR_ADDR = 0x000000000000000000000000000000000000F010;
+    /**
+     * @dev Address of the Punish contract.
+     */
     address
         public constant PUNISH_ADDR = 0x000000000000000000000000000000000000F011;
+    /**
+     * @dev Address of the Proposal contract.
+     */
     address
         public constant PROPOSAL_ADDR = 0x000000000000000000000000000000000000F012;
+    /**
+     * @dev Address of the Staking contract.
+     */
     address
         public constant STAKING_ADDR = 0x000000000000000000000000000000000000F013;
 

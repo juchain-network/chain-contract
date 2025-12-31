@@ -1,9 +1,4 @@
 #!/bin/bash
-
-# Anvil Setup Script for PoSA Test Environment
-
-set -e
-
 # Default values
 DEFAULT_PORT=8545
 DEFAULT_CHAIN_ID=1337

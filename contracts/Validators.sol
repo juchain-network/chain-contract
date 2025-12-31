@@ -81,6 +81,13 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         require(!operationsDone[block.number][uint8(Operations.Distribute)], 'Block is already rewarded');
     }
 
+    /**
+     * @dev Initializes the Validators contract with validators and dependencies.
+     * @param vals Array of initial validator addresses.
+     * @param proposal_ Address of the Proposal contract.
+     * @param punish_ Address of the Punish contract.
+     * @param staking_ Address of the Staking contract.
+     */
     function initialize(
         address[] calldata vals,
         address proposal_,
@@ -116,6 +123,16 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         initialized = true;
     }
 
+    /**
+     * @dev Creates or edits a validator's information.
+     * @param feeAddr Address where validator fees will be sent.
+     * @param moniker Validator's display name.
+     * @param identity Validator's identity (e.g., Keybase ID).
+     * @param website Validator's website URL.
+     * @param email Validator's email address.
+     * @param details Additional details about the validator.
+     * @return bool Returns true if the operation was successful.
+     */
     function createOrEditValidator(
         address payable feeAddr,
         string calldata moniker,
@@ -168,7 +185,13 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         return true;
     }
 
-    // feeAddr can withdraw profits of it's validator
+    /**
+     * @dev Allows the fee address to withdraw profits for a validator.
+     * @param validator Address of the validator whose profits are being withdrawn.
+     * @return bool Returns true if the operation was successful.
+     * @notice Only the validator's designated fee address can call this function.
+     * @notice There's a minimum waiting period between withdrawals.
+     */
     function withdrawProfits(address validator) external nonReentrant returns (bool) {
         address payable feeAddr = payable(msg.sender);
         // Check if validator exists (has staked) from Staking contract
@@ -194,8 +217,12 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         return true;
     }
 
-    // distributeBlockReward distributes block reward to the block producer
-    // If the block producer is jailed, the reward is distributed to other active validators
+    /**
+     * @dev Distributes block reward to the block producer (validator).
+     * @notice If the block producer is jailed, the reward is distributed to other active validators.
+     * @notice Only the miner can call this function.
+     * @notice Block reward is passed via msg.value.
+     */
     function distributeBlockReward() external payable onlyMiner onlyInitialized onlyNotRewarded {
         // Check is now handled by onlyNotRewarded modifier
         
@@ -232,6 +259,13 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         emit LogDistributeBlockReward(val, hb, block.timestamp);
     }
 
+    /**
+     * @dev Updates the active validator set.
+     * @param newSet Array of addresses for the new validator set.
+     * @param epoch Epoch number for which the update is happening.
+     * @notice Only the miner can call this function.
+     * @notice Validators are updated at specific epoch boundaries.
+     */
     function updateActiveValidatorSet(address[] memory newSet, uint256 epoch)
         public
         onlyMiner
@@ -260,10 +294,20 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         emit LogUpdateValidator(newSet);
     }
 
+    /**
+     * @dev Removes a validator from the active set.
+     * @param val Address of the validator to remove.
+     * @notice Only the Punish contract can call this function.
+     */
     function removeValidator(address val) external onlyPunishContract nonReentrant {
         removeValidatorInternal(val);
     }
 
+    /**
+     * @dev Tries to remove a validator from the active set.
+     * @param val Address of the validator to remove.
+     * @notice Only the Proposal contract can call this function.
+     */
     function tryRemoveValidator(address val) external onlyProposalContract nonReentrant {
         // Jail validator first to ensure no more rewards are distributed
         staking.jailValidator(val, proposal.validatorUnjailPeriod());
@@ -291,10 +335,24 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         }
     }
 
+    /**
+     * @dev Removes a validator from the incoming validator set.
+     * @param val Address of the validator to remove.
+     * @notice Only the Punish contract can call this function.
+     */
     function removeValidatorIncoming(address val) external onlyPunishContract nonReentrant {
         tryRemoveValidatorIncoming(val);
     }
 
+    /**
+     * @dev Gets the description of a validator.
+     * @param val Address of the validator.
+     * @return moniker Validator's display name.
+     * @return identity Validator's identity (e.g., Keybase ID).
+     * @return website Validator's website URL.
+     * @return email Validator's email address.
+     * @return details Additional details about the validator.
+     */
     function getValidatorDescription(address val)
         public
         view
@@ -417,6 +475,11 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         return currentValidatorSet.length;
     }
 
+    /**
+     * @dev Checks if an address is an active validator.
+     * @param who Address to check.
+     * @return bool Returns true if the address is in the current validator set.
+     */
     function isActiveValidator(address who) public view returns (bool) {
         uint256 currentSetLength = currentValidatorSet.length;
         for (uint256 i = 0; i < currentSetLength; i++) {
@@ -468,6 +531,11 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         return selfStake > 0;
     }
 
+    /**
+     * @dev Checks if an address is a top validator.
+     * @param who Address to check.
+     * @return bool Returns true if the address is in the highest validators set.
+     */
     function isTopValidator(address who) public view returns (bool) {
         uint256 highestSetLength = highestValidatorsSet.length;
         for (uint256 i = 0; i < highestSetLength; i++) {
@@ -477,14 +545,6 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         }
 
         return false;
-    }
-
-    /**
-     * @dev Get highest validators set (returns cached highestValidatorsSet)
-     * @return Highest validators list from cached set
-     */
-    function getHighestValidators() public view returns (address[] memory) {
-        return highestValidatorsSet;
     }
 
     /**
@@ -500,6 +560,23 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         return staking.getTopValidators(highestValidators);
     }
 
+    /**
+     * @dev Get highest validators set (returns cached highestValidatorsSet)
+     * @return Highest validators list from cached set
+     */
+    function getHighestValidators() public view returns (address[] memory) {
+        return highestValidatorsSet;
+    }
+
+    /**
+     * @dev Validates a validator's description fields.
+     * @param moniker Validator's display name.
+     * @param identity Validator's identity (e.g., Keybase ID).
+     * @param website Validator's website URL.
+     * @param email Validator's email address.
+     * @param details Additional details about the validator.
+     * @return bool Returns true if all fields are valid.
+     */
     function validateDescription(
         string memory moniker,
         string memory identity,

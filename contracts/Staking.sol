@@ -109,6 +109,11 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(!validatorStakes[validator].isJailed, "Validator is jailed");
     }
 
+    /**
+     * @dev Initializes the Staking contract with required dependencies.
+     * @param validators_ Address of the Validators contract.
+     * @param proposal_ Address of the Proposal contract.
+     */
     function initialize(address validators_, address proposal_) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
         require(proposal_ != address(0), "Invalid proposal address");
