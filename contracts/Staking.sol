@@ -79,7 +79,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
     event ValidatorUpdated(address indexed validator, uint256 commissionRate);
-    event ValidatorStakeWithdrawn(address indexed validator, uint256 amount);
+    event ValidatorStakeIncreased(address indexed validator, uint256 amount);
+    event ValidatorStakeDecreased(address indexed validator, uint256 amount);
     event ValidatorExited(address indexed validator, uint256 amount);
     event Delegated(address indexed delegator, address indexed validator, uint256 amount);
     event Undelegated(address indexed delegator, address indexed validator, uint256 amount);
@@ -227,6 +228,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(validatorStakes[msg.sender].isRegistered, "Validator not registered");
         validatorStakes[msg.sender].selfStake = validatorStakes[msg.sender].selfStake + msg.value;
         totalStaked = totalStaked + msg.value;
+        emit ValidatorStakeIncreased(msg.sender, msg.value);
     }
 
     /**
@@ -264,11 +266,13 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         stake.selfStake = remainingStake;
         totalStaked = totalStaked - amount;
         
-        emit ValidatorStakeWithdrawn(msg.sender, amount);
+        // Instead of transferring funds directly, add them to unbonding like exitValidator and undelegate
+        unbondingDelegations[msg.sender][msg.sender].push(UnbondingEntry({
+            amount: amount,
+            completionBlock: block.number + proposalContract.unbondingPeriod()
+        }));
         
-        // Interactions: external call after state update
-        (bool success, ) = payable(msg.sender).call{value: amount}("");
-        require(success, "Transfer failed");
+        emit ValidatorStakeDecreased(msg.sender, amount);
     }
 
     /**

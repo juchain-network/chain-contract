@@ -322,10 +322,28 @@ contract StakingTest is Test {
         vm.prank(VALIDATOR1);
         Staking(STAKING).decreaseValidatorStake(withdrawAmount);
         
-        assertEq(VALIDATOR1.balance, initialBalance + withdrawAmount);
+        // Check that funds are in unbonding delegations, not immediately transferred
+        assertEq(VALIDATOR1.balance, initialBalance);
         
+        // Check validator's self-stake decreased correctly
         (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE * 2 - withdrawAmount);
+        
+        // Get unbonding entries
+        Staking.UnbondingEntry[] memory unbondingEntries = Staking(STAKING).getUnbondingEntries(VALIDATOR1, VALIDATOR1);
+        assertEq(unbondingEntries.length, 1);
+        assertEq(unbondingEntries[0].amount, withdrawAmount);
+        
+        // Fast forward to after unbonding period
+        uint256 unbondingPeriod = Proposal(PROPOSAL).unbondingPeriod();
+        vm.roll(block.number + unbondingPeriod + 1);
+        
+        // Withdraw the unbonded amount
+        vm.prank(VALIDATOR1);
+        Staking(STAKING).withdrawUnbonded(VALIDATOR1, 1);
+        
+        // Now check that balance increased
+        assertEq(VALIDATOR1.balance, initialBalance + withdrawAmount);
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
     }
 
@@ -400,16 +418,34 @@ contract StakingTest is Test {
         
         // Try to decrease stake from jailed validator
         vm.prank(VALIDATOR1);
-        // Note: decreaseValidatorStake doesn't explicitly check jail status, but the transfer should still work
+        // Note: decreaseValidatorStake doesn't explicitly check jail status
         // This test verifies that jailed validators can still decrease their stake
         uint256 decreaseAmount = 100 ether;
         uint256 initialBalance = VALIDATOR1.balance;
         
         Staking(STAKING).decreaseValidatorStake(decreaseAmount);
         
+        // Check that funds are in unbonding delegations, not immediately transferred
+        assertEq(VALIDATOR1.balance, initialBalance);
+        
         // Verify the decrease happened
         (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE + 200 ether - decreaseAmount);
+        
+        // Get unbonding entries
+        Staking.UnbondingEntry[] memory unbondingEntries = Staking(STAKING).getUnbondingEntries(VALIDATOR1, VALIDATOR1);
+        assertEq(unbondingEntries.length, 1);
+        assertEq(unbondingEntries[0].amount, decreaseAmount);
+        
+        // Fast forward to after unbonding period
+        uint256 unbondingPeriod = Proposal(PROPOSAL).unbondingPeriod();
+        vm.roll(block.number + unbondingPeriod + 1);
+        
+        // Withdraw the unbonded amount
+        vm.prank(VALIDATOR1);
+        Staking(STAKING).withdrawUnbonded(VALIDATOR1, 1);
+        
+        // Now check that balance increased
         assertEq(VALIDATOR1.balance, initialBalance + decreaseAmount);
     }
 
