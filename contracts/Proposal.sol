@@ -18,6 +18,8 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 private constant DEFAULT_VALIDATOR_UNJAIL_PERIOD = 86400; // 1 day in blocks
     uint256 private constant DEFAULT_MIN_VALIDATOR_STAKE = 100000 ether; // Minimum validator stake
     uint256 private constant DEFAULT_MAX_VALIDATORS = 21; // Maximum active validators
+    uint256 private constant DEFAULT_MIN_DELEGATION = 10 ether; // 10 JU
+    uint256 private constant DEFAULT_MIN_UNDELEGATION = 1 ether; // 1 JU
 
     // How many blocks a proposal will exist
     uint256 public proposalLastingPeriod;
@@ -36,6 +38,10 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 public minValidatorStake;
     // Maximum validators in active set
     uint256 public maxValidators;
+    // Minimum delegation amount per delegator
+    uint256 public minDelegation;
+    // Minimum undelegation amount per delegator
+    uint256 public minUndelegation;
 
     // record
     mapping(address => bool) public pass;
@@ -141,6 +147,8 @@ contract Proposal is Params, ReentrancyGuard {
         validatorUnjailPeriod = DEFAULT_VALIDATOR_UNJAIL_PERIOD;
         minValidatorStake = DEFAULT_MIN_VALIDATOR_STAKE;
         maxValidators = DEFAULT_MAX_VALIDATORS;
+        minDelegation = DEFAULT_MIN_DELEGATION;
+        minUndelegation = DEFAULT_MIN_UNDELEGATION;
         initialized = true;
     }
 
@@ -297,10 +305,12 @@ contract Proposal is Params, ReentrancyGuard {
      *   - 7: validatorUnjailPeriod (must > 0)
      *   - 8: minValidatorStake (must > 0, in wei)
      *   - 9: maxValidators (must > 0)
+     *   - 10: minDelegation (must > 0, in wei)
+     *   - 11: minUndelegation (must > 0, in wei)
      * @param value New configuration value
      */
     function validateConfig(uint256 cid, uint256 value) internal pure returns (bool) {
-        require(cid <= 9, "Invalid config ID");
+        require(cid <= 11, "Invalid config ID");
         require(value > 0, "Config value must be positive");
         return true;
     }
@@ -334,6 +344,10 @@ contract Proposal is Params, ReentrancyGuard {
             minValidatorStake = value;
         } else if (cid == 9) {
             maxValidators = value;
+        } else if (cid == 10) {
+            minDelegation = value;
+        } else if (cid == 11) {
+            minUndelegation = value;
         } else {
             revert("Unknown config ID"); // Fail fast for new config IDs
         }

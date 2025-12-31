@@ -14,14 +14,13 @@ import {IStaking} from './IStaking.sol';
  */
 contract Staking is Params, ReentrancyGuard, IStaking {
 
-    // Minimum delegation amount
-    uint256 public constant MIN_DELEGATION = 1 ether; // 1 JU
+
     
     // Commission rate precision (10000 = 100%)
     uint256 public constant COMMISSION_RATE_BASE = 10000;    
     
-    // Maximum number of unbonding entries to process in a single withdrawUnbonded call
-    uint256 public constant MAX_UNBONDING_ENTRIES_PER_WITHDRAW = 50;
+    // Maximum number of unbonding entries per delegator-validator pair
+    uint256 public constant MAX_UNBONDING_ENTRIES = 20;
 
     struct ValidatorStake {
         uint256 selfStake;          // Validator's own stake
@@ -345,7 +344,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function delegate(address validator) external payable onlyActiveValidator(validator) nonReentrant {
         require(validator != address(0), "Invalid validator address");
-        require(msg.value >= MIN_DELEGATION, "Insufficient delegation amount");
+        require(msg.value >= proposalContract.minDelegation(), "Insufficient delegation amount");
         require(validator != msg.sender, "Cannot delegate to yourself");
         
         // Calculate pending rewards
@@ -375,6 +374,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function undelegate(address validator, uint256 amount) external nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(amount > 0, "Amount must be positive");
+        require(amount >= proposalContract.minUndelegation(), "Insufficient undelegation amount");
+        require(unbondingDelegations[msg.sender][validator].length < MAX_UNBONDING_ENTRIES, "Too many unbonding entries");
         require(validator != msg.sender, "Cannot undelegate from yourself");
         require(delegations[msg.sender][validator].amount >= amount, "Insufficient delegation");
         // Allow undelegation even if validator has exited (selfStake == 0)
@@ -412,7 +413,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function withdrawUnbonded(address validator, uint256 maxEntries) external nonReentrant {
         require(maxEntries > 0, "maxEntries must be positive");
-        require(maxEntries <= MAX_UNBONDING_ENTRIES_PER_WITHDRAW, "maxEntries too large");
+        require(maxEntries <= MAX_UNBONDING_ENTRIES, "maxEntries too large");
         
         UnbondingEntry[] storage entries = unbondingDelegations[msg.sender][validator];
         uint256 totalWithdraw = 0;

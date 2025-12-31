@@ -77,4 +77,16 @@ interface IProposal {
      * @return uint256 The maximum number of validators.
      */
     function maxValidators() external view returns (uint256);
+    
+    /**
+     * @dev Returns the minimum delegation amount per delegator.
+     * @return uint256 The minimum delegation amount in wei.
+     */
+    function minDelegation() external view returns (uint256);
+    
+    /**
+     * @dev Returns the minimum undelegation amount per delegator.
+     * @return uint256 The minimum undelegation amount in wei.
+     */
+    function minUndelegation() external view returns (uint256);
 }
