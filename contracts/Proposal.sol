@@ -110,6 +110,11 @@ contract Proposal is Params, ReentrancyGuard {
         require(validators.isActiveValidator(msg.sender), 'Validator only');
     }
 
+    /**
+     * @dev Initializes the Proposal contract with validators and default parameters.
+     * @param vals Array of initial validator addresses.
+     * @param validators_ Address of the Validators contract.
+     */
     function initialize(
         address[] calldata vals,
         address validators_
@@ -139,6 +144,13 @@ contract Proposal is Params, ReentrancyGuard {
         initialized = true;
     }
 
+    /**
+     * @dev Creates a new proposal for validator management.
+     * @param dst Address of the validator being proposed for addition or removal.
+     * @param flag Boolean indicating whether to add (true) or remove (false) the validator.
+     * @param details Description of the proposal.
+     * @return bytes32 Unique identifier for the created proposal.
+     */
     function createProposal(
         address dst,
         bool flag,
@@ -176,6 +188,12 @@ contract Proposal is Params, ReentrancyGuard {
         return id;
     }
 
+    /**
+     * @dev Creates a proposal to update system configuration parameters.
+     * @param cid Configuration parameter ID.
+     * @param newValue New value for the configuration parameter.
+     * @return bytes32 Unique identifier for the created proposal.
+     */
     function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bytes32) {
         // Validate config parameters before creating proposal
         require(validateConfig(cid, newValue), "Config validation failed");
@@ -203,6 +221,12 @@ contract Proposal is Params, ReentrancyGuard {
         return id;
     }
 
+    /**
+     * @dev Casts a vote on a proposal.
+     * @param id Unique identifier of the proposal.
+     * @param auth Boolean indicating approval (true) or rejection (false) of the proposal.
+     * @return bool Returns true if the vote was successful.
+     */
     function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {
         require(proposals[id].createTime != 0, 'Proposal not exist');
         require(votes[msg.sender][id].voteTime == 0, "You can't vote for a proposal twice");
@@ -316,10 +340,11 @@ contract Proposal is Params, ReentrancyGuard {
     }
 
     /**
-     * @dev Set validator as unpassed
-     * @param val Validator address
-     * @notice This function is called when validator is removed due to punishment
-     * @notice Validator must pass a reproposal to regain validator status
+     * @dev Sets a validator as unpassed (ineligible).
+     * @param val Address of the validator to mark as unpassed.
+     * @return bool Returns true if the operation was successful.
+     * @notice This function is called when validator is removed due to punishment.
+     * @notice Validator must pass a reproposal to regain validator status.
      */
     function setUnpassed(address val) external onlyValidatorsContract returns (bool) {
         // set validator unpass
@@ -331,12 +356,12 @@ contract Proposal is Params, ReentrancyGuard {
     }
 
     /**
-     * @dev Check if proposal passed height is still valid (within proposalLastingPeriod blocks) for NEW registration
-     * @notice This function is ONLY used to check if a NEW validator can register within the specified block period
-     * @notice Once a validator is registered (has selfStake >= MIN_VALIDATOR_STAKE), 
-     *         this check is no longer applied. Validators are removed by setUnpassed() when punished.
-     * @param validator Validator address
-     * @return Whether the proposal is still valid for new staking registration
+     * @dev Checks if a validator's proposal is valid for staking.
+     * @param validator Address of the validator to check.
+     * @return bool Returns true if the validator's proposal is valid for staking.
+     * @notice This function is ONLY used to check if a NEW validator can register within the specified block period.
+     * @notice Once a validator is registered (has selfStake >= MIN_VALIDATOR_STAKE), this check is no longer applied.
+     * @notice Validators are removed by setUnpassed() when punished.
      */
     function isProposalValidForStaking(address validator) external view returns (bool) {
         if (!pass[validator]) {

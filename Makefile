@@ -19,6 +19,7 @@ help:
 	@echo ""
 	@echo "$(YELLOW)Core Tasks:$(NC)"
 	@echo "  $(GREEN)build$(NC)               - Compile contracts and generate artifacts"
+	@echo "  $(GREEN)bytecode$(NC)            - Build contracts and extract bytecode"
 	@echo "  $(GREEN)test$(NC)                - Run all tests using forge"
 	@echo "  $(GREEN)clean$(NC)               - Clean build artifacts and test environment"
 	@echo "  $(GREEN)fmt$(NC)                 - Format Solidity code"
@@ -52,6 +53,7 @@ help:
 	@echo ""
 	@echo "Usage examples:"
 	@echo "  make build       - Build all contracts"
+	@echo "  make bytecode    - Build contracts and extract bytecode"
 	@echo "  make test-all    - Run comprehensive test suite"
 	@echo "  make clean build - Clean and then build"
 	@echo ""
@@ -68,6 +70,11 @@ clean:
 build:generate-contracts
 	@echo "$(YELLOW)Building contracts...$(NC)"
 	forge build
+
+# Build contracts and extract bytecode
+bytecode: clean generate-contracts build
+	@echo "$(YELLOW)Building contracts and extracting bytecode...$(NC)"
+	npm run build-and-extract
 # Run tests
 test: build
 	@echo "$(YELLOW)Running tests...$(NC)"
@@ -143,7 +150,7 @@ version:
 	@forge tree --no-dedupe
 
 # Generate Go client code using abigen
-generate-go-client: build
+generate-go-client: clean generate-contracts build
 	@echo "$(YELLOW)Generating Go client code...$(NC)"
 	@node generate-go-client.js
 

@@ -46,6 +46,12 @@ contract Punish is Params, ReentrancyGuard {
         require(!decreased[block.number], 'Already decreased');
     }
 
+    /**
+     * @dev Initializes the Punish contract with required dependencies.
+     * @param validators_ Address of the Validators contract.
+     * @param proposal_ Address of the Proposal contract.
+     * @param staking_ Address of the Staking contract.
+     */
     function initialize(
         address validators_,
         address proposal_,
@@ -61,6 +67,12 @@ contract Punish is Params, ReentrancyGuard {
         initialized = true;
     }
 
+    /**
+     * @dev Punishes a validator for missing blocks.
+     * @param val Address of the validator to punish.
+     * @notice Only the miner can call this function.
+     * @notice Punishment is applied based on missed blocks threshold.
+     */
     function punish(address val) external onlyMiner onlyInitialized onlyNotPunished nonReentrant {
         punished[block.number] = true;
         if (!punishRecords[val].exist) {
@@ -84,6 +96,12 @@ contract Punish is Params, ReentrancyGuard {
         emit LogPunishValidator(val, block.timestamp);
     }
 
+    /**
+     * @dev Decreases the missed blocks counter for all validators at the end of an epoch.
+     * @param epoch The epoch number for which to decrease the counter.
+     * @notice Only the miner can call this function.
+     * @notice This function is called once per epoch to reduce punishment counters.
+     */
     function decreaseMissedBlocksCounter(uint256 epoch)
         external
         onlyMiner
@@ -114,7 +132,12 @@ contract Punish is Params, ReentrancyGuard {
         emit LogDecreaseMissedBlocksCounter();
     }
 
-    // clean validator's punish record if one restake in
+    /**
+     * @dev Cleans the punishment record for a validator.
+     * @param val Address of the validator whose record to clean.
+     * @return bool Returns true if the operation was successful.
+     * @notice This function is called when a validator restakes.
+     */
     function cleanPunishRecord(address val) public onlyInitialized onlyValidatorsContract returns (bool) {
         if (punishRecords[val].missedBlocksCounter != 0) {
             punishRecords[val].missedBlocksCounter = 0;
@@ -136,10 +159,19 @@ contract Punish is Params, ReentrancyGuard {
         return true;
     }
 
+    /**
+     * @dev Gets the number of validators currently being punished.
+     * @return uint256 The number of validators in the punishment list.
+     */
     function getPunishValidatorsLen() public view returns (uint256) {
         return punishValidators.length;
     }
 
+    /**
+     * @dev Gets the punishment record for a specific validator.
+     * @param val Address of the validator to check.
+     * @return uint256 The number of missed blocks for the validator.
+     */
     function getPunishRecord(address val) public view returns (uint256) {
         return punishRecords[val].missedBlocksCounter;
     }
