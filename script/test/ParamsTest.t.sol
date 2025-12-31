@@ -87,7 +87,7 @@ contract ParamsTest is Test {
     
     function testOnlyInitializedModifier() public {
         // Should fail when not initialized
-        vm.expectRevert("Not init yet");
+        vm.expectRevert("Not initialized yet");
         params.callOnlyInitialized();
         
         // Initialize and test success

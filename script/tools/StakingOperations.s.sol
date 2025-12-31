@@ -105,14 +105,10 @@ contract StakingOperationsScript is BaseSetup {
                 // Safely display delegation information
                 try stakingContract.getDelegationInfo(msg.sender, validator) returns (
                     uint256 delegatedAmount,
-                    uint256 rewards,
-                    uint256 unbondingAmount,
-                    uint256 unbondingBlock
+                    uint256 rewards
                 ) {
                     emit StakingInfo("Delegated amount", delegatedAmount);
                     emit StakingInfo("Pending rewards", rewards);
-                    emit StakingInfo("Unbonding amount", unbondingAmount);
-                    emit StakingInfo("Unbonding block", unbondingBlock);
                 } catch {
                     emit StakingInfo("Cannot get delegation info", 0);
                 }

@@ -367,7 +367,7 @@ contract StakingTest is Test {
         
         // Try to withdraw amount that would leave stake below minimum
         vm.prank(VALIDATOR1);
-        vm.expectRevert("Remaining stake below minimum, use exitValidator() to withdraw all");
+        vm.expectRevert("Remaining stake below minimum, withdraw all stake instead");
         Staking(STAKING).decreaseValidatorStake(1001);
     }
     
@@ -464,7 +464,7 @@ contract StakingTest is Test {
         assertEq(selfStake, MIN_STAKE);
         assertEq(totalDelegated, delegationAmount);
         
-        (uint256 delegatedAmount,,,) = Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
+        (uint256 delegatedAmount,) = Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
         assertEq(delegatedAmount, delegationAmount);
     }
 
@@ -745,7 +745,7 @@ contract StakingTest is Test {
         vm.stopPrank();
         
         // Check delegation info
-        (uint256 amount, , ,) = Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
+        (uint256 amount,) = Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
         assertEq(amount, delegationAmount - undelegateAmount);
         
         // Check validator's total delegated
@@ -1156,7 +1156,7 @@ contract StakingTest is Test {
         assertEq(DELEGATOR1.balance, initialBalance + totalWithdrawn);
         
         // Verify delegation entry is deleted (all entries withdrawn)
-        (uint256 amount, , ,) = Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
+        (uint256 amount,) = Staking(STAKING).getDelegationInfo(DELEGATOR1, VALIDATOR1);
         assertEq(amount, 700 ether); // 3000 - 2300 = 700
         vm.stopPrank();
     }

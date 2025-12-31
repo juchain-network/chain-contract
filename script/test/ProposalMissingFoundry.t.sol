@@ -267,7 +267,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         
         // Try to vote for non-existent proposal
         vm.prank(v1);
-        vm.expectRevert("Proposal not exist");
+        vm.expectRevert("Proposal does not exist");
         p.voteProposal(nonExistentId, true);
     }
     

@@ -94,7 +94,7 @@ contract Params {
     }
 
     function _onlyInitialized() internal view {
-        require(initialized, "Not init yet");
+        require(initialized, "Not initialized yet");
     }
 
     function _onlyPunishContract() internal view {

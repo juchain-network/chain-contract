@@ -83,7 +83,7 @@ contract StakingRewardTest is BaseSetup {
         vm.stopPrank();
         
         // Verify that the delegation was successful
-        (uint256 amount, uint256 pendingRewards, , ) = Staking(STAKING).getDelegationInfo(delegator1, v1);
+        (uint256 amount, uint256 pendingRewards) = Staking(STAKING).getDelegationInfo(delegator1, v1);
         assertEq(amount, 1000 ether, "Delegation amount should match");
         assertEq(pendingRewards, 0, "Pending rewards should be 0 initially");
     }

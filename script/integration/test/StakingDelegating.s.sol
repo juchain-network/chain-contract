@@ -79,16 +79,14 @@ contract StakingDelegating is StakingUtils, DelegatorUtils {
         
         // Verify Delegator 1's delegation to Validator 1
         console.log("\n2. Delegator 1 Delegation to Validator 1:");
-        (uint256 delegator1to1Stake, uint256 delegator1to1Rewards, , ) = staking.delegations(delegator1, validator1);
+        (uint256 delegator1to1Stake, ) = staking.delegations(delegator1, validator1);
         console.log("   Delegated stake:", delegator1to1Stake / 1 ether, "ETH");
-        console.log("   Accumulated rewards:", delegator1to1Rewards / 1 ether, "ETH");
         require(delegator1to1Stake == 0 ether, "Delegator 1 should have no stake left with Validator 1");
         
         // Verify Delegator 1's delegation to Validator 2
         console.log("\n3. Delegator 1 Delegation to Validator 2:");
-        (uint256 delegator1to2Stake, uint256 delegator1to2Rewards, , ) = staking.delegations(delegator1, validator2);
+        (uint256 delegator1to2Stake, ) = staking.delegations(delegator1, validator2);
         console.log("   Delegated stake:", delegator1to2Stake / 1 ether, "ETH");
-        console.log("   Accumulated rewards:", delegator1to2Rewards / 1 ether, "ETH");
         require(delegator1to2Stake == 800 ether, "Delegator 1 should have 800 ETH left with Validator 2");
         
         console.log("\nAll Staking Mechanism tests completed successfully!");

@@ -195,7 +195,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     function withdrawProfits(address validator) external nonReentrant returns (bool) {
         address payable feeAddr = payable(msg.sender);
         // Check if validator exists (has staked) from Staking contract
-        require(this.isValidatorExist(validator), 'Validator not exist');
+        require(this.isValidatorExist(validator), 'Validator does not exist');
         require(validatorInfo[validator].feeAddr == feeAddr, 'You are not the fee receiver of this validator');
         require(
             validatorInfo[validator].lastWithdrawProfitsBlock + proposal.withdrawProfitPeriod() <= block.number,
@@ -644,7 +644,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         
         // Set unpassed so validator must repropose to regain validator status
         bool success = proposal.setUnpassed(validator);
-        require(success, "setUnpassed failed");
+        require(success, "Failed to update validator status");
         
         // Note: We do NOT remove transaction fee income (aacIncoming) here
         // This is different from removeValidatorInternal() which calls tryRemoveValidatorIncoming()

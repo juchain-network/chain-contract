@@ -38,8 +38,6 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     struct Delegation {
         uint256 amount;             // Delegated amount
         uint256 rewardDebt;         // Reward debt for accurate reward calculation
-        uint256 unbondingAmount;    // Amount being unbonded
-        uint256 unbondingBlock;     // Block when unbonding completes
     }
 
     struct UnbondingEntry {
@@ -260,7 +258,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         
         // If partial reduction, remaining stake must meet minimum requirement
         // If complete reduction (remainingStake == 0), use exitValidator() instead
-        require(remainingStake >= proposalContract.minValidatorStake(), "Remaining stake below minimum, use exitValidator() to withdraw all");
+        require(remainingStake >= proposalContract.minValidatorStake(), "Remaining stake below minimum, withdraw all stake instead");
         
         // Effects: update state before external call
         stake.selfStake = remainingStake;
@@ -845,14 +843,10 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @param validator Validator address
      * @return amount Delegated amount
      * @return pendingRewards Pending reward amount
-     * @return unbondingAmount Amount being unbonded
-     * @return unbondingBlock Block when unbonding completes
      */
     function getDelegationInfo(address delegator, address validator) external view returns (
         uint256 amount,
-        uint256 pendingRewards,
-        uint256 unbondingAmount,
-        uint256 unbondingBlock
+        uint256 pendingRewards
     ) {
         Delegation storage delegation = delegations[delegator][validator];
         uint256 pending = 0;
@@ -866,9 +860,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         
         return (
             delegation.amount,
-            pending,
-            delegation.unbondingAmount,
-            delegation.unbondingBlock
+            pending
         );
     }
 

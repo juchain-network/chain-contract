@@ -69,7 +69,7 @@ contract BaseIntegration is BaseTestUtils {
         
         
         // Verify delegation
-        (uint256 delegatorStake, , , ) = staking.getDelegationInfo(delegator, validator);
+        (uint256 delegatorStake, ) = staking.getDelegationInfo(delegator, validator);
         require(delegatorStake == delegationAmount, "Delegator should have correct stake");
         
         // Test 2: Increase delegation
@@ -80,7 +80,7 @@ contract BaseIntegration is BaseTestUtils {
         staking.delegate{value: additionalDelegation}(validator);
         vm.stopBroadcast();
         
-        (delegatorStake, , , ) = staking.getDelegationInfo(delegator, validator);
+        (delegatorStake, ) = staking.getDelegationInfo(delegator, validator);
         require(delegatorStake == initialDelegatedAmount + additionalDelegation, "Delegator should have increased stake");
         
         console.log("Staking Mechanism tests passed");
@@ -184,7 +184,7 @@ contract BaseIntegration is BaseTestUtils {
         staking.delegate{value: initialDelegateAmount}(validator);
         vm.stopBroadcast();
         
-        (uint256 delegatorStake, , , ) = staking.getDelegationInfo(delegator, validator);
+        (uint256 delegatorStake, ) = staking.getDelegationInfo(delegator, validator);
         require(delegatorStake == initialDelegateAmount, "Delegator should have correct stake");
         
         // Test 2: Additional delegation
@@ -192,7 +192,7 @@ contract BaseIntegration is BaseTestUtils {
         staking.delegate{value: additionalDelegateAmount}(validator);
         vm.stopBroadcast();
         
-        (delegatorStake, , , ) = staking.getDelegationInfo(delegator, validator);
+        (delegatorStake, ) = staking.getDelegationInfo(delegator, validator);
         require(delegatorStake == initialDelegateAmount + additionalDelegateAmount, "Delegator should have increased stake");
         
         // Test 3: Claim rewards

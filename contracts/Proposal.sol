@@ -228,7 +228,7 @@ contract Proposal is Params, ReentrancyGuard {
      * @return bool Returns true if the vote was successful.
      */
     function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {
-        require(proposals[id].createTime != 0, 'Proposal not exist');
+        require(proposals[id].createTime != 0, 'Proposal does not exist');
         require(votes[msg.sender][id].voteTime == 0, "You can't vote for a proposal twice");
         require(block.number < proposals[id].createBlock + proposalLastingPeriod, 'Proposal expired');
 

@@ -101,13 +101,10 @@ contract DelegatorUtils is BaseTestUtils {
     // Check delegator status for a specific validator
     function getDelegatorStatus(address delegatorAddr, address validatorAddr) public {
         loadState();
-        (uint256 delegatorStake, uint256 rewards, uint256 withdrawableAmount, uint256 unbondingTimestamp) = 
-            staking.delegations(delegatorAddr, validatorAddr);
+        (uint256 delegatorStake, uint256 rewards) = staking.getDelegationInfo(delegatorAddr, validatorAddr);
         
         console.log("Validator:", validatorAddr);
         console.log("  Delegated Stake:", delegatorStake / 1 ether, "ETH");
         console.log("  Rewards:", rewards / 1 ether, "ETH");
-        console.log("  Withdrawable Amount:", withdrawableAmount / 1 ether, "ETH");
-        console.log("  Unbonding Timestamp:", unbondingTimestamp);
     }
 }
