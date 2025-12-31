@@ -88,7 +88,7 @@ The network incentivizes validators to maintain network security and process tra
 Block rewards are distributed in two parts:
 
 1. **Transaction Fee Distribution** (100%)
-   - All transaction fees are evenly distributed among all active validators
+   - All transaction fees are distributed to the block-producing validator
    - Jailed validators cannot receive transaction fees
 
 2. **Basic Reward Distribution** (Proportional Distribution)
@@ -157,8 +157,8 @@ In the JPoSA network, miners are called "validators" and are responsible for pro
    - Missing block production will be punished
 
 2. **Punishment Mechanism**
-   - Over 24 blocks, suspend transaction fee income and forfeit transaction fees, distributed to other validators, but basic miner fee income remains
-   - Over 48 blocks, jailed and removed from validator set, but in the current epoch can still continue block production and receive basic miner fee income, but in the next epoch will be permanently kicked out, requiring re-proposal application to become a validator again
+   - Over 24 blocks, suspend transaction fee income and forfeit transaction fees, distributed to other validators, but basic staking income remains
+   - Over 48 blocks, jailed and removed from validator set, but in the current epoch can still continue block production and receive basic staking income, but in the next epoch will be permanently kicked out, requiring re-proposal application to become a validator again
    - Epoch cycle is 24 hours
 
 3. **Exit Mechanism**
@@ -249,16 +249,10 @@ The governance committee of the JPoSA network consists of all active validators 
    - Updating block reward amounts
    - Adjusting commission rate caps
 
-3. **Protocol Upgrade Proposals**
-   - Hard fork upgrade plans
-   - Introduction of new functional features
-   - Security vulnerability fixes
-
 ### Voting Mechanism
 
 1. **Voting Threshold**
-   - Ordinary proposals: Require agreement from more than half of active validators
-   - Major changes: May require higher proportion of approval votes
+   - All proposals (including ordinary proposals and major changes): Require agreement from more than half of active validators
 
 2. **Voting Period**
    - Default proposal validity period is 7 days
@@ -279,8 +273,8 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
 ### Time-Related Parameters
 
 1. **Proposal Validity Period** (proposalLastingPeriod)
-   - Range: 1 hour to 30 days
-   - Default value: 7 days
+   - Range: 3,600 blocks (approximately 1 hour) to 2,592,000 blocks (approximately 30 days)
+   - Default value: 604,800 blocks (approximately 7 days)
    - Used to control proposal voting cycles
 
 2. **Unbonding Period** (unbondingPeriod)
@@ -316,21 +310,21 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
    - Controls minimum interval for validators to withdraw transaction fees
    - Default value: 86,400 blocks (approximately 24 hours)
 
-2. **Block Reward**
+2. **Block Reward** (blockReward)
    - Basic reward amount produced per block
    - Default value: 0.2 JU
 
-### Technical Parameters
-
-1. **Commission Rate Base** (COMMISSION_RATE_BASE)
+3. **Commission Rate Base** (COMMISSION_RATE_BASE)
    - Used to calculate validator commission rates
    - 10000 represents 100%
 
-2. **Maximum Validator Count** (MAX_VALIDATORS)
+### Technical Parameters
+
+1. **Maximum Validator Count** (maxValidators)
    - Upper limit of simultaneously active validators in the network
    - Default value: 21
 
-3. **Minimum Validator Stake** (minValidatorStake)
+2. **Minimum Validator Stake** (minValidatorStake)
    - Minimum staking amount required to become a validator
    - Default value: 100,000 JU
    - Ensures validators have sufficient economic incentives to maintain network security
