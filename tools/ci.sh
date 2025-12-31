@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# 解析命令行参数，分离出私钥(-k)和--rpc参数
+# Parse command line arguments, separating private key (-k) and --rpc parameter
 PRIVATE_KEY=""
 RPC_URL=""
 OTHER_ARGS=()
 
-# 使用Bash数组索引（从1开始）
+# Use Bash array indexing
 args=($@)
 for ((i=0; i<${#args[@]}; i++)); do
     arg=${args[$i]}
@@ -18,17 +18,17 @@ for ((i=0; i<${#args[@]}; i++)); do
     fi
 done
 
-# 检查是否提供了私钥
+# Check if private key is provided
 if [[ -z $PRIVATE_KEY ]]; then
     echo "Error: Private key (-k) is required"
     exit 1
 fi
 
-# 执行第一步：生成原始交易
+# Step 1: Generating raw transaction...
 echo "Step 1: Generating raw transaction..."
 go run main.go "${OTHER_ARGS[@]}" --rpc "$RPC_URL"| tee step1_output.txt
 
-# 从第一步输出中提取交易文件名
+# Extract transaction file name from step 1 output
 TX_FILE=$(grep -oP 'Transaction file: \K[^\s]+' step1_output.txt)
 
 if [[ -z $TX_FILE ]]; then
@@ -39,13 +39,13 @@ fi
 echo "Extracted transaction file: $TX_FILE"
 echo ""
 
-# 执行第二步：签名交易
+# Step 2: Signing transaction...
 echo "Step 2: Signing transaction..."
 SIGNED_TX_FILE="${TX_FILE%.*}_signed.json"
 go run main.go misc sign -f "$TX_FILE" -k "$PRIVATE_KEY" | tee step2_output.txt
 echo ""
 
-# 执行第三步：发送交易
+# Step 3: Sending transaction...
 echo "Step 3: Sending transaction..."
 SEND_CMD="go run main.go misc send -f $SIGNED_TX_FILE"
 if [[ -n $RPC_URL ]]; then
@@ -54,7 +54,7 @@ fi
 echo "Executing: $SEND_CMD"
 $SEND_CMD | tee step3_output.txt
 
-# 清理临时文件
+# Clean up temporary files
 rm -f step1_output.txt step2_output.txt step3_output.txt
 
 echo "All steps completed successfully!"
