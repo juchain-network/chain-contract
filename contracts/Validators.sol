@@ -2,12 +2,12 @@
 
 pragma solidity ^0.8.29;
 
-import {Params} from './Params.sol';
-import {IProposal} from './IProposal.sol';
-import {IPunish} from './IPunish.sol';
-import {IStaking} from './IStaking.sol';
-import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
-import {IValidators} from './IValidators.sol';
+import {Params} from "./Params.sol";
+import {IProposal} from "./IProposal.sol";
+import {IPunish} from "./IPunish.sol";
+import {IStaking} from "./IStaking.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IValidators} from "./IValidators.sol";
 
 contract Validators is Params, ReentrancyGuard, IValidators {
 
@@ -78,7 +78,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     }
 
     function _onlyNotRewarded() internal view {
-        require(!operationsDone[block.number][uint8(Operations.Distribute)], 'Block is already rewarded');
+        require(!operationsDone[block.number][uint8(Operations.Distribute)], "Block is already rewarded");
     }
 
     /**
@@ -103,7 +103,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         staking = IStaking(staking_);
 
         for (uint256 i = 0; i < vals.length; i++) {
-            require(vals[i] != address(0), 'Invalid validator address');
+            require(vals[i] != address(0), "Invalid validator address");
 
             if (!isActiveValidator(vals[i])) {
                 currentValidatorSet.push(vals[i]);
@@ -141,10 +141,10 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         string calldata email,
         string calldata details
     ) external onlyInitialized returns (bool) {
-        require(feeAddr != address(0), 'Invalid fee address');
-        require(validateDescription(moniker, identity, website, email, details), 'Invalid description');
+        require(feeAddr != address(0), "Invalid fee address");
+        require(validateDescription(moniker, identity, website, email, details), "Invalid description");
         address payable validator = payable(msg.sender);
-        require(proposal.pass(validator), 'You must be authorized first');
+        require(proposal.pass(validator), "You must be authorized first");
 
         if (validatorInfo[validator].feeAddr != feeAddr) {
             validatorInfo[validator].feeAddr = feeAddr;
@@ -195,11 +195,11 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     function withdrawProfits(address validator) external nonReentrant returns (bool) {
         address payable feeAddr = payable(msg.sender);
         // Check if validator exists (has staked) from Staking contract
-        require(this.isValidatorExist(validator), 'Validator does not exist');
-        require(validatorInfo[validator].feeAddr == feeAddr, 'You are not the fee receiver of this validator');
+        require(this.isValidatorExist(validator), "Validator does not exist");
+        require(validatorInfo[validator].feeAddr == feeAddr, "You are not the fee receiver of this validator");
         require(
             validatorInfo[validator].lastWithdrawProfitsBlock + proposal.withdrawProfitPeriod() <= block.number,
-            'You must wait enough blocks to withdraw your profits after latest withdraw of this validator'
+            "You must wait enough blocks to withdraw your profits after latest withdraw of this validator"
         );
         uint256 aacIncoming = validatorInfo[validator].aacIncoming;
         require(aacIncoming > 0, "You don't have any profits");
@@ -287,7 +287,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Set updated flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.UpdateValidators)] = true;
         
-        require(newSet.length > 0, 'Validator set empty!');
+        require(newSet.length > 0, "Validator set empty!");
 
         currentValidatorSet = newSet;
 
@@ -584,11 +584,11 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         string memory email,
         string memory details
     ) public pure returns (bool) {
-        require(bytes(moniker).length <= 70, 'Invalid moniker length');
-        require(bytes(identity).length <= 3000, 'Invalid identity length');
-        require(bytes(website).length <= 140, 'Invalid website length');
-        require(bytes(email).length <= 140, 'Invalid email length');
-        require(bytes(details).length <= 280, 'Invalid details length');
+        require(bytes(moniker).length <= 70, "Invalid moniker length");
+        require(bytes(identity).length <= 3000, "Invalid identity length");
+        require(bytes(website).length <= 140, "Invalid website length");
+        require(bytes(email).length <= 140, "Invalid email length");
+        require(bytes(details).length <= 280, "Invalid details length");
 
         return true;
     }

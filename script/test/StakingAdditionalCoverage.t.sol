@@ -20,7 +20,7 @@ contract StakingAdditionalCoverageTest is Test {
     address constant DELEGATOR1 = 0x976EA74026E726554dB657fA54763abd0C3a0aa9;
     
     uint256 constant MIN_STAKE = 100000 ether;
-    uint256 constant MIN_DELEGATION = 1 ether;
+    uint256 constant MIN_DELEGATION = 10 ether;
     
     Staking staking;
     Proposal proposal;
@@ -259,7 +259,7 @@ contract StakingAdditionalCoverageTest is Test {
         
         // Delegate tokens
         vm.startPrank(DELEGATOR1);
-        testStaking.delegate{value: 2 ether}(VALIDATOR1);
+        testStaking.delegate{value: 10 ether}(VALIDATOR1);
         vm.stopPrank();
         
         // Simulate block.coinbase as VALIDATOR1
@@ -272,7 +272,7 @@ contract StakingAdditionalCoverageTest is Test {
         
         // Undelegate, which should trigger pending rewards claim
         vm.startPrank(DELEGATOR1);
-        testStaking.undelegate(VALIDATOR1, 1 ether);
+        testStaking.undelegate(VALIDATOR1, 10 ether);
         vm.stopPrank();
         
         // Verify the undelegation and rewards were handled correctly

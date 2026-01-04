@@ -2,11 +2,11 @@
 
 pragma solidity ^0.8.29;
 
-import {Params} from './Params.sol';
-import {IProposal} from './IProposal.sol';
-import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
-import {IValidators} from './IValidators.sol';
-import {IStaking} from './IStaking.sol';
+import {Params} from "./Params.sol";
+import {IProposal} from "./IProposal.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IValidators} from "./IValidators.sol";
+import {IStaking} from "./IStaking.sol";
 
 /**
  * @title Staking Contract for JPoSA Consensus

@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.29;
 
-import {Params} from './Params.sol';
-import {IValidators} from './IValidators.sol';
-import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import {Params} from "./Params.sol";
+import {IValidators} from "./IValidators.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract Proposal is Params, ReentrancyGuard {
     // Default configuration constants
@@ -113,7 +113,7 @@ contract Proposal is Params, ReentrancyGuard {
     }
 
     function _onlyValidator() internal view {
-        require(validators.isActiveValidator(msg.sender), 'Validator only');
+        require(validators.isActiveValidator(msg.sender), "Validator only");
     }
 
     /**
@@ -129,7 +129,7 @@ contract Proposal is Params, ReentrancyGuard {
         
         validators = IValidators(validators_);
         for (uint256 i = 0; i < vals.length; i++) {
-            require(vals[i] != address(0), 'Invalid validator address');
+            require(vals[i] != address(0), "Invalid validator address");
             pass[vals[i]] = true;
             // Set proposalPassedHeight for genesis validators (uses proposalLastingPeriod for block-based validation)
             // This ensures consistency with normal proposal flow, even though genesis validators
@@ -176,8 +176,8 @@ contract Proposal is Params, ReentrancyGuard {
         // generate proposal id using nonce instead of block.timestamp
         // forge-lint: disable-next-line(asm-keccak256)
         bytes32 id = keccak256(abi.encode(msg.sender, dst, flag, details, currentNonce));
-        require(bytes(details).length <= 3000, 'Details too long');
-        require(proposals[id].createTime == 0, 'Proposal already exists');
+        require(bytes(details).length <= 3000, "Details too long");
+        require(proposals[id].createTime == 0, "Proposal already exists");
 
         // Increment nonce for the proposer
         proposerNonces[msg.sender]++;
@@ -236,9 +236,9 @@ contract Proposal is Params, ReentrancyGuard {
      * @return bool Returns true if the vote was successful.
      */
     function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {
-        require(proposals[id].createTime != 0, 'Proposal does not exist');
+        require(proposals[id].createTime != 0, "Proposal does not exist");
         require(votes[msg.sender][id].voteTime == 0, "You can't vote for a proposal twice");
-        require(block.number < proposals[id].createBlock + proposalLastingPeriod, 'Proposal expired');
+        require(block.number < proposals[id].createBlock + proposalLastingPeriod, "Proposal expired");
 
         votes[msg.sender][id].voteTime = block.timestamp;
         votes[msg.sender][id].voter = msg.sender;

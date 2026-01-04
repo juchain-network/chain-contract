@@ -2,11 +2,11 @@
 
 pragma solidity ^0.8.29;
 
-import {Params} from './Params.sol';
-import {IStaking} from './IStaking.sol';
-import {IValidators} from './IValidators.sol';
-import {IProposal} from './IProposal.sol';
-import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import {Params} from "./Params.sol";
+import {IStaking} from "./IStaking.sol";
+import {IValidators} from "./IValidators.sol";
+import {IProposal} from "./IProposal.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract Punish is Params, ReentrancyGuard {
     struct PunishRecord {
@@ -39,11 +39,11 @@ contract Punish is Params, ReentrancyGuard {
     }
 
     function _onlyNotPunished() internal view {
-        require(!punished[block.number], 'Already punished');
+        require(!punished[block.number], "Already punished");
     }
 
     function _onlyNotDecreased() internal view {
-        require(!decreased[block.number], 'Already decreased');
+        require(!decreased[block.number], "Already decreased");
     }
 
     /**
