@@ -5,6 +5,7 @@ pragma solidity ^0.8.29;
 import {Params} from "./Params.sol";
 import {IValidators} from "./IValidators.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IStaking} from "./IStaking.sol";
 
 contract Proposal is Params, ReentrancyGuard {
     // Default configuration constants
@@ -164,10 +165,33 @@ contract Proposal is Params, ReentrancyGuard {
         bool flag,
         string calldata details
     ) external onlyValidator returns (bytes32) {
-        // can't add an already exist dst or remove a not exist dst
+        // Only add additional checks for add proposals
+        if (flag) {
+            // Check if validator is already in top validator set
+            bool isTop = validators.isTopValidator(dst);
+            
+            // Only block add proposals for validators already in top set
+            if (isTop) {
+                revert("Validator is already in top validator set");
+            }
+            
+            // If proposal was passed before, check if it's expired
+            if (pass[dst]) {
+                uint256 passedHeight = proposalPassedHeight[dst];
+                // If proposal has expired, clear the pass status to allow resubmission
+                if (block.number > passedHeight + proposalLastingPeriod) {
+                    pass[dst] = false;
+                    proposalPassedHeight[dst] = 0;
+                } else {
+                    // Proposal is still valid, can't resubmit add proposal
+                    revert("Can't add an already passed dst");
+                }
+            }
+        }
+        // Simplified requirement: only check for add proposals, remove proposals can be resubmitted freely
         require(
-            (!pass[dst] && flag) || (pass[dst] && !flag),
-            "Can't add an already exist dst or Can't remove a not passed dst"
+            (!pass[dst] && flag) || !flag,
+            "Can't add an already exist dst"
         );
 
         // Get current nonce for the proposer

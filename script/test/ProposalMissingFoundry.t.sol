@@ -212,7 +212,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         
         // Test trying to add an already existing validator
         vm.prank(v1); // Use validator v1 as proposer
-        vm.expectRevert("Can't add an already exist dst or Can't remove a not passed dst");
+        vm.expectRevert("Validator is already in top validator set");
         p.createProposal(existingValidator, true, "Try to add existing validator");
         
         // Test details too long
@@ -299,9 +299,10 @@ contract ProposalMissingFoundryTest is BaseSetup {
         address nonExistentValidator = makeAddr("nonExistentValidator");
         
         // Try to create a proposal to remove a validator that hasn't passed
+        // This should now succeed, as we allow removing non-existent validators
         vm.prank(v1); // Use validator v1 as proposer
-        vm.expectRevert("Can't add an already exist dst or Can't remove a not passed dst");
-        p.createProposal(nonExistentValidator, false, "Remove non-existent validator");
+        bytes32 id = p.createProposal(nonExistentValidator, false, "Remove non-existent validator");
+        require(id != bytes32(0), "Remove proposal should succeed for non-existent validator");
     }
     
     function testUpdateConfigCID1() public {

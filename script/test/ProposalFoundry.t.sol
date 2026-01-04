@@ -105,11 +105,11 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testCreateProposalConstraints() public {
         Proposal p = Proposal(PROPOSAL);
-        // can't remove a not passed dst (choose an address not initialized)
+        // can remove a not passed dst (choose an address not initialized) - now allowed
         address notPassed = makeAddr("np");
         vm.prank(v1);
-        vm.expectRevert("Can't add an already exist dst or Can't remove a not passed dst");
-        p.createProposal(notPassed, false, "");
+        bytes32 removeId = p.createProposal(notPassed, false, "");
+        require(removeId != bytes32(0), "remove should succeed even for not passed dst");
 
         // details too long
         string memory tooLong = new string(3001);
@@ -127,7 +127,7 @@ contract ProposalFoundryTest is BaseSetup {
     vm.prank(v2); p.voteProposal(id, true);
     vm.prank(v3); p.voteProposal(id, true);
     vm.prank(v1);
-    vm.expectRevert("Can't add an already exist dst or Can't remove a not passed dst");
+    vm.expectRevert("Can't add an already passed dst");
     p.createProposal(address(0xBBB2), true, "");
     }
 

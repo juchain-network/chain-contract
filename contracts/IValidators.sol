@@ -30,6 +30,13 @@ interface IValidators {
     function isActiveValidator(address who) external view returns (bool);
 
     /**
+     * @dev Checks if an address is a top validator.
+     * @param who Address to check.
+     * @return bool Returns true if the address is a top validator.
+     */
+    function isTopValidator(address who) external view returns (bool);
+
+    /**
      * @dev Removes a validator from the highest set.
      * @param validator Address of the validator to remove.
      */
