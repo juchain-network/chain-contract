@@ -56,8 +56,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     // List of all validators (including inactive ones)
     address[] public allValidators;
     
-    // Validator address => index in allValidators array
-    mapping(address => uint256) public validatorIndex;
+
     
     // Total staked amount in the system
     uint256 public totalStaked;
@@ -177,7 +176,6 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             });
             
             // Add to validators list (same as registerValidator)
-            validatorIndex[validator] = allValidators.length;
             allValidators.push(validator);
             totalStaked = totalStaked + minValidatorStake;
             // Emit event for each validator (more accurate than single event)
@@ -213,7 +211,6 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             isRegistered: true
         });
 
-        validatorIndex[msg.sender] = allValidators.length;
         allValidators.push(msg.sender);
         totalStaked = totalStaked + msg.value;
 
