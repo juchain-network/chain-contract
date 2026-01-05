@@ -81,10 +81,10 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     mapping(address => uint256) public validatorDelegatorCount;
 
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
-    event ValidatorUpdated(address indexed validator, uint256 commissionRate);
-    event ValidatorStakeIncreased(address indexed validator, uint256 amount);
-    event ValidatorStakeDecreased(address indexed validator, uint256 amount);
-    event ValidatorExited(address indexed validator, uint256 amount);
+    event CommissionRateUpdated(address indexed validator, uint256 commissionRate);
+    event ValidatorStakeIncreased(address indexed delegator, address indexed validator, uint256 amount);
+    event ValidatorStakeDecreased(address indexed delegator, address indexed validator, uint256 amount);
+    event ValidatorExited(address indexed validator);
     event Delegated(address indexed delegator, address indexed validator, uint256 amount);
     event Undelegated(address indexed delegator, address indexed validator, uint256 amount);
     event UnbondingCompleted(address indexed delegator, address indexed validator, uint256 amount);
@@ -229,7 +229,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(validatorStakes[msg.sender].isRegistered, "Validator not registered");
         validatorStakes[msg.sender].selfStake = validatorStakes[msg.sender].selfStake + msg.value;
         totalStaked = totalStaked + msg.value;
-        emit ValidatorStakeIncreased(msg.sender, msg.value);
+        emit ValidatorStakeIncreased(msg.sender, msg.sender, msg.value);
     }
 
     /**
@@ -241,7 +241,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(newCommissionRate < COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
         
         validatorStakes[msg.sender].commissionRate = newCommissionRate;
-        emit ValidatorUpdated(msg.sender, newCommissionRate);
+        emit CommissionRateUpdated(msg.sender, newCommissionRate);
     }
 
     /**
@@ -273,7 +273,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             completionBlock: block.number + proposalContract.unbondingPeriod()
         }));
         
-        emit ValidatorStakeDecreased(msg.sender, amount);
+        emit ValidatorStakeDecreased(msg.sender, msg.sender, amount);
     }
 
     /**
@@ -339,7 +339,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             validatorsContract.removeFromHighestSet(msg.sender);
         }
 
-        emit ValidatorExited(msg.sender, withdrawAmount);
+        emit ValidatorExited(msg.sender);
     }
 
     /**
