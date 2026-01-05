@@ -74,6 +74,13 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     IValidators public validatorsContract;
     IProposal public proposalContract;
 
+    // Total number of unique delegators
+    uint256 public delegatorCount;
+    // Mapping to track if an address is a delegator
+    mapping(address => bool) public delegatorExists;
+    // Validator address => number of delegators
+    mapping(address => uint256) public validatorDelegatorCount;
+
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
     event ValidatorUpdated(address indexed validator, uint256 commissionRate);
     event ValidatorStakeIncreased(address indexed validator, uint256 amount);
@@ -350,6 +357,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         // Calculate pending rewards
         uint256 pending = _getPendingRewards(msg.sender, validator);
         
+        // Check if this is the first delegation to this validator
+        bool isFirstForValidator = delegations[msg.sender][validator].amount == 0;
+        
         // Update delegation amount
         delegations[msg.sender][validator].amount += msg.value;
         validatorStakes[validator].totalDelegated += msg.value;
@@ -357,6 +367,18 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         
         // Update reward debt
         delegations[msg.sender][validator].rewardDebt = delegations[msg.sender][validator].amount * rewardPerShare[validator] / 1e18;
+
+        // Update delegator counts
+        if (isFirstForValidator) {
+            // Increment validator's delegator count
+            validatorDelegatorCount[validator]++;
+            
+            // Check if this is the first delegation for the delegator
+            if (!delegatorExists[msg.sender]) {
+                delegatorCount++;
+                delegatorExists[msg.sender] = true;
+            }
+        }
 
         // Send pending rewards if any
         if (pending > 0) {
@@ -384,6 +406,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         // Step 1: Calculate pending rewards (pure view operation, no state changes)
         uint256 pending = _getPendingRewards(msg.sender, validator);
         
+        // Check if this will result in no delegation left for this validator
+        bool willRemoveFromValidator = delegations[msg.sender][validator].amount == amount;
+        
         // Step 2: Effects - Update all state variables before external calls
         delegations[msg.sender][validator].amount -= amount;
         validatorStakes[validator].totalDelegated -= amount;
@@ -391,6 +416,28 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         
         // Update reward debt based on new delegation amount
         delegations[msg.sender][validator].rewardDebt = delegations[msg.sender][validator].amount * rewardPerShare[validator] / 1e18;
+        
+        // Update delegator counts if all delegation is removed
+        if (willRemoveFromValidator) {
+            // Decrement validator's delegator count
+            validatorDelegatorCount[validator]--;
+            
+            // Check if delegator has any remaining delegations
+            bool hasRemainingDelegations = false;
+            for (uint256 i = 0; i < allValidators.length; i++) {
+                address v = allValidators[i];
+                if (v != validator && delegations[msg.sender][v].amount > 0) {
+                    hasRemainingDelegations = true;
+                    break;
+                }
+            }
+            
+            // If no remaining delegations, update delegation status
+            if (!hasRemainingDelegations) {
+                delegatorCount--;
+                delegatorExists[msg.sender] = false;
+            }
+        }
         
         // Add to unbonding
         unbondingDelegations[msg.sender][validator].push(UnbondingEntry({

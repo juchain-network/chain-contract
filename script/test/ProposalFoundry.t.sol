@@ -296,4 +296,37 @@ contract ProposalFoundryTest is BaseSetup {
         result = p.isProposalValidForStaking(validValidator);
         require(!result, "should return false for valid validator outside period");
     }
+
+    function testCreateProposalExpiredPass() public {
+        Proposal p = Proposal(PROPOSAL);
+        address newValidator = makeAddr("newValidator");
+        
+        // 1. 创建一个添加验证者的提案，并使其通过
+        vm.warp(8_000_000);
+        vm.prank(v1);
+        bytes32 id = p.createProposal(newValidator, true, "");
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+        
+        // 验证提案初始状态
+        require(p.pass(newValidator), "validator should be passed initially");
+        
+        // 2. 等待提案过期
+        uint256 proposalLastingPeriod = p.proposalLastingPeriod();
+        vm.roll(block.number + proposalLastingPeriod + 1);
+        
+        // 3. 再次尝试创建相同的添加验证者提案
+        // 这应该成功，因为提案已经过期，第182-185行的分支会被执行
+        vm.prank(v1);
+        bytes32 newId = p.createProposal(newValidator, true, "");
+        
+        // 4. 验证新提案成功创建
+        require(newId != bytes32(0), "should be able to create new proposal after expiration");
+        require(newId != id, "new proposal should have different ID");
+        
+        // 验证计数器状态被重置
+        require(!p.pass(newValidator), "pass should be reset to false");
+        require(p.proposalPassedHeight(newValidator) == 0, "proposalPassedHeight should be reset to 0");
+    }
 }

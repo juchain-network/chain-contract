@@ -686,6 +686,58 @@ contract ProposalMissingFoundryTest is BaseSetup {
         p.createUpdateConfigProposal(9, invalidValue);
     }
 
+    function testUpdateConfigCID10() public {
+        // Test updating minDelegation (cid=10)
+        Proposal p = Proposal(PROPOSAL);
+        
+        // Create and pass config proposal to update minDelegation
+        vm.prank(v1); // Use validator v1 as proposer
+        bytes32 id = p.createUpdateConfigProposal(10, 20 ether);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+        
+        // Verify configuration is updated
+        assertEq(p.minDelegation(), 20 ether);
+    }
+
+    function testUpdateConfigCID10Invalid() public {
+        // Test updating minDelegation with invalid value (cid=10)
+        Proposal p = Proposal(PROPOSAL);
+        
+        // Test zero value
+        uint256 invalidValue = 0;
+        vm.expectRevert("Config value must be positive");
+        vm.prank(v1); // Use validator v1 as proposer
+        p.createUpdateConfigProposal(10, invalidValue);
+    }
+
+    function testUpdateConfigCID11() public {
+        // Test updating minUndelegation (cid=11)
+        Proposal p = Proposal(PROPOSAL);
+        
+        // Create and pass config proposal to update minUndelegation
+        vm.prank(v1); // Use validator v1 as proposer
+        bytes32 id = p.createUpdateConfigProposal(11, 5 ether);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+        
+        // Verify configuration is updated
+        assertEq(p.minUndelegation(), 5 ether);
+    }
+
+    function testUpdateConfigCID11Invalid() public {
+        // Test updating minUndelegation with invalid value (cid=11)
+        Proposal p = Proposal(PROPOSAL);
+        
+        // Test zero value
+        uint256 invalidValue = 0;
+        vm.expectRevert("Config value must be positive");
+        vm.prank(v1); // Use validator v1 as proposer
+        p.createUpdateConfigProposal(11, invalidValue);
+    }
+
     function testInvalidProposalType() public {
         // Test invalid proposal type in voteProposal
         // Note: This case is theoretically unreachable in normal operation
@@ -694,10 +746,9 @@ contract ProposalMissingFoundryTest is BaseSetup {
     }
 
     function testUpdateConfigUnknownCID() public {
-        // Test unknown config ID in updateConfig
-        // Note: This case is theoretically unreachable in normal operation
-        // because validateConfig already checks cid <= 9
-        // The test is included for coverage completeness
+        // Note: The "Unknown config ID" revert in updateConfig is theoretically unreachable
+        // because validateConfig already checks cid <= 11, and all values 0-11 are covered by the if-else chain
+        // This test is kept for documentation purposes
     }
 
     function testIsProposalValidForStakingExpired() public {

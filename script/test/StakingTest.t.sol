@@ -27,7 +27,7 @@ contract StakingTest is Test {
     address constant DELEGATOR2 = 0x14dC79964da2C08b23698B3D3cc7Ca32193d9955;
     
     uint256 constant MIN_STAKE = 100000 ether;
-    uint256 constant MIN_DELEGATION = 1 ether;
+    uint256 constant MIN_DELEGATION = 10 ether;
     uint256 constant COMMISSION_RATE = 1000; // 10%
 
     function setUp() public {
@@ -70,7 +70,219 @@ contract StakingTest is Test {
         // Now we initialize with 6 validators
         assertEq(Staking(STAKING).getValidatorCount(), 0); // Validators are not registered in Staking yet, only in Proposal and Validators
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 6); // Validators are active in the Validators contract
-    }    
+        // Check initial counter values
+        assertEq(Staking(STAKING).delegatorCount(), 0);
+    }
+
+    /**
+     * @dev Test first delegation - counters should be updated correctly
+     */
+    function testFirstDelegationCounters() public {
+        // Register validator first
+        _setupValidator(VALIDATOR1);
+        
+        // Get initial counter values
+        uint256 initialDelegatorCount = Staking(STAKING).delegatorCount();
+        bool initialDelegatorExists = Staking(STAKING).delegatorExists(DELEGATOR1);
+        uint256 initialValidatorDelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        
+        // Assert initial state
+        assertEq(initialDelegatorCount, 0);
+        assertEq(initialDelegatorExists, false);
+        assertEq(initialValidatorDelegatorCount, 0);
+        
+        // Perform delegation
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION}(VALIDATOR1);
+        
+        // Check updated counter values
+        uint256 finalDelegatorCount = Staking(STAKING).delegatorCount();
+        bool finalDelegatorExists = Staking(STAKING).delegatorExists(DELEGATOR1);
+        uint256 finalValidatorDelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        
+        // Assert counter updates
+        assertEq(finalDelegatorCount, initialDelegatorCount + 1);
+        assertEq(finalDelegatorExists, true);
+        assertEq(finalValidatorDelegatorCount, initialValidatorDelegatorCount + 1);
+    }
+
+    /**
+     * @dev Test multiple delegations to the same validator - counters should not increase repeatedly
+     */
+    function testMultipleDelegationsToSameValidator() public {
+        // Register validator first
+        _setupValidator(VALIDATOR1);
+        
+        // First delegation
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION}(VALIDATOR1);
+        
+        // Get counter values after first delegation
+        uint256 afterFirstDelegatorCount = Staking(STAKING).delegatorCount();
+        uint256 afterFirstValidatorDelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        
+        // Second delegation to the same validator
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION}(VALIDATOR1);
+        
+        // Check counter values after second delegation
+        uint256 afterSecondDelegatorCount = Staking(STAKING).delegatorCount();
+        uint256 afterSecondValidatorDelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        
+        // Assert counters don't increase repeatedly
+        assertEq(afterSecondDelegatorCount, afterFirstDelegatorCount);
+        assertEq(afterSecondValidatorDelegatorCount, afterFirstValidatorDelegatorCount);
+    }
+
+    /**
+     * @dev Test delegation to multiple validators - delegator counter should increase only once
+     */
+    function testDelegationToMultipleValidators() public {
+        // Register multiple validators
+        _setupValidator(VALIDATOR1);
+        _setupValidator(VALIDATOR2);
+        
+        // First delegation to validator 1
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION}(VALIDATOR1);
+        
+        // Get counter values after first delegation
+        uint256 afterFirstDelegatorCount = Staking(STAKING).delegatorCount();
+        uint256 afterFirstValidator1DelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        uint256 afterFirstValidator2DelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR2);
+        
+        // Second delegation to validator 2
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION}(VALIDATOR2);
+        
+        // Check counter values after second delegation
+        uint256 afterSecondDelegatorCount = Staking(STAKING).delegatorCount();
+        uint256 afterSecondValidator1DelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        uint256 afterSecondValidator2DelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR2);
+        
+        // Assert delegator counter increases only once
+        assertEq(afterSecondDelegatorCount, afterFirstDelegatorCount);
+        assertEq(afterSecondValidator1DelegatorCount, afterFirstValidator1DelegatorCount);
+        assertEq(afterSecondValidator2DelegatorCount, afterFirstValidator2DelegatorCount + 1);
+    }
+
+    /**
+     * @dev Test partial undelegation - counters should remain unchanged
+     */
+    function testPartialUndelegation() public {
+        // Register validator first
+        _setupValidator(VALIDATOR1);
+        
+        // Perform delegation
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION * 2}(VALIDATOR1);
+        
+        // Get counter values after delegation
+        uint256 afterDelegatorCount = Staking(STAKING).delegatorCount();
+        bool afterDelegatorExists = Staking(STAKING).delegatorExists(DELEGATOR1);
+        uint256 afterValidatorDelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        
+        // Perform partial undelegation
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).undelegate(VALIDATOR1, MIN_DELEGATION);
+        
+        // Check counter values after partial undelegation
+        uint256 afterUndelegatorCount = Staking(STAKING).delegatorCount();
+        bool afterUndelegatorExists = Staking(STAKING).delegatorExists(DELEGATOR1);
+        uint256 afterUndelegateValidatorDelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        
+        // Assert counters remain unchanged
+        assertEq(afterUndelegatorCount, afterDelegatorCount);
+        assertEq(afterUndelegatorExists, afterDelegatorExists);
+        assertEq(afterUndelegateValidatorDelegatorCount, afterValidatorDelegatorCount);
+    }
+
+    /**
+     * @dev Test full undelegation - counters should decrease correctly
+     */
+    function testFullUndelegation() public {
+        // Register validator first
+        _setupValidator(VALIDATOR1);
+        
+        // Perform delegation
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION}(VALIDATOR1);
+        
+        // Get counter values after delegation
+        uint256 afterDelegatorCount = Staking(STAKING).delegatorCount();
+        uint256 afterValidatorDelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        
+        // Perform full undelegation
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).undelegate(VALIDATOR1, MIN_DELEGATION);
+        
+        // Check counter values after full undelegation
+        uint256 afterUndelegatorCount = Staking(STAKING).delegatorCount();
+        bool afterUndelegatorExists = Staking(STAKING).delegatorExists(DELEGATOR1);
+        uint256 afterUndelegateValidatorDelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        
+        // Assert counters decrease correctly
+        assertEq(afterUndelegatorCount, afterDelegatorCount - 1);
+        assertEq(afterUndelegatorExists, false);
+        assertEq(afterUndelegateValidatorDelegatorCount, afterValidatorDelegatorCount - 1);
+    }
+
+    /**
+     * @dev Test undelegation from one validator while still delegating to others
+     */
+    function testUndelegationFromOneValidator() public {
+        // Register multiple validators
+        _setupValidator(VALIDATOR1);
+        _setupValidator(VALIDATOR2);
+        
+        // Delegate to both validators
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION}(VALIDATOR1);
+        
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).delegate{value: MIN_DELEGATION}(VALIDATOR2);
+        
+        // Get counter values after delegations
+        uint256 afterDelegatorCount = Staking(STAKING).delegatorCount();
+        uint256 afterValidator1DelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        uint256 afterValidator2DelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR2);
+        
+        // Undelegate from validator 1
+        vm.prank(DELEGATOR1);
+        Staking(STAKING).undelegate(VALIDATOR1, MIN_DELEGATION);
+        
+        // Check counter values after undelegation
+        uint256 afterUndelegatorCount = Staking(STAKING).delegatorCount();
+        bool afterUndelegatorExists = Staking(STAKING).delegatorExists(DELEGATOR1);
+        uint256 afterUndelegateValidator1DelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR1);
+        uint256 afterUndelegateValidator2DelegatorCount = Staking(STAKING).validatorDelegatorCount(VALIDATOR2);
+        
+        // Assert counters update correctly
+        assertEq(afterUndelegatorCount, afterDelegatorCount); // Total delegator count should remain the same
+        assertEq(afterUndelegatorExists, true); // Delegator should still exist
+        assertEq(afterUndelegateValidator1DelegatorCount, afterValidator1DelegatorCount - 1);
+        assertEq(afterUndelegateValidator2DelegatorCount, afterValidator2DelegatorCount); // Validator 2 counter should remain the same
+    }
+
+    /**
+     * @dev Helper function to set up validator with pass status and register in Staking contract
+     */
+    function _setupValidator(address validator) internal {
+        // Check if validator is already in pass list
+        if (Proposal(PROPOSAL).pass(validator)) {
+            // Check if validator is already registered in Staking contract
+            (uint256 selfStake, ) = Staking(STAKING).getDelegationInfo(validator, validator);
+            if (selfStake > 0) {
+                return;
+            }
+        } else {
+            _setupValidatorPass(validator);
+        }
+        
+        // Register validator in Staking contract
+        vm.prank(validator);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+    }
     // Helper function to set up validator with pass status
     function _setupValidatorPass(address validator) internal {
         // Check if validator is already in pass list
