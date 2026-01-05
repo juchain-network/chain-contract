@@ -435,7 +435,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             // If no remaining delegations, update delegation status
             if (!hasRemainingDelegations) {
                 delegatorCount--;
-                delegatorExists[msg.sender] = false;
+                delete delegatorExists[msg.sender];
             }
         }
         
