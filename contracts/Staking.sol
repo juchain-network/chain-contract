@@ -122,9 +122,10 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function initialize(address validators_, address proposal_) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
         require(proposal_ != address(0), "Invalid proposal address");
-
+        
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
+        _initializeEpoch(proposalContract.epoch());
         initialized = true;
     }
 
@@ -152,6 +153,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
+        _initializeEpoch(proposalContract.epoch());
 
         // Cache the minimum validator stake outside the loop
         uint256 minValidatorStake = proposalContract.minValidatorStake();
@@ -191,7 +193,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @dev Register as a validator with self-stake
      * @param commissionRate Commission rate (0-10000, representing 0%-100%)
      */
-    function registerValidator(uint256 commissionRate) external payable onlyInitialized nonReentrant {
+    function registerValidator(uint256 commissionRate) external payable onlyInitialized onlyNotEpoch nonReentrant {
         require(commissionRate > 0, "Commission rate must be greater than 0");
         require(commissionRate <= COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
         require(!validatorStakes[msg.sender].isRegistered, "Already registered");
@@ -227,7 +229,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     /**
      * @dev Add more self-stake to existing validator
      */
-    function addValidatorStake() external payable nonReentrant {
+    function addValidatorStake() external payable onlyNotEpoch nonReentrant {
         require(msg.value > 0, "Amount must be positive");
         require(validatorStakes[msg.sender].isRegistered, "Validator not registered");
         validatorStakes[msg.sender].selfStake = validatorStakes[msg.sender].selfStake + msg.value;
@@ -253,7 +255,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @notice If remaining stake would be less than MIN_VALIDATOR_STAKE, the reduction will fail
      * @notice Use withdrawAfterResignation() to withdraw all stake (requires minimum validators requirement)
      */
-    function decreaseValidatorStake(uint256 amount) external nonReentrant onlyValidValidator(msg.sender) {
+    function decreaseValidatorStake(uint256 amount) external onlyNotEpoch nonReentrant onlyValidValidator(msg.sender) {
         require(amount > 0, "Amount must be positive");
 
         ValidatorStake storage stake = validatorStakes[msg.sender];
@@ -287,7 +289,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @notice After resigning, validator will be excluded from currentValidatorSet at next epoch
      * @notice After being excluded, validator can call emergencyExit() to withdraw all stake
      */
-    function resignValidator() external onlyValidValidator(msg.sender) nonReentrant {
+    function resignValidator() external onlyNotEpoch onlyValidValidator(msg.sender) nonReentrant {
         ValidatorStake storage stake = validatorStakes[msg.sender];
 
         // Cannot resign if already jailed/resigned
@@ -310,7 +312,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @notice Validators must jail themselves first, then wait until next epoch to exit
      * @notice This ensures smooth exit without disrupting consensus
      */
-    function exitValidator() external nonReentrant onlyValidValidator(msg.sender) {
+    function exitValidator() external onlyNotEpoch nonReentrant onlyValidValidator(msg.sender) {
         ValidatorStake storage stake = validatorStakes[msg.sender];
         uint256 withdrawAmount = stake.selfStake;
         require(withdrawAmount > 0, "Validator has no stake to withdraw");
@@ -349,7 +351,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @dev Delegate tokens to a validator
      * @param validator Validator address to delegate to
      */
-    function delegate(address validator) external payable onlyActiveValidator(validator) nonReentrant {
+    function delegate(address validator) external payable onlyNotEpoch onlyActiveValidator(validator) nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(msg.value >= proposalContract.minDelegation(), "Insufficient delegation amount");
         require(validator != msg.sender, "Cannot delegate to yourself");
@@ -393,7 +395,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @param validator Validator address to undelegate from
      * @param amount Amount to undelegate
      */
-    function undelegate(address validator, uint256 amount) external nonReentrant {
+    function undelegate(address validator, uint256 amount) external onlyNotEpoch nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(amount > 0, "Amount must be positive");
         require(amount >= proposalContract.minUndelegation(), "Insufficient undelegation amount");
@@ -668,7 +670,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @notice Validator must have passed a proposal (reproposal) before unjailing
      * @notice Once jailed, validator must go through the voting process again to regain validator status
      */
-    function unjailValidator(address validator) external nonReentrant {
+    function unjailValidator(address validator) external onlyNotEpoch nonReentrant {
         require(validator != address(0), "Invalid validator address");
         require(msg.sender == validator, "Only validator can unjail themselves");
         require(validatorStakes[validator].isJailed, "Validator not jailed");
@@ -753,7 +755,11 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         }
 
         // Return top validators (up to MAX_VALIDATORS)
-        uint256 returnLength = candidateCount < proposalContract.maxValidators() ? candidateCount : proposalContract.maxValidators();
+        uint256 maxValidators = proposalContract.maxValidators();
+        if (maxValidators > CONSENSUS_MAX_VALIDATORS) {
+            maxValidators = CONSENSUS_MAX_VALIDATORS;
+        }
+        uint256 returnLength = candidateCount < maxValidators ? candidateCount : maxValidators;
         address[] memory topValidators = new address[](returnLength);
         for (uint256 i = 0; i < returnLength; i++) {
             topValidators[i] = candidateValidators[i];

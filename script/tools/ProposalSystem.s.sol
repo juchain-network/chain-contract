@@ -76,7 +76,8 @@ contract ProposalSystemScript is Script, Test {
         for (uint256 i = 0; i < validatorAccounts.length; i++) {
             initialValidators[i] = validatorAccounts[i];
         }
-        proposal.initialize(initialValidators, address(validators));
+        uint256 epoch = vm.envOr("EPOCH_DURATION", uint256(600));
+        proposal.initialize(initialValidators, address(validators), epoch);
         
         // Initialize Validators contract
         validators.initialize(initialValidators, address(proposal), address(punish), address(staking));

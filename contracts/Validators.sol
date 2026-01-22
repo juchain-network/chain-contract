@@ -101,6 +101,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         proposal = IProposal(proposal_);
         punish = IPunish(punish_);
         staking = IStaking(staking_);
+        _initializeEpoch(proposal.epoch());
 
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), "Invalid validator address");
@@ -165,7 +166,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @notice This function does NOT check jailed status, only checks if validator is in currentValidatorSet
      * @notice Can be called even if validator is still jailed (e.g., in unjailValidator before state change)
      */
-    function tryActive(address validator) external onlyInitialized nonReentrant returns (bool) {
+    function tryActive(address validator) external onlyInitialized onlyNotEpoch nonReentrant returns (bool) {
         require(
             msg.sender == address(proposal) || msg.sender == address(staking),
             "Only Proposal or Staking contract can call"
@@ -287,7 +288,17 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Set updated flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.UpdateValidators)] = true;
         
-        require(newSet.length > 0, "Validator set empty!");
+        address[] memory expected = staking.getTopValidators(highestValidatorsSet);
+        require(expected.length > 0, "Validator set empty!");
+        uint256 maxValidators = proposal.maxValidators();
+        if (maxValidators > CONSENSUS_MAX_VALIDATORS) {
+            maxValidators = CONSENSUS_MAX_VALIDATORS;
+        }
+        require(expected.length <= maxValidators, "Validator set too large");
+        require(newSet.length == expected.length, "Validator set mismatch");
+        _validateValidatorSet(newSet);
+        _validateValidatorSet(expected);
+        _requireSameSet(newSet, expected);
 
         currentValidatorSet = newSet;
 
@@ -299,7 +310,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @param val Address of the validator to remove.
      * @notice Only the Punish contract can call this function.
      */
-    function removeValidator(address val) external onlyPunishContract nonReentrant {
+    function removeValidator(address val) external onlyPunishContract onlyNotEpoch nonReentrant {
         removeValidatorInternal(val);
     }
 
@@ -308,7 +319,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @param val Address of the validator to remove.
      * @notice Only the Proposal contract can call this function.
      */
-    function tryRemoveValidator(address val) external onlyProposalContract nonReentrant {
+    function tryRemoveValidator(address val) external onlyProposalContract onlyNotEpoch nonReentrant {
         // Jail validator first to ensure no more rewards are distributed
         staking.jailValidator(val, proposal.validatorUnjailPeriod());
         // Remove validator from active set
@@ -340,7 +351,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @param val Address of the validator to remove.
      * @notice Only the Punish contract can call this function.
      */
-    function removeValidatorIncoming(address val) external onlyPunishContract nonReentrant {
+    function removeValidatorIncoming(address val) external onlyPunishContract onlyNotEpoch nonReentrant {
         tryRemoveValidatorIncoming(val);
     }
 
@@ -610,7 +621,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @dev Add validator to highest validators set (called by Staking contract)
      * @param validator Validator address to add
      */
-    function tryAddValidatorToHighestSet(address validator) external onlyStakingContract onlyInitialized {
+    function tryAddValidatorToHighestSet(address validator) external onlyStakingContract onlyInitialized onlyNotEpoch {
         _tryAddValidatorToHighestSet(validator);
     }
 
@@ -625,7 +636,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @notice This is different from removeValidatorInternal() which calls tryRemoveValidatorIncoming()
      * @notice Ensures at least one validator remains in highestValidatorsSet
      */
-    function removeFromHighestSet(address validator) external onlyStakingContract onlyInitialized nonReentrant {
+    function removeFromHighestSet(address validator) external onlyStakingContract onlyInitialized onlyNotEpoch nonReentrant {
         // Check if validator is in highestValidatorsSet
         bool isInSet = false;
         uint256 highestSetLength = highestValidatorsSet.length;
@@ -716,6 +727,31 @@ contract Validators is Params, ReentrancyGuard, IValidators {
                 }
                 validatorInfo[val].aacIncoming += reward;
             }
+        }
+    }
+
+    function _validateValidatorSet(address[] memory set) private pure {
+        uint256 length = set.length;
+        for (uint256 i = 0; i < length; i++) {
+            address validator = set[i];
+            require(validator != address(0), "Invalid validator address");
+            for (uint256 j = i + 1; j < length; j++) {
+                require(set[j] != validator, "Duplicate validator");
+            }
+        }
+    }
+
+    function _requireSameSet(address[] memory left, address[] memory right) private pure {
+        uint256 length = left.length;
+        for (uint256 i = 0; i < length; i++) {
+            bool found = false;
+            for (uint256 j = 0; j < length; j++) {
+                if (left[i] == right[j]) {
+                    found = true;
+                    break;
+                }
+            }
+            require(found, "Validator set mismatch");
         }
     }
 

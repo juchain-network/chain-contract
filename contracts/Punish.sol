@@ -24,6 +24,8 @@ contract Punish is Params, ReentrancyGuard {
 
     mapping(uint256 => bool) punished;
     mapping(uint256 => bool) decreased;
+    mapping(address => bool) pendingRemove;
+    mapping(address => bool) pendingRemoveIncoming;
 
     event LogDecreaseMissedBlocksCounter();
     event LogPunishValidator(address indexed val, uint256 time);
@@ -63,6 +65,7 @@ contract Punish is Params, ReentrancyGuard {
         validators = IValidators(validators_);
         proposal = IProposal(proposal_);
         staking = IStaking(staking_);
+        _initializeEpoch(proposal.epoch());
 
         initialized = true;
     }
@@ -75,12 +78,43 @@ contract Punish is Params, ReentrancyGuard {
      */
     function punish(address val) external onlyMiner onlyInitialized onlyNotPunished nonReentrant {
         punished[block.number] = true;
+        require(epoch > 0, "Epoch not set");
+        bool isEpochBlock = block.number % epoch == 0;
+
+        if (!isEpochBlock) {
+            if (pendingRemove[val]) {
+                pendingRemove[val] = false;
+                pendingRemoveIncoming[val] = false;
+                punishRecords[val].missedBlocksCounter = 0;
+                staking.jailValidator(val, proposal.validatorUnjailPeriod());
+                validators.removeValidator(val);
+                emit LogPunishValidator(val, block.timestamp);
+                return;
+            }
+            if (pendingRemoveIncoming[val]) {
+                pendingRemoveIncoming[val] = false;
+                validators.removeValidatorIncoming(val);
+                emit LogPunishValidator(val, block.timestamp);
+                return;
+            }
+        }
+
         if (!punishRecords[val].exist) {
             punishRecords[val].index = punishValidators.length;
             punishValidators.push(val);
             punishRecords[val].exist = true;
         }
         punishRecords[val].missedBlocksCounter++;
+
+        if (isEpochBlock) {
+            if (punishRecords[val].missedBlocksCounter % proposal.removeThreshold() == 0) {
+                pendingRemove[val] = true;
+            } else if (punishRecords[val].missedBlocksCounter % proposal.punishThreshold() == 0) {
+                pendingRemoveIncoming[val] = true;
+            }
+            emit LogPunishValidator(val, block.timestamp);
+            return;
+        }
 
         if (punishRecords[val].missedBlocksCounter % proposal.removeThreshold() == 0) {
             // reset validator's missed blocks counter

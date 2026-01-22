@@ -288,7 +288,7 @@ contract PunishMissingFoundryTest is BaseSetup {
     function testOnlyNotDecreasedModifier() public {
         // Test that onlyNotDecreased modifier prevents multiple decrease calls in the same block
         Punish punish = Punish(PUNISH);
-        uint256 epoch = 30; // Based on typical POSA configuration
+        uint256 epoch = Punish(PUNISH).epoch();
         
         // Roll to a block that is multiple of epoch
         uint256 targetBlock = epoch * 2;
@@ -311,7 +311,7 @@ contract PunishMissingFoundryTest is BaseSetup {
     function testDecreaseMissedBlocksCounterAtEpochBlock() public {
         // Test decreaseMissedBlocksCounter at epoch block
         Punish punish = Punish(PUNISH);
-        uint256 epoch = 30;
+        uint256 epoch = Punish(PUNISH).epoch();
         
         // Roll to a block that is multiple of epoch
         uint256 targetBlock = epoch * 2;
@@ -342,7 +342,7 @@ contract PunishMissingFoundryTest is BaseSetup {
 
     function testDecreaseMissedBlocksCounterLogic() public {
         Punish punish = Punish(PUNISH);
-        uint256 epoch = 30;
+        uint256 epoch = Punish(PUNISH).epoch();
         
         // Punish validators to set up different missed block counts
         vm.coinbase(VALIDATORS);

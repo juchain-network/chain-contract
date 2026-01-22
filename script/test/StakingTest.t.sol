@@ -13,6 +13,7 @@ contract StakingTest is Test {
     address constant PUNISH = 0x000000000000000000000000000000000000F011;
     address constant PROPOSAL = 0x000000000000000000000000000000000000F012;
     address constant STAKING = 0x000000000000000000000000000000000000F013;
+    uint256 constant TEST_EPOCH = 1_000_000;
     
     // Test addresses
     address constant VALIDATOR1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
@@ -58,7 +59,7 @@ contract StakingTest is Test {
         initVals[4] = VALIDATOR5;
         initVals[5] = VALIDATOR6;
         
-        Proposal(PROPOSAL).initialize(initVals, VALIDATORS);
+        Proposal(PROPOSAL).initialize(initVals, VALIDATORS, TEST_EPOCH);
         Staking(STAKING).initialize(VALIDATORS, PROPOSAL);
         Punish(PUNISH).initialize(VALIDATORS, PROPOSAL, STAKING);
         Validators(VALIDATORS).initialize(initVals, PROPOSAL, PUNISH, STAKING);
@@ -285,45 +286,37 @@ contract StakingTest is Test {
     }
     // Helper function to set up validator with pass status
     function _setupValidatorPass(address validator) internal {
-        // Check if validator is already in pass list
-        if (Proposal(PROPOSAL).pass(validator)) {
-            return;
-        }
-        
         // For simplicity and reliability in tests, we'll use direct storage manipulation
         // This ensures consistent behavior across all test scenarios without complex proposal flow dependencies
         // In real-world scenarios, this would be done through proper proposal voting
         // Correct slot calculation:
-        // 1. ReentrancyGuard._status: slot 0
-        // 2. Params.initialized: slot 1
-        // 3. proposalLastingPeriod: slot 2
-        // 4. punishThreshold: slot 3
-        // 5. removeThreshold: slot 4
-        // 6. decreaseRate: slot 5
-        // 7. withdrawProfitPeriod: slot 6
-        // 8. blockReward: slot 7
-        // 9. unbondingPeriod: slot 8
-        // 10. validatorUnjailPeriod: slot 9
-        // 11. minValidatorStake: slot 10
-        // 12. maxValidators: slot 11
-        // 13. pass (mapping): slot 12
-        // 14. proposalPassedTime (mapping): slot 13
+        // 1. Params.initialized: slot 0
+        // 2. Params.epoch: slot 1
+        // 3. ReentrancyGuard._status: slot 2
+        // 4. proposalLastingPeriod: slot 3
+        // 5. punishThreshold: slot 4
+        // 6. removeThreshold: slot 5
+        // 7. decreaseRate: slot 6
+        // 8. withdrawProfitPeriod: slot 7
+        // 9. blockReward: slot 8
+        // 10. unbondingPeriod: slot 9
+        // 11. validatorUnjailPeriod: slot 10
+        // 12. minValidatorStake: slot 11
+        // 13. maxValidators: slot 12
+        // 14. minDelegation: slot 13
+        // 15. minUndelegation: slot 14
+        // 16. pass (mapping): slot 15
+        // 17. proposalPassedHeight (mapping): slot 16
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(12))), // pass mapping slot (correct slot is 12)
+            keccak256(abi.encode(validator, uint256(15))), // pass mapping slot
             bytes32(uint256(1))
         );
-        // Set proposalPassedTime to current time (within 7 days)
-        vm.store(
-            PROPOSAL,
-            keccak256(abi.encode(validator, uint256(13))), // proposalPassedTime mapping slot (correct slot is 13)
-            bytes32(block.timestamp)
-        );
-        
+
         // Set proposalPassedHeight to current block height (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(14))), // proposalPassedHeight mapping slot (correct slot is 14)
+            keccak256(abi.encode(validator, uint256(16))), // proposalPassedHeight mapping slot
             bytes32(uint256(block.number))
         );
     }
@@ -343,7 +336,7 @@ contract StakingTest is Test {
         vm.coinbase(miner);
         
         // Roll to epoch boundary (epoch is typically 30 blocks)
-        uint256 epoch = 30;
+        uint256 epoch = Validators(VALIDATORS).epoch();
         uint256 currentBlock = block.number;
         uint256 nextEpoch = ((currentBlock / epoch) + 1) * epoch;
         vm.roll(nextEpoch);
@@ -351,6 +344,7 @@ contract StakingTest is Test {
         // Update active validator set
         vm.prank(miner);
         Validators(VALIDATORS).updateActiveValidatorSet(topValidators, epoch);
+        vm.roll(nextEpoch + 1);
     }
 
     function testGetValidatorStatus() public {

@@ -77,6 +77,12 @@ interface IProposal {
      * @return uint256 The maximum number of validators.
      */
     function maxValidators() external view returns (uint256);
+
+    /**
+     * @dev Returns the epoch duration in blocks.
+     * @return uint256 The epoch duration.
+     */
+    function epoch() external view returns (uint256);
     
     /**
      * @dev Returns the minimum delegation amount per delegator.

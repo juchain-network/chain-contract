@@ -123,10 +123,12 @@ contract Proposal is Params, ReentrancyGuard {
      */
     function initialize(
         address[] calldata vals,
-        address validators_
+        address validators_,
+        uint256 epoch_
     ) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
 
+        _initializeEpoch(epoch_);
         validators = IValidators(validators_);
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), "Invalid validator address");
@@ -258,7 +260,7 @@ contract Proposal is Params, ReentrancyGuard {
      * @param auth Boolean indicating approval (true) or rejection (false) of the proposal.
      * @return bool Returns true if the vote was successful.
      */
-    function voteProposal(bytes32 id, bool auth) external onlyValidator nonReentrant returns (bool) {
+    function voteProposal(bytes32 id, bool auth) external onlyValidator onlyNotEpoch nonReentrant returns (bool) {
         require(proposals[id].createTime != 0, "Proposal does not exist");
         require(votes[msg.sender][id].voteTime == 0, "You can't vote for a proposal twice");
         require(block.number < proposals[id].createBlock + proposalLastingPeriod, "Proposal expired");
@@ -332,9 +334,19 @@ contract Proposal is Params, ReentrancyGuard {
      *   - 11: minUndelegation (must > 0, in wei)
      * @param value New configuration value
      */
-    function validateConfig(uint256 cid, uint256 value) internal pure returns (bool) {
+    function validateConfig(uint256 cid, uint256 value) internal view returns (bool) {
         require(cid <= 11, "Invalid config ID");
         require(value > 0, "Config value must be positive");
+        if (cid == 1) {
+            require(value < removeThreshold, "punishThreshold must be < removeThreshold");
+        } else if (cid == 2) {
+            require(punishThreshold < value, "removeThreshold must be > punishThreshold");
+            require(decreaseRate <= value, "removeThreshold must be >= decreaseRate");
+        } else if (cid == 3) {
+            require(value <= removeThreshold, "decreaseRate must be <= removeThreshold");
+        } else if (cid == 9) {
+            require(value <= CONSENSUS_MAX_VALIDATORS, "maxValidators exceeds consensus limit");
+        }
         return true;
     }
 

@@ -8,6 +8,9 @@ contract Params {
      */
     bool public initialized ;
 
+    uint256 public epoch;
+    uint256 public constant CONSENSUS_MAX_VALIDATORS = 21;
+
     
     // Production version: constants use SCREAMING_SNAKE_CASE
     // System contracts (POSA addresses)
@@ -54,8 +57,13 @@ contract Params {
         _;
     }
 
-    modifier onlyBlockEpoch(uint256 epoch) {
-        _onlyBlockEpoch(epoch);
+    modifier onlyBlockEpoch(uint256 epochParam) {
+        _onlyBlockEpoch(epochParam);
+        _;
+    }
+
+    modifier onlyNotEpoch() {
+        _onlyNotEpoch();
         _;
     }
 
@@ -103,9 +111,16 @@ contract Params {
         
     }
 
-    function _onlyBlockEpoch(uint256 epoch) internal view {
+    function _onlyBlockEpoch(uint256 epochParam) internal view {
         // Check if block.number is divisible by epoch, no need for >= check since block.number starts at 0
+        require(epoch > 0, "Epoch not set");
+        require(epochParam == epoch, "Epoch mismatch");
         require(block.number % epoch == 0, "Block epoch only");
+    }
+
+    function _onlyNotEpoch() internal view {
+        require(epoch > 0, "Epoch not set");
+        require(block.number % epoch != 0, "Epoch block forbidden");
     }
 
     function _onlyValidatorsContract() internal view {
@@ -142,6 +157,12 @@ contract Params {
             
             "Only punish or validators contract can call this function"
         );
+    }
+
+    function _initializeEpoch(uint256 epoch_) internal {
+        require(epoch_ > 0, "Epoch must be positive");
+        require(epoch == 0, "Epoch already set");
+        epoch = epoch_;
     }
 
     

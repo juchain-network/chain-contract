@@ -13,6 +13,7 @@ abstract contract BaseSetup is Test {
     address constant PUNISH = 0x000000000000000000000000000000000000F011;
     address constant PROPOSAL = 0x000000000000000000000000000000000000F012;
     address constant STAKING = 0x000000000000000000000000000000000000F013;
+    uint256 constant TEST_EPOCH = 1_000_000;
 
     // Deploy runtime code of contracts to fixed addresses and initialize them
     function deploySystem(address[] memory initVals) internal {
@@ -24,7 +25,7 @@ abstract contract BaseSetup is Test {
 
         // Initialize contracts in correct order
         // 1. Proposal first (needed by others)
-        Proposal(PROPOSAL).initialize(initVals, VALIDATORS);
+        Proposal(PROPOSAL).initialize(initVals, VALIDATORS, TEST_EPOCH);
         
         // 2. Staking with genesis validators (but don't call tryAddValidatorToHighestSet yet)
         // Use initializeWithValidators to automatically register genesis validators in Staking

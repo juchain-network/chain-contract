@@ -99,7 +99,7 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testInitOnlyOnce() public {
         bytes memory err;
-        try Proposal(PROPOSAL).initialize(new address[](0), address(0xCAFE)) { revert("should revert"); } catch (bytes memory e) { err = e; }
+        try Proposal(PROPOSAL).initialize(new address[](0), address(0xCAFE), TEST_EPOCH) { revert("should revert"); } catch (bytes memory e) { err = e; }
         require(err.length > 0, "expected revert");
     }
 
@@ -210,7 +210,7 @@ contract ProposalFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         uint256[8] memory cids = [uint256(0),1,2,3,4,5,6,7];
 
-        uint256[8] memory vals = [uint256(3600),200,300,400,500,833_000_000_000_000_000,604800,86400];
+        uint256[8] memory vals = [uint256(3600),20,60,30,500,833_000_000_000_000_000,604800,86400];
         for (uint i = 0; i < cids.length; i++) {
             // Create config proposal using validator v1
             vm.prank(v1);

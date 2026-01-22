@@ -39,10 +39,12 @@ contract DeploymentScript is Script {
         Staking staking = new Staking();
         console.log(unicode"✓ Staking deployed at:", address(staking));
         
+        uint256 epoch = vm.envOr("EPOCH_DURATION", uint256(600));
+
         // 2. Initialize Proposal contract first (requires initial validators and validators contract address)
         address[] memory initialValidators = new address[](1);
         initialValidators[0] = vm.addr(deployerKey);
-        proposal.initialize(initialValidators, address(validators));
+        proposal.initialize(initialValidators, address(validators), epoch);
         console.log(unicode"✓ Proposal contract initialized");
         
         // 3. Initialize Validators contract (requires initial validators, proposal, punish, and staking addresses)

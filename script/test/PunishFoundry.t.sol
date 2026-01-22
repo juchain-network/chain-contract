@@ -62,8 +62,7 @@ contract PunishFoundryTest is BaseSetup {
         Punish(PUNISH).punish(v3);
         vm.roll(block.number + 1);
 
-        // reach an epoch boundary: roll to next multiple of 30
-        uint256 epoch = 30;
+        uint256 epoch = Punish(PUNISH).epoch();
         uint256 blocksToNext = epoch - (block.number % epoch);
         vm.roll(block.number + blocksToNext);
         vm.prank(miner);

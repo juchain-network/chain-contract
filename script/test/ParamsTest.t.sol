@@ -37,6 +37,10 @@ contract TestableParams is Params {
     function callOnlyBlockEpoch(uint256 epoch) external view onlyBlockEpoch(epoch) returns (bool) {
         return true;
     }
+
+    function setEpochForTest(uint256 epoch_) external {
+        _initializeEpoch(epoch_);
+    }
     
     function initializeForTest() external {
         initialized = true;
@@ -133,6 +137,7 @@ contract ParamsTest is Test {
     
     function testOnlyBlockEpochModifier() public {
         uint256 epoch = 10;
+        params.setEpochForTest(epoch);
         
         // Set block number to multiple of epoch
         vm.roll(20); // 20 % 10 == 0

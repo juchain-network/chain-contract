@@ -309,7 +309,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         
         // Test updating punishThreshold (cid=1) with valid value
-        uint256 validValue = 48; // New punish threshold
+        uint256 validValue = 30; // New punish threshold
         
         // Create config proposal
         vm.prank(v1);
@@ -384,7 +384,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         address[] memory vals = new address[](1);
         vals[0] = makeAddr("val1");
         vm.expectRevert("Invalid validators address");
-        p.initialize(vals, address(0));
+        p.initialize(vals, address(0), 1_000_000);
     }
 
     function testInitializeWithZeroAddressInVals() public {
@@ -395,7 +395,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         vals[0] = makeAddr("val1");
         vals[1] = address(0); // Invalid address
         vm.expectRevert("Invalid validator address");
-        p.initialize(vals, makeAddr("validators"));
+        p.initialize(vals, makeAddr("validators"), 1_000_000);
     }
 
     function testCreateDuplicateProposal() public {
@@ -650,7 +650,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
     function testUpdateConfigCID9() public {
         // Test updating maxValidators (cid=9)
         Proposal p = Proposal(PROPOSAL);
-        uint256 validValue = 42; // New maximum validators
+        uint256 validValue = 20; // New maximum validators
         
         vm.prank(v1);
         bytes32 id = p.createUpdateConfigProposal(9, validValue);

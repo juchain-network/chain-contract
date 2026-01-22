@@ -176,24 +176,22 @@ contract ValidatorsAdditionalTest is BaseSetup {
 
     // Test modifier onlyNotUpdated
     function testOnlyNotUpdatedModifier() public {
-        // Need to move to a future block since setup might have used current block
-        vm.roll(block.number + 1);
+        uint256 epoch = Validators(VALIDATORS).epoch();
+        uint256 targetBlock = ((block.number / epoch) + 1) * epoch;
+        vm.roll(targetBlock);
         
         // Set v1 as coinbase/miner
         vm.coinbase(v1);
         
         // First call should succeed
-        address[] memory newSet = new address[](3);
-        newSet[0] = v1;
-        newSet[1] = v2;
-        newSet[2] = v3;
+        address[] memory newSet = Validators(VALIDATORS).getTopValidators();
         
         vm.prank(v1); // v1 is the miner
-        Validators(VALIDATORS).updateActiveValidatorSet(newSet, block.number);
+        Validators(VALIDATORS).updateActiveValidatorSet(newSet, epoch);
         
         // Second call in same block should silently return (not revert)
         vm.prank(v1);
-        Validators(VALIDATORS).updateActiveValidatorSet(newSet, block.number);
+        Validators(VALIDATORS).updateActiveValidatorSet(newSet, epoch);
         
         // Test passed if no revert occurred
     }

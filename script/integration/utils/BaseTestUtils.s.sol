@@ -168,7 +168,7 @@ contract BaseTestUtils is Script, Test {
             initialValidatorsArray[i] = validatorAccounts[i];
         }
         
-        proposal.initialize(initialValidatorsArray, address(validators));
+        proposal.initialize(initialValidatorsArray, address(validators), epochDuration);
         
         // Initialize Validators contract
         validators.initialize(initialValidatorsArray, address(proposal), address(punish), address(staking));
@@ -315,7 +315,7 @@ contract BaseTestUtils is Script, Test {
         try vm.envUint("EPOCH_DURATION") returns (uint256 duration) {
             epochDuration = duration;
         } catch {
-            epochDuration = 10;
+            epochDuration = 1_000_000;
         }
         
         try vm.envUint("INITIAL_STAKE") returns (uint256 stake) {

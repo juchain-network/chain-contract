@@ -159,7 +159,12 @@ contract BaseIntegration is BaseTestUtils {
         address[] memory topValidators = validators.getTopValidators();
         vm.startBroadcast(validatorKeys[0]);
         setMinerTemporarily(miner);
-        validators.updateActiveValidatorSet(topValidators, 1);
+        uint256 epoch = validators.epoch();
+        uint256 currentBlock = block.number;
+        uint256 nextEpoch = ((currentBlock / epoch) + 1) * epoch;
+        vm.roll(nextEpoch);
+        validators.updateActiveValidatorSet(topValidators, epoch);
+        vm.roll(nextEpoch + 1);
         vm.stopBroadcast();
         
         // Test 3: Check if validators can claim rewards
@@ -238,7 +243,12 @@ contract BaseIntegration is BaseTestUtils {
         // decreaseMissedBlocksCounter may require miner permission
         vm.startBroadcast(validatorKeys[1]);
         setMinerTemporarily(miner);
-        punish.decreaseMissedBlocksCounter(1);
+        uint256 epoch = punish.epoch();
+        uint256 currentBlock = block.number;
+        uint256 nextEpoch = ((currentBlock / epoch) + 1) * epoch;
+        vm.roll(nextEpoch);
+        punish.decreaseMissedBlocksCounter(epoch);
+        vm.roll(nextEpoch + 1);
         vm.stopBroadcast();
         
         console.log("Validator Punishment Path tests passed");
@@ -257,7 +267,12 @@ contract BaseIntegration is BaseTestUtils {
         address[] memory topValidators = validators.getTopValidators();
         vm.startBroadcast(validatorKeys[0]);
         setMinerTemporarily(miner);
-        validators.updateActiveValidatorSet(topValidators, 1);
+        uint256 epoch = validators.epoch();
+        uint256 currentBlock = block.number;
+        uint256 nextEpoch = ((currentBlock / epoch) + 1) * epoch;
+        vm.roll(nextEpoch);
+        validators.updateActiveValidatorSet(topValidators, epoch);
+        vm.roll(nextEpoch + 1);
         vm.stopBroadcast();
         
         // Test 3: Get updated active validators

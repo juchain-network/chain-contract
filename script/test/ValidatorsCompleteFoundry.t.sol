@@ -264,10 +264,8 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
 
     function testUpdateActiveValidatorSet() public {
         // Corresponds to "update active validator set"
-        uint256 epoch = 30;
-        address[] memory newSet = new address[](2);
-        newSet[0] = v1;
-        newSet[1] = v2;
+        uint256 epoch = Validators(VALIDATORS).epoch();
+        address[] memory newSet = Validators(VALIDATORS).getTopValidators();
         
         // Simulate reaching epoch boundary (block.number % epoch == 0)
         uint256 targetBlock = ((block.number / epoch) + 1) * epoch;
@@ -278,9 +276,10 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         
         // Verify new validator set
         address[] memory activeSet = Validators(VALIDATORS).getActiveValidators();
-        require(activeSet.length == 2, "should have 2 active validators");
-        require(activeSet[0] == v1, "should contain v1");
-        require(activeSet[1] == v2, "should contain v2");
+        require(activeSet.length == newSet.length, "should have expected active validators");
+        for (uint256 i = 0; i < newSet.length; i++) {
+            require(activeSet[i] == newSet[i], "should match expected validator");
+        }
     }
 
     // Helper functions

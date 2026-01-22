@@ -209,9 +209,11 @@ contract DeployToChainScript is Script {
         
         // Correctly initialize contracts according to dependency relationships
         
+        uint256 epoch = vm.envOr("EPOCH_DURATION", uint256(600));
+
         // 1. First initialize Proposal (Staking needs Proposal address)
         console.log("Initializing Proposal...");
-        Proposal(proposal).initialize(initialValidators, validators);
+        Proposal(proposal).initialize(initialValidators, validators, epoch);
         console.log("Proposal initialized successfully");
 
         // 2. Initialize Staking (pass in validators, proposal addresses and initial validators, directly pre-register)

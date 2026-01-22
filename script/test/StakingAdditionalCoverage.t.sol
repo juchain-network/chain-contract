@@ -13,6 +13,7 @@ contract StakingAdditionalCoverageTest is Test {
     address constant PUNISH = 0x000000000000000000000000000000000000F011;
     address constant PROPOSAL = 0x000000000000000000000000000000000000F012;
     address constant STAKING = 0x000000000000000000000000000000000000F013;
+    uint256 constant TEST_EPOCH = 1_000_000;
     
     // Test addresses
     address constant VALIDATOR1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
@@ -53,17 +54,17 @@ contract StakingAdditionalCoverageTest is Test {
         // Initialize contracts properly
         address deployer = address(this);
         
-        // Initialize Validators contract first
+        // Initialize Proposal contract first
         vm.startPrank(deployer);
         address[] memory initialValidators = new address[](2);
         initialValidators[0] = deployer;
         initialValidators[1] = VALIDATOR1;
-        validators.initialize(initialValidators, PROPOSAL, PUNISH, STAKING);
+        proposal.initialize(initialValidators, VALIDATORS, TEST_EPOCH);
         vm.stopPrank();
         
-        // Initialize Proposal contract
+        // Initialize Validators contract
         vm.startPrank(deployer);
-        proposal.initialize(initialValidators, VALIDATORS);
+        validators.initialize(initialValidators, PROPOSAL, PUNISH, STAKING);
         vm.stopPrank();
         
         // Initialize Staking contract
@@ -115,7 +116,7 @@ contract StakingAdditionalCoverageTest is Test {
         vm.startPrank(deployer);
         address[] memory initialValidators = new address[](1);
         initialValidators[0] = VALIDATOR1;
-        newProposal.initialize(initialValidators, VALIDATORS);
+        newProposal.initialize(initialValidators, VALIDATORS, TEST_EPOCH);
         
         // Initialize the staking contract with the new proposal instance
         testStaking.initialize(VALIDATORS, address(newProposal));
@@ -438,7 +439,7 @@ contract StakingAdditionalCoverageTest is Test {
         vm.startPrank(deployer);
         address[] memory initialValidators = new address[](1);
         initialValidators[0] = VALIDATOR1;
-        newProposal.initialize(initialValidators, VALIDATORS);
+        newProposal.initialize(initialValidators, VALIDATORS, TEST_EPOCH);
         
         // Initialize the staking contract with the new proposal instance
         testStaking.initialize(VALIDATORS, address(newProposal));
