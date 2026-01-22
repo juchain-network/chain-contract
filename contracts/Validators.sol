@@ -175,7 +175,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         _tryAddValidatorToHighestSet(validator);
         
         // Only clean punish record if validator was previously jailed
-        (, , , , bool isJailed, , , , ) = staking.getValidatorInfo(validator);
+        (, , , , bool isJailed, , , , , ) = staking.getValidatorInfo(validator);
         if (isJailed) {
             require(punish.cleanPunishRecord(validator), "Punish record clean failed");
         }
@@ -402,7 +402,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Calculate status from Staking contract for backward compatibility
         Status calculatedStatus;
         // Check if validator has staked
-        (uint256 selfStake, , , , , , , , bool isRegistered) = staking.getValidatorInfo(val);
+        (uint256 selfStake, , , , , , , , bool isRegistered, ) = staking.getValidatorInfo(val);
         
         // Check if validator is not registered or has no stake
         if (!isRegistered || selfStake == 0) {
@@ -451,7 +451,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             validators[i] = validator;
             
             // Get validator info from Staking contract
-            (uint256 selfStake, uint256 totalDelegated, , , , , , , ) = 
+            (uint256 selfStake, uint256 totalDelegated, , , , , , , , ) = 
                 staking.getValidatorInfo(validator);
             
             // Calculate total stake (selfStake + totalDelegated)
@@ -526,7 +526,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Whether validator exists (has staked)
      */
     function isValidatorExist(address validator) external view returns (bool) {
-        (uint256 selfStake, , , , , , , , ) = 
+        (uint256 selfStake, , , , , , , , , ) = 
             staking.getValidatorInfo(validator);
         return selfStake > 0;
     }

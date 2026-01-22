@@ -37,6 +37,7 @@ interface IStaking {
      * @return totalClaimedRewards Total rewards claimed by the validator.
      * @return lastClaimBlock Block number at which the validator last claimed rewards.
      * @return isRegistered Whether the validator is currently registered.
+     * @return totalRewards Total rewards earned by distribution (cumulative).
      */
     function getValidatorInfo(address validator) external view returns (
         uint256 selfStake,
@@ -47,7 +48,8 @@ interface IStaking {
         uint256 jailUntilBlock,
         uint256 totalClaimedRewards,
         uint256 lastClaimBlock,
-        bool isRegistered
+        bool isRegistered,
+        uint256 totalRewards
     );
 
     /**

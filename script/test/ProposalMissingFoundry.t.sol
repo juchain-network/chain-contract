@@ -85,7 +85,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         vm.prank(v3); p.voteProposal(id, true);
         
         // Verify proposal information
-        (address storedProposer, uint256 createTime, uint256 creationBlock, uint256 proposalType, address dst, bool flag, string memory details, , ) = p.proposals(id);
+        (address storedProposer, uint256 createTime, , uint256 proposalType, address dst, bool flag, string memory details, , ) = p.proposals(id);
         require(storedProposer == proposer, "proposer should match");
         require(dst == candidate, "candidate should match");
         require(flag == true, "flag should be true");

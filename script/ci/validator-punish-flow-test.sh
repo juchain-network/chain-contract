@@ -49,7 +49,7 @@ echo "Miner address: $MINER"
 echo "Miner key: $MINER_KEY"
 
 # Check initial validator status from staking contract
-INITIAL_STAKING_STATUS=$(cast call $STAKING_ADDRESS "getValidatorInfo(address)(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256)" $VALIDATOR)
+INITIAL_STAKING_STATUS=$(cast call $STAKING_ADDRESS "getValidatorInfo(address)(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,bool,uint256)" $VALIDATOR)
 INITIAL_IS_JAILED=$(echo $INITIAL_STAKING_STATUS | cut -d' ' -f5)
 INITIAL_JAIL_UNTIL=$(echo $INITIAL_STAKING_STATUS | cut -d' ' -f6)
 echo "Initial staking status:"
@@ -84,7 +84,7 @@ for i in {1..5}; do
     # Increase block number for each reward distribution
     cast rpc evm_increaseTime 1
     cast rpc evm_mine
-    
+
     # Distribute block reward
     cast send $VALIDATORS_ADDRESS "distributeBlockReward()()" --private-key $VALIDATOR_KEY --value 1ether
     echo "  Block reward distributed #$i"
@@ -144,10 +144,10 @@ for ((i=1; i<=PUNISH_THRESHOLD; i++)); do
     # Increase block number for each punishment
     cast rpc evm_increaseTime 1
     cast rpc evm_mine
-    
+
     # Call punish method on punish contract
     cast send $PUNISH_ADDRESS "punish(address)" $VALIDATOR --private-key $MINER_KEY
-    
+
     # Get updated punishment record
     MISSED_BLOCKS=$(cast call $PUNISH_ADDRESS "getPunishRecord(address)(uint256)" $VALIDATOR)
     echo "  Punishment #$i, Missed blocks: $MISSED_BLOCKS"
@@ -206,10 +206,10 @@ for ((i=1; i<=REMAINING_PUNISHMENTS; i++)); do
     # Increase block number for each punishment
     cast rpc evm_increaseTime 1
     cast rpc evm_mine
-    
+
     # Call punish method on punish contract
     cast send $PUNISH_ADDRESS "punish(address)" $VALIDATOR --private-key $MINER_KEY
-    
+
     # Get updated punishment record
     MISSED_BLOCKS=$(cast call $PUNISH_ADDRESS "getPunishRecord(address)(uint256)" $VALIDATOR)
     echo "  Punishment #$((PUNISH_THRESHOLD + i)), Missed blocks: $MISSED_BLOCKS"

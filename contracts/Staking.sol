@@ -15,10 +15,10 @@ import {IStaking} from "./IStaking.sol";
 contract Staking is Params, ReentrancyGuard, IStaking {
 
 
-    
+
     // Commission rate precision (10000 = 100%)
-    uint256 public constant COMMISSION_RATE_BASE = 10000;    
-    
+    uint256 public constant COMMISSION_RATE_BASE = 10000;
+
     // Maximum number of unbonding entries per delegator-validator pair
     uint256 public constant MAX_UNBONDING_ENTRIES = 20;
 
@@ -26,7 +26,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         uint256 selfStake;          // Validator's own stake
         uint256 totalDelegated;     // Total delegated to this validator
         uint256 commissionRate;     // Commission rate (0-10000, representing 0%-100%)
-        uint256 accumulatedRewards; // Accumulated rewards for distribution
+        uint256 totalRewards;       // Total rewards earned bye distribution
+        uint256 accumulatedRewards; // Accumulated rewards for the validator
         bool isJailed;              // Whether validator is jailed
         uint256 jailUntilBlock;     // Block number until which validator is jailed
         uint256 totalClaimedRewards; // Total claimed rewards (cumulative)
@@ -46,21 +47,21 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
     // Validator address => ValidatorStake
     mapping(address => ValidatorStake) public validatorStakes;
-    
+
     // Delegator => Validator => Delegation
     mapping(address => mapping(address => Delegation)) public delegations;
-    
+
     // Delegator => Validator => UnbondingEntry[]
     mapping(address => mapping(address => UnbondingEntry[])) public unbondingDelegations;
-    
+
     // List of all validators (including inactive ones)
     address[] public allValidators;
-    
 
-    
+
+
     // Total staked amount in the system
     uint256 public totalStaked;
-    
+
     // Rewards per share (scaled by 1e18 for precision)
     mapping(address => uint256) public rewardPerShare;
 
@@ -121,7 +122,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function initialize(address validators_, address proposal_) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
         require(proposal_ != address(0), "Invalid proposal address");
-        
+
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
         initialized = true;
@@ -148,25 +149,26 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(initialValidators.length > 0, "No validators provided");
         require(commissionRate > 0, "Commission rate must be greater than 0");
         require(commissionRate < COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
-        
+
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
-        
+
         // Cache the minimum validator stake outside the loop
         uint256 minValidatorStake = proposalContract.minValidatorStake();
-        
+
         // Pre-register all initial validators with default stake
         // This automatically performs the same logic as registerValidator for genesis validators
         for (uint256 i = 0; i < initialValidators.length; i++) {
             address validator = initialValidators[i];
             require(validator != address(0), "Invalid validator address");
             require(!validatorStakes[validator].isRegistered, "Validator already exists");
-            
+
             // Set up validator stake (same as registerValidator)
             validatorStakes[validator] = ValidatorStake({
                 selfStake: minValidatorStake,
                 totalDelegated: 0,
                 commissionRate: commissionRate,
+                totalRewards: 0,
                 accumulatedRewards: 0,
                 isJailed: false,
                 jailUntilBlock: 0,
@@ -174,14 +176,14 @@ contract Staking is Params, ReentrancyGuard, IStaking {
                 lastClaimBlock: 0,
                 isRegistered: true
             });
-            
+
             // Add to validators list (same as registerValidator)
             allValidators.push(validator);
             totalStaked = totalStaked + minValidatorStake;
             // Emit event for each validator (more accurate than single event)
             emit ValidatorRegistered(validator, minValidatorStake, commissionRate);
         }
-        
+
         initialized = true;
     }
 
@@ -203,6 +205,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             selfStake: msg.value,
             totalDelegated: 0,
             commissionRate: commissionRate,
+            totalRewards: 0,
             accumulatedRewards: 0,
             isJailed: false,
             jailUntilBlock: 0,
@@ -239,7 +242,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function updateCommissionRate(uint256 newCommissionRate) external onlyValidValidator(msg.sender) nonReentrant {
         require(newCommissionRate > 0, "Commission rate must be greater than 0");
         require(newCommissionRate < COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
-        
+
         validatorStakes[msg.sender].commissionRate = newCommissionRate;
         emit CommissionRateUpdated(msg.sender, newCommissionRate);
     }
@@ -252,27 +255,27 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function decreaseValidatorStake(uint256 amount) external nonReentrant onlyValidValidator(msg.sender) {
         require(amount > 0, "Amount must be positive");
-        
+
         ValidatorStake storage stake = validatorStakes[msg.sender];
         require(stake.selfStake >= amount, "Insufficient self-stake");
-        
+
         // Calculate remaining stake after reduction
         uint256 remainingStake = stake.selfStake - amount;
-        
+
         // If partial reduction, remaining stake must meet minimum requirement
         // If complete reduction (remainingStake == 0), use exitValidator() instead
         require(remainingStake >= proposalContract.minValidatorStake(), "Remaining stake below minimum, withdraw all stake instead");
-        
+
         // Effects: update state before external call
         stake.selfStake = remainingStake;
         totalStaked = totalStaked - amount;
-        
+
         // Instead of transferring funds directly, add them to unbonding like exitValidator and undelegate
         unbondingDelegations[msg.sender][msg.sender].push(UnbondingEntry({
             amount: amount,
             completionBlock: block.number + proposalContract.unbondingPeriod()
         }));
-        
+
         emit ValidatorStakeDecreased(msg.sender, msg.sender, amount);
     }
 
@@ -286,16 +289,16 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function resignValidator() external onlyValidValidator(msg.sender) nonReentrant {
         ValidatorStake storage stake = validatorStakes[msg.sender];
-        
+
         // Cannot resign if already jailed/resigned
         require(!stake.isJailed, "Validator already resigned or jailed");
-        
+
         // Mark validator as jailed to ensure exclusion from currentValidatorSet at next epoch
         // This is a technical mechanism to ensure smooth exit, not a punishment
         stake.isJailed = true;
         stake.jailUntilBlock = block.number + proposalContract.validatorUnjailPeriod();
         emit ValidatorJailed(msg.sender, stake.jailUntilBlock);
-        
+
         // Remove from highestValidatorsSet and set pass = false
         // Note: This does NOT remove transaction fee income (aacIncoming)
         validatorsContract.removeFromHighestSet(msg.sender);
@@ -311,28 +314,28 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         ValidatorStake storage stake = validatorStakes[msg.sender];
         uint256 withdrawAmount = stake.selfStake;
         require(withdrawAmount > 0, "Validator has no stake to withdraw");
-        
+
         // Check if validator is currently participating in consensus (in currentValidatorSet)
         // Note: isActiveValidator() checks currentValidatorSet, not jail status
         bool isInCurrentSet = validatorsContract.isActiveValidator(msg.sender);
-        
+
         // Validators in active set cannot exit - they must resign first
         // After resigning, they will be excluded from currentValidatorSet at next epoch
         require(!isInCurrentSet, "Cannot exit: validator is in active set, resign first and wait until next epoch");
-        
+
         // Check if we need to remove from highest set before state changes
         bool needRemoveFromHighestSet = proposalContract.pass(msg.sender);
-        
+
         // Effects: update all state variables first
         stake.selfStake = 0;
         totalStaked = totalStaked - withdrawAmount;
-        
+
         // Instead of transferring funds directly, add them to unbonding like undelegate
         unbondingDelegations[msg.sender][msg.sender].push(UnbondingEntry({
             amount: withdrawAmount,
             completionBlock: block.number + proposalContract.unbondingPeriod()
         }));
-        
+
         // Interactions: external call after state updates
         if (needRemoveFromHighestSet) {
             // Validator didn't call resignValidator(), so we need to remove them now
@@ -350,18 +353,18 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(validator != address(0), "Invalid validator address");
         require(msg.value >= proposalContract.minDelegation(), "Insufficient delegation amount");
         require(validator != msg.sender, "Cannot delegate to yourself");
-        
+
         // Calculate pending rewards
         uint256 pending = _getPendingRewards(msg.sender, validator);
-        
+
         // Check if this is the first delegation to this validator
         bool isFirstForValidator = delegations[msg.sender][validator].amount == 0;
-        
+
         // Update delegation amount
         delegations[msg.sender][validator].amount += msg.value;
         validatorStakes[validator].totalDelegated += msg.value;
         totalStaked += msg.value;
-        
+
         // Update reward debt
         delegations[msg.sender][validator].rewardDebt = delegations[msg.sender][validator].amount * rewardPerShare[validator] / 1e18;
 
@@ -369,7 +372,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         if (isFirstForValidator) {
             // Increment validator's delegator count
             validatorDelegatorCount[validator]++;
-            
+
             // Check if this is the first delegation for the delegator
             if (!delegatorExists[msg.sender]) {
                 delegatorCount++;
@@ -381,7 +384,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         if (pending > 0) {
             _claimPending(msg.sender, validator, pending);
         }
-        
+
         emit Delegated(msg.sender, validator, msg.value);
     }
 
@@ -399,26 +402,26 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(delegations[msg.sender][validator].amount >= amount, "Insufficient delegation");
         // Allow undelegation even if validator has exited (selfStake == 0)
         // This ensures delegators can always withdraw their funds
-        
+
         // Step 1: Calculate pending rewards (pure view operation, no state changes)
         uint256 pending = _getPendingRewards(msg.sender, validator);
-        
+
         // Check if this will result in no delegation left for this validator
         bool willRemoveFromValidator = delegations[msg.sender][validator].amount == amount;
-        
+
         // Step 2: Effects - Update all state variables before external calls
         delegations[msg.sender][validator].amount -= amount;
         validatorStakes[validator].totalDelegated -= amount;
         totalStaked -= amount;
-        
+
         // Update reward debt based on new delegation amount
         delegations[msg.sender][validator].rewardDebt = delegations[msg.sender][validator].amount * rewardPerShare[validator] / 1e18;
-        
+
         // Update delegator counts if all delegation is removed
         if (willRemoveFromValidator) {
             // Decrement validator's delegator count
             validatorDelegatorCount[validator]--;
-            
+
             // Check if delegator has any remaining delegations
             bool hasRemainingDelegations = false;
             for (uint256 i = 0; i < allValidators.length; i++) {
@@ -428,25 +431,25 @@ contract Staking is Params, ReentrancyGuard, IStaking {
                     break;
                 }
             }
-            
+
             // If no remaining delegations, update delegation status
             if (!hasRemainingDelegations) {
                 delegatorCount--;
                 delete delegatorExists[msg.sender];
             }
         }
-        
+
         // Add to unbonding
         unbondingDelegations[msg.sender][validator].push(UnbondingEntry({
             amount: amount,
             completionBlock: block.number + proposalContract.unbondingPeriod()
         }));
-        
+
         // Step 3: Interactions - Send pending rewards last
         if (pending > 0) {
             _claimPending(msg.sender, validator, pending);
         }
-        
+
         emit Undelegated(msg.sender, validator, amount);
     }
 
@@ -458,15 +461,15 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function withdrawUnbonded(address validator, uint256 maxEntries) external nonReentrant {
         require(maxEntries > 0, "maxEntries must be positive");
         require(maxEntries <= MAX_UNBONDING_ENTRIES, "maxEntries too large");
-        
+
         UnbondingEntry[] storage entries = unbondingDelegations[msg.sender][validator];
         uint256 totalWithdraw = 0;
         uint256 processed = 0;
-        
+
         for (uint256 i = 0; i < entries.length && processed < maxEntries;) {
             if (entries[i].completionBlock <= block.number) {
                 totalWithdraw = totalWithdraw + entries[i].amount;
-                
+
                 // Remove completed entry
                 entries[i] = entries[entries.length - 1];
                 entries.pop();
@@ -476,21 +479,21 @@ contract Staking is Params, ReentrancyGuard, IStaking {
                 i++; // Only increment when not deleting
             }
         }
-        
+
         require(totalWithdraw > 0, "No unbonded tokens available");
-        
+
         // Check if we need to delete the delegation before external call
         bool shouldDeleteDelegation = false;
-        if (delegations[msg.sender][validator].amount == 0 && 
+        if (delegations[msg.sender][validator].amount == 0 &&
             unbondingDelegations[msg.sender][validator].length == 0) {
             shouldDeleteDelegation = true;
         }
-        
+
         // Effects: delete delegation entry if needed before external call
         if (shouldDeleteDelegation) {
             delete delegations[msg.sender][validator];
         }
-        
+
         // Interactions: external call after all state updates
         (bool success, ) = payable(msg.sender).call{value: totalWithdraw}("");
         require(success, "Transfer failed");
@@ -509,58 +512,60 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         if (operationsDone[block.number][uint8(Operations.Distribute)]) {
             return; // Silently return to avoid consensus issues
         }
-        
+
         // Clean up previous block's data to save storage
         // This prevents storage accumulation while maintaining reentrancy protection
         // Note: We only need to track the current block, historical data is never accessed
         if (block.number > 0) {
             delete operationsDone[block.number - 1][uint8(Operations.Distribute)];
         }
-        
+
         // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
-        
+
         // Get block reward from msg.value (consensus layer reads from Proposal contract and passes it here)
         // This avoids duplicate contract calls and saves gas
         uint256 blockReward = msg.value;
-        
+
         // Check if there are rewards to distribute
         if (blockReward == 0) {
             return;
         }
-        
+
         // Get validator address from block.coinbase (similar to Validators.distributeBlockReward())
         address validator = block.coinbase;
-        
+
         // Check if validator exists (has staked)
         ValidatorStake storage stake = validatorStakes[validator];
         if (stake.selfStake == 0) {
             return; // Validator doesn't exist, silently return
         }
-        
+
         // Note: We don't check selfStake >= MIN_VALIDATOR_STAKE here because:
         // 1. Validators in active set cannot exit (emergencyExit() rejects them)
         // 2. Validators cannot reduce stake below MIN_VALIDATOR_STAKE (withdrawValidatorStake() requires remainingStake >= MIN_VALIDATOR_STAKE)
         // 3. If validator can produce a block, they must be in active set and have sufficient stake
-        
+
         uint256 totalStake = stake.selfStake + stake.totalDelegated;
-        
+
         if (totalStake == 0) return;
-        
+
+        stake.totalRewards += blockReward;
+
         // 1. Calculate and allocate commission to validator first
         uint256 commission = blockReward * stake.commissionRate / COMMISSION_RATE_BASE;
         stake.accumulatedRewards = stake.accumulatedRewards + commission;
-        
+
         // 2. Calculate remaining rewards after commission
         uint256 remainingRewards = blockReward - commission;
-        
+
         // 3. Calculate validator's share from remaining rewards based on their self-stake proportion
         uint256 validatorShare = remainingRewards * stake.selfStake / totalStake;
         stake.accumulatedRewards = stake.accumulatedRewards + validatorShare;
-        
+
         // 4. Calculate delegator rewards (remaining after validator's share)
         uint256 delegatorRewards = remainingRewards - validatorShare;
-        
+
         // 5. Update reward per share for delegators
         if (stake.totalDelegated > 0) {
             rewardPerShare[validator] = rewardPerShare[validator] + (
@@ -570,7 +575,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             // If no delegators, allocate delegatorRewards to validator
             stake.accumulatedRewards = stake.accumulatedRewards + delegatorRewards;
         }
-        
+
         emit RewardsDistributed(validator, blockReward);
     }
 
@@ -584,10 +589,10 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function claimRewards(address validator) external nonReentrant {
         // Checks: Verify validator is registered
         require(validatorStakes[validator].isRegistered, "Validator not registered");
-        
+
         // Checks: Verify caller has delegation to this validator
         require(delegations[msg.sender][validator].amount > 0, "No delegation found");
-        
+
         // Get current pending rewards
         uint256 pending = _getPendingRewards(msg.sender, validator);
 
@@ -614,14 +619,14 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function claimValidatorRewards() external nonReentrant {
         address validator = msg.sender;
-        
+
         // Checks: Verify caller is a registered validator
         require(validatorStakes[validator].isRegistered, "Not a registered validator");
-        
+
         // Get current accumulated commission rewards
         ValidatorStake storage stake = validatorStakes[validator];
         uint256 commission = stake.accumulatedRewards;
-        
+
         if (commission > 0) {
             // Checks: Verify withdraw period has passed (if not first claim)
             if (stake.lastClaimBlock > 0) {
@@ -631,12 +636,12 @@ contract Staking is Params, ReentrancyGuard, IStaking {
                     "Must wait withdrawProfitPeriod blocks between claims"
                 );
             }
-            
+
             // Effects: Update all state variables before external calls
             stake.accumulatedRewards = 0;
             stake.totalClaimedRewards = stake.totalClaimedRewards + commission;
             stake.lastClaimBlock = block.number;
-            
+
             // Interactions: External call for commission after all state updates
             _claimPending(msg.sender, validator, commission);
         }
@@ -668,21 +673,21 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(msg.sender == validator, "Only validator can unjail themselves");
         require(validatorStakes[validator].isJailed, "Validator not jailed");
         require(block.number >= validatorStakes[validator].jailUntilBlock, "Jail period not complete");
-        
+
         // Check if validator has sufficient stake to be active
         require(validatorStakes[validator].selfStake >= proposalContract.minValidatorStake(), "Insufficient stake, must add stake first");
-        
+
         // Must have passed proposal (reproposal required) - no automatic restoration
         require(proposalContract.pass(validator), "Must pass reproposal first");
-        
+
         // Update state first (effects)
         validatorStakes[validator].isJailed = false;
         validatorStakes[validator].jailUntilBlock = 0;
-        
+
         // Interactions: Activate validator after state update
         // This ensures validator is added to highestValidatorsSet after state change
         require(validatorsContract.tryActive(validator), "Failed to activate validator");
-        
+
         emit ValidatorUnjailed(validator);
     }
 
@@ -696,20 +701,20 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         if (validators.length == 0) {
             return new address[](0);
         }
-        
+
         // Create arrays for validators and their total stakes
         address[] memory candidateValidators = new address[](validators.length);
         uint256[] memory totalStakes = new uint256[](validators.length);
         uint256 candidateCount = 0;
-        
+
         // Cache the minimum validator stake outside the loop
         uint256 minValidatorStake = proposalContract.minValidatorStake();
-        
+
         // Collect validators and their total stakes for sorting
         for (uint256 i = 0; i < validators.length; i++) {
             address validator = validators[i];
             ValidatorStake storage stake = validatorStakes[validator];
-            
+
             // Only include validators with self-stake >= MIN_VALIDATOR_STAKE
             if (stake.selfStake >= minValidatorStake) {
                 candidateValidators[candidateCount] = validator;
@@ -717,27 +722,27 @@ contract Staking is Params, ReentrancyGuard, IStaking {
                 candidateCount++;
             }
         }
-        
+
         if (candidateCount == 0) {
             return new address[](0);
         }
-        
+
         // Sort by total stake using heap sort for improved performance
         // Build max heap
         for (uint256 i = candidateCount / 2; i > 0; i--) {
             heapify(candidateValidators, totalStakes, candidateCount, i - 1);
         }
-        
+
         // Extract max and heapify - this puts elements in ascending order (smallest at beginning)
         for (uint256 i = candidateCount - 1; i > 0; i--) {
             // Swap current maximum to end
             (candidateValidators[0], candidateValidators[i]) = (candidateValidators[i], candidateValidators[0]);
             (totalStakes[0], totalStakes[i]) = (totalStakes[i], totalStakes[0]);
-            
+
             // Heapify the reduced heap
             heapify(candidateValidators, totalStakes, i, 0);
         }
-        
+
         // Reverse the array to get descending order (largest at beginning)
         for (uint256 i = 0; i < candidateCount / 2; i++) {
             uint256 j = candidateCount - 1 - i;
@@ -746,17 +751,17 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             // Swap corresponding stakes
             (totalStakes[i], totalStakes[j]) = (totalStakes[j], totalStakes[i]);
         }
-        
+
         // Return top validators (up to MAX_VALIDATORS)
         uint256 returnLength = candidateCount < proposalContract.maxValidators() ? candidateCount : proposalContract.maxValidators();
         address[] memory topValidators = new address[](returnLength);
         for (uint256 i = 0; i < returnLength; i++) {
             topValidators[i] = candidateValidators[i];
         }
-        
+
         return topValidators;
     }
-    
+
     /**
      * @dev Heapify function to maintain max heap property
      * @param arr Array of validator addresses to heapify
@@ -768,21 +773,21 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         uint256 largest = i;
         uint256 left = 2 * i + 1;
         uint256 right = 2 * i + 2;
-        
+
         // Find largest among root, left child and right child
         if (left < n && stakes[left] > stakes[largest]) {
             largest = left;
         }
-        
+
         if (right < n && stakes[right] > stakes[largest]) {
             largest = right;
         }
-        
+
         // If largest is not root, swap and continue heapifying
         if (largest != i) {
             (arr[i], arr[largest]) = (arr[largest], arr[i]);
             (stakes[i], stakes[largest]) = (stakes[largest], stakes[i]);
-            
+
             heapify(arr, stakes, n, largest);
         }
     }
@@ -804,7 +809,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             // Interactions: external call after state update
             (bool success, ) = payable(delegator).call{value: pending}("");
             require(success, "Transfer failed");
-                
+
             emit RewardsClaimed(delegator, validator, pending);
         }
     }
@@ -847,6 +852,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @return totalClaimedRewards Total claimed rewards (cumulative)
      * @return lastClaimBlock Block number of last reward claim
      * @return isRegistered Whether validator is registered
+     * @return totalRewards Total rewards earned by distribution (cumulative)
      */
     function getValidatorInfo(address validator) external view returns (
         uint256 selfStake,
@@ -857,7 +863,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         uint256 jailUntilBlock,
         uint256 totalClaimedRewards,
         uint256 lastClaimBlock,
-        bool isRegistered
+        bool isRegistered,
+        uint256 totalRewards
     ) {
         ValidatorStake storage stake = validatorStakes[validator];
         return (
@@ -869,7 +876,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             stake.jailUntilBlock,
             stake.totalClaimedRewards,
             stake.lastClaimBlock,
-            stake.isRegistered
+            stake.isRegistered,
+            stake.totalRewards
         );
     }
 
@@ -895,14 +903,14 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     ) {
         Delegation storage delegation = delegations[delegator][validator];
         uint256 pending = 0;
-        
+
         if (delegation.amount > 0) {
             pending = delegation.amount
                 * rewardPerShare[validator]
                 / 1e18
                 - delegation.rewardDebt;
         }
-        
+
         return (
             delegation.amount,
             pending

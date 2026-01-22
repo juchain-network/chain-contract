@@ -395,7 +395,7 @@ contract StakingTest is Test {
         
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 1);
         
-        (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, , bool isJailed, uint256 jailUntilBlock, , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, uint256 totalDelegated, uint256 commissionRate, , bool isJailed, uint256 jailUntilBlock, , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
             
         assertEq(selfStake, MIN_STAKE);
         assertEq(totalDelegated, 0);
@@ -538,7 +538,7 @@ contract StakingTest is Test {
         assertEq(VALIDATOR1.balance, initialBalance);
         
         // Check validator's self-stake decreased correctly
-        (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, , , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE * 2 - withdrawAmount);
         
         // Get unbonding entries
@@ -641,7 +641,7 @@ contract StakingTest is Test {
         assertEq(VALIDATOR1.balance, initialBalance);
         
         // Verify the decrease happened
-        (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, , , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE + 200 ether - decreaseAmount);
         
         // Get unbonding entries
@@ -672,7 +672,7 @@ contract StakingTest is Test {
         vm.prank(DELEGATOR1);
         Staking(STAKING).delegate{value: delegationAmount}(VALIDATOR1);
         
-        (uint256 selfStake, uint256 totalDelegated, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, uint256 totalDelegated, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE);
         assertEq(totalDelegated, delegationAmount);
         
@@ -830,7 +830,7 @@ contract StakingTest is Test {
         // They can still vote, but won't receive rewards
         assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 4);
         
-        (, , , , bool isJailed, uint256 jailUntilBlock, , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
+        (, , , , bool isJailed, uint256 jailUntilBlock, , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertTrue(isJailed);
         assertEq(jailUntilBlock, block.number + 1000);
         
@@ -853,7 +853,7 @@ contract StakingTest is Test {
         vm.stopPrank();
         
         // Check updated stake
-        (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, , , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE + additionalStake);
         assertEq(Staking(STAKING).totalStaked(), MIN_STAKE + additionalStake);
     }
@@ -907,7 +907,7 @@ contract StakingTest is Test {
         Staking(STAKING).addValidatorStake{value: additionalStake}();
         
         // Verify stake was added successfully
-        (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (uint256 selfStake, , , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(selfStake, MIN_STAKE + additionalStake, "Stake should be successfully added even when validator is jailed");
     }
 
@@ -923,7 +923,7 @@ contract StakingTest is Test {
         vm.stopPrank();
         
         // Check updated rate
-        (, , uint256 commissionRate, , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (, , uint256 commissionRate, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(commissionRate, newRate);
     }
 
@@ -961,7 +961,7 @@ contract StakingTest is Test {
         assertEq(amount, delegationAmount - undelegateAmount);
         
         // Check validator's total delegated
-        (, uint256 totalDelegated, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (, uint256 totalDelegated, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(totalDelegated, delegationAmount - undelegateAmount);
     }
 
@@ -1050,7 +1050,7 @@ contract StakingTest is Test {
         Staking(STAKING).jailValidator(VALIDATOR4, 100);
         
         // Verify jailed
-        (, , , , bool isJailed, , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
+        (, , , , bool isJailed, , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertTrue(isJailed);
         
         // Fast forward past jail period
@@ -1061,7 +1061,7 @@ contract StakingTest is Test {
         Staking(STAKING).unjailValidator(VALIDATOR4);
         
         // Verify unjailed
-        (, , , , bool isJailedAfter, uint256 jailUntilBlock, , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
+        (, , , , bool isJailedAfter, uint256 jailUntilBlock, , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertFalse(isJailedAfter);
         assertEq(jailUntilBlock, 0);
     }
@@ -1201,7 +1201,7 @@ contract StakingTest is Test {
         vm.stopPrank();
         
         // Check that validator has no self-stake left
-        (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
+        (uint256 selfStake, , , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertEq(selfStake, 0);
         
         // Check that the amount is now in unbonding state
@@ -1461,7 +1461,7 @@ contract StakingTest is Test {
         Staking(STAKING).jailValidator(VALIDATOR1, 100);
         
         // Verify that validator is indeed jailed
-        (, , , , bool isJailed, , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (, , , , bool isJailed, , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertTrue(isJailed, "Validator should be jailed");
         
         // Try to update commission rate while jailed - should NOT revert because updateCommissionRate only uses onlyValidValidator modifier
@@ -1470,7 +1470,7 @@ contract StakingTest is Test {
         Staking(STAKING).updateCommissionRate(COMMISSION_RATE);
         
         // Verify commission rate was updated successfully
-        (, , uint256 updatedCommissionRate, , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (, , uint256 updatedCommissionRate, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(updatedCommissionRate, COMMISSION_RATE, "Commission rate should be updated successfully even when jailed");
     }
 
@@ -1492,7 +1492,7 @@ contract StakingTest is Test {
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Verify validator is registered
-        (uint256 selfStake, , , , bool isJailed, , , , ) = Staking(STAKING).getValidatorInfo(validator);
+        (uint256 selfStake, , , , bool isJailed, , , , , ) = Staking(STAKING).getValidatorInfo(validator);
         assertEq(selfStake, MIN_STAKE, "Validator should have minimum stake");
         assertFalse(isJailed, "Validator should not be jailed");
     }
@@ -1734,7 +1734,7 @@ contract StakingTest is Test {
         Staking(STAKING).jailValidator(VALIDATOR1, jailBlocks);
         
         // Verify validator is jailed
-        (, , , , bool isJailed, uint256 jailUntilBlock, , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (, , , , bool isJailed, uint256 jailUntilBlock, , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertTrue(isJailed);
         assertEq(jailUntilBlock, block.number + jailBlocks);
         
@@ -2076,7 +2076,7 @@ contract StakingTest is Test {
         Staking(STAKING).distributeRewards{value: 100 ether}();
 
         // Check that no rewards were distributed by verifying validator rewards are zero
-        (, , , uint256 accumulatedRewards, , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        (, , , uint256 accumulatedRewards, , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(accumulatedRewards, 0);
     }
     function testDistributeRewards_CleanupPreviousBlock() public {
@@ -2208,7 +2208,7 @@ contract StakingTest is Test {
         Staking(STAKING).exitValidator();
 
         // Check validator has no self-stake left
-        (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
+        (uint256 selfStake, , , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertEq(selfStake, 0);
     }
     function testExitValidator_AlreadyCalledResign() public {
@@ -2230,7 +2230,7 @@ contract StakingTest is Test {
         Staking(STAKING).exitValidator();
 
         // Check validator has no self-stake left
-        (uint256 selfStake, , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
+        (uint256 selfStake, , , , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR4);
         assertEq(selfStake, 0);
     }    function testUnjailValidator_InsufficientStake() public {
         // This test is simplified because:

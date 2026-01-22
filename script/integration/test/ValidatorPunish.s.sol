@@ -6,7 +6,7 @@ import {console} from "forge-std/Test.sol";
 
 // Atomic script: Responsible for validator punishment operations
 contract ValidatorPunish is BaseTestUtils {
-    function run() public override {
+    function run() public pure override {
         console.log("Starting Validator Punish Tests...");
         
         // // Create test accounts

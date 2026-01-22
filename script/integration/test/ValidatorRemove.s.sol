@@ -31,7 +31,7 @@ contract ValidatorRemove is ValidatorUtils {
         
         // Verify the validator is in the initial set
         console.log("Verifying validator is in initial set...");
-        (uint256 selfStakeBefore, , , , , , , , ) = staking.getValidatorInfo(validatorAddr);
+        (uint256 selfStakeBefore, , , , , , , , , ) = staking.getValidatorInfo(validatorAddr);
         require(selfStakeBefore > 0, "Validator should be in initial set with stake");
         console.log(unicode"✓ Validator is in initial set with stake:", selfStakeBefore / 1 ether, "ETH");
         

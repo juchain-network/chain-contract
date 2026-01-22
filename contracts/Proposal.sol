@@ -5,7 +5,6 @@ pragma solidity ^0.8.29;
 import {Params} from "./Params.sol";
 import {IValidators} from "./IValidators.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IStaking} from "./IStaking.sol";
 
 contract Proposal is Params, ReentrancyGuard {
     // Default configuration constants
@@ -127,7 +126,7 @@ contract Proposal is Params, ReentrancyGuard {
         address validators_
     ) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
-        
+
         validators = IValidators(validators_);
         for (uint256 i = 0; i < vals.length; i++) {
             require(vals[i] != address(0), "Invalid validator address");
@@ -169,12 +168,12 @@ contract Proposal is Params, ReentrancyGuard {
         if (flag) {
             // Check if validator is already in top validator set
             bool isTop = validators.isTopValidator(dst);
-            
+
             // Only block add proposals for validators already in top set
             if (isTop) {
                 revert("Validator is already in top validator set");
             }
-            
+
             // If proposal was passed before, check if it's expired
             if (pass[dst]) {
                 uint256 passedHeight = proposalPassedHeight[dst];
@@ -196,7 +195,7 @@ contract Proposal is Params, ReentrancyGuard {
 
         // Get current nonce for the proposer
         uint256 currentNonce = proposerNonces[msg.sender];
-        
+
         // generate proposal id using nonce instead of block.timestamp
         // forge-lint: disable-next-line(asm-keccak256)
         bytes32 id = keccak256(abi.encode(msg.sender, dst, flag, details, currentNonce));
@@ -229,10 +228,10 @@ contract Proposal is Params, ReentrancyGuard {
     function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bytes32) {
         // Validate config parameters before creating proposal
         require(validateConfig(cid, newValue), "Config validation failed");
-        
+
         // Get current nonce for the proposer
         uint256 currentNonce = proposerNonces[msg.sender];
-        
+
         // generate proposal id using nonce instead of block.timestamp
         // forge-lint: disable-next-line(asm-keccak256)
         bytes32 id = keccak256(abi.encode(msg.sender, cid, newValue, currentNonce));
@@ -312,7 +311,7 @@ contract Proposal is Params, ReentrancyGuard {
             results[id].resultExist = true;
             emit LogRejectProposal(id, block.timestamp);
         }
-        
+
         return true;
     }
 
@@ -346,7 +345,7 @@ contract Proposal is Params, ReentrancyGuard {
      */
     function updateConfig(uint256 cid, uint256 value) private {
         validateConfig(cid, value);
-        
+
         // Use if-else statements for better robustness
         if (cid == 0) {
             proposalLastingPeriod = value;
@@ -388,7 +387,7 @@ contract Proposal is Params, ReentrancyGuard {
         // set validator unpass
         pass[val] = false;
         proposalPassedHeight[val] = 0; // Clear passed height
-        
+
         emit LogSetUnpassed(val, block.timestamp);
         return true;
     }

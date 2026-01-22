@@ -45,7 +45,7 @@ contract StakingUtils is BaseTestUtils {
         console.log("Add stake transaction completed");
         
         // Verify stake amount
-        (uint256 selfStake, , , , , , , , ) = staking.getValidatorInfo(validatorAddr);
+        (uint256 selfStake, , , , , , , , , ) = staking.getValidatorInfo(validatorAddr);
         console.log("Updated self stake:", selfStake / 1 ether, "ETH");
     }
     
@@ -63,7 +63,7 @@ contract StakingUtils is BaseTestUtils {
         console.log("Decrease stake transaction completed");
         
         // Verify stake amount
-        (uint256 selfStake, , , , , , , , ) = staking.getValidatorInfo(validatorAddr);
+        (uint256 selfStake, , , , , , , , , ) = staking.getValidatorInfo(validatorAddr);
         console.log("Updated self stake:", selfStake / 1 ether, "ETH");
     }
     
@@ -81,7 +81,7 @@ contract StakingUtils is BaseTestUtils {
         console.log("Set commission rate transaction completed");
         
         // Verify commission rate
-        (, , , , , uint256 commissionRate, , , ) = staking.getValidatorInfo(validatorAddr);
+        (, , , , , uint256 commissionRate, , , , ) = staking.getValidatorInfo(validatorAddr);
         console.log("Updated commission rate:", commissionRate / 100, "%");
     }
     
