@@ -58,6 +58,8 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     IPunish punish;
     IStaking staking;
 
+    uint256 private constant PENDING_EXECUTION_LIMIT = 5;
+
     enum Operations {Distribute, UpdateValidators}
     // Record the operations is done or not.
     mapping(uint256 => mapping(uint8 => bool)) operationsDone;
@@ -236,6 +238,10 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         
         // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
+
+        if (block.number % epoch != 0) {
+            try punish.executePending(PENDING_EXECUTION_LIMIT) {} catch {}
+        }
         
         address val = msg.sender;
         uint256 hb = msg.value;

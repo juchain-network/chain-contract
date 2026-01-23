@@ -305,18 +305,21 @@ contract StakingTest is Test {
         // 13. maxValidators: slot 12
         // 14. minDelegation: slot 13
         // 15. minUndelegation: slot 14
-        // 16. pass (mapping): slot 15
-        // 17. proposalPassedHeight (mapping): slot 16
+        // 16. doubleSignSlashAmount: slot 15
+        // 17. doubleSignRewardAmount: slot 16
+        // 18. burnAddress: slot 17
+        // 19. pass (mapping): slot 18
+        // 20. proposalPassedHeight (mapping): slot 19
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(15))), // pass mapping slot
+            keccak256(abi.encode(validator, uint256(18))), // pass mapping slot
             bytes32(uint256(1))
         );
 
         // Set proposalPassedHeight to current block height (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(16))), // proposalPassedHeight mapping slot
+            keccak256(abi.encode(validator, uint256(19))), // proposalPassedHeight mapping slot
             bytes32(uint256(block.number))
         );
     }

@@ -59,5 +59,23 @@ interface IStaking {
      */
     function jailValidator(address validator, uint256 jailBlocks) external;
 
+    /**
+     * @dev Slash a validator's self-stake and distribute reward/burn amounts.
+     * @param validator Validator address to slash
+     * @param slashAmount Absolute slash amount in wei
+     * @param reporter Address to receive the reporter reward
+     * @param rewardAmount Reporter reward amount in wei
+     * @param burnAddress Address to receive the burn amount
+     * @return actualSlash Actual slashed amount
+     * @return actualReward Actual reward paid to reporter
+     */
+    function slashValidator(
+        address validator,
+        uint256 slashAmount,
+        address reporter,
+        uint256 rewardAmount,
+        address burnAddress
+    ) external returns (uint256 actualSlash, uint256 actualReward);
+
 
 }

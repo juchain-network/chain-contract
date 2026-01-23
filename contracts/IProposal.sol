@@ -95,4 +95,22 @@ interface IProposal {
      * @return uint256 The minimum undelegation amount in wei.
      */
     function minUndelegation() external view returns (uint256);
+
+    /**
+     * @dev Returns the double-sign slash amount (absolute, in wei).
+     * @return uint256 The slash amount.
+     */
+    function doubleSignSlashAmount() external view returns (uint256);
+
+    /**
+     * @dev Returns the double-sign reporter reward amount (absolute, in wei).
+     * @return uint256 The reward amount.
+     */
+    function doubleSignRewardAmount() external view returns (uint256);
+
+    /**
+     * @dev Returns the burn address for slashed funds after reward.
+     * @return address The burn address.
+     */
+    function burnAddress() external view returns (address);
 }

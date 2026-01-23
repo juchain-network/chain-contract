@@ -20,6 +20,9 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 private constant DEFAULT_MAX_VALIDATORS = 21; // Maximum active validators
     uint256 private constant DEFAULT_MIN_DELEGATION = 10 ether; // 10 JU
     uint256 private constant DEFAULT_MIN_UNDELEGATION = 1 ether; // 1 JU
+    uint256 private constant DEFAULT_DOUBLE_SIGN_SLASH_AMOUNT = 50000 ether;
+    uint256 private constant DEFAULT_DOUBLE_SIGN_REWARD_AMOUNT = 10000 ether;
+    address private constant DEFAULT_BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     // How many blocks a proposal will exist
     uint256 public proposalLastingPeriod;
@@ -42,6 +45,12 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 public minDelegation;
     // Minimum undelegation amount per delegator
     uint256 public minUndelegation;
+    // Double-sign slash amount (absolute, in wei)
+    uint256 public doubleSignSlashAmount;
+    // Double-sign reporter reward amount (absolute, in wei)
+    uint256 public doubleSignRewardAmount;
+    // Burn address for slashed funds after reward
+    address public burnAddress;
 
     // record
     mapping(address => bool) public pass;
@@ -151,6 +160,9 @@ contract Proposal is Params, ReentrancyGuard {
         maxValidators = DEFAULT_MAX_VALIDATORS;
         minDelegation = DEFAULT_MIN_DELEGATION;
         minUndelegation = DEFAULT_MIN_UNDELEGATION;
+        doubleSignSlashAmount = DEFAULT_DOUBLE_SIGN_SLASH_AMOUNT;
+        doubleSignRewardAmount = DEFAULT_DOUBLE_SIGN_REWARD_AMOUNT;
+        burnAddress = DEFAULT_BURN_ADDRESS;
         initialized = true;
     }
 
@@ -332,10 +344,13 @@ contract Proposal is Params, ReentrancyGuard {
      *   - 9: maxValidators (must > 0)
      *   - 10: minDelegation (must > 0, in wei)
      *   - 11: minUndelegation (must > 0, in wei)
+     *   - 12: doubleSignSlashAmount (must > 0)
+     *   - 13: doubleSignRewardAmount (must > 0)
+     *   - 14: burnAddress (must be non-zero)
      * @param value New configuration value
      */
     function validateConfig(uint256 cid, uint256 value) internal view returns (bool) {
-        require(cid <= 11, "Invalid config ID");
+        require(cid <= 14, "Invalid config ID");
         require(value > 0, "Config value must be positive");
         if (cid == 1) {
             require(value < removeThreshold, "punishThreshold must be < removeThreshold");
@@ -346,6 +361,13 @@ contract Proposal is Params, ReentrancyGuard {
             require(value <= removeThreshold, "decreaseRate must be <= removeThreshold");
         } else if (cid == 9) {
             require(value <= CONSENSUS_MAX_VALIDATORS, "maxValidators exceeds consensus limit");
+        } else if (cid == 12) {
+            require(value >= doubleSignRewardAmount, "doubleSignSlashAmount must be >= doubleSignRewardAmount");
+        } else if (cid == 13) {
+            require(value <= doubleSignSlashAmount, "doubleSignRewardAmount must be <= doubleSignSlashAmount");
+        } else if (cid == 14) {
+            require(value <= type(uint160).max, "burnAddress invalid");
+            require(address(uint160(value)) != address(0), "burnAddress must be non-zero");
         }
         return true;
     }
@@ -383,6 +405,12 @@ contract Proposal is Params, ReentrancyGuard {
             minDelegation = value;
         } else if (cid == 11) {
             minUndelegation = value;
+        } else if (cid == 12) {
+            doubleSignSlashAmount = value;
+        } else if (cid == 13) {
+            doubleSignRewardAmount = value;
+        } else if (cid == 14) {
+            burnAddress = address(uint160(value));
         } else {
             revert("Unknown config ID"); // Fail fast for new config IDs
         }

@@ -35,6 +35,12 @@ interface IPunish {
     function cleanPunishRecord(address val) external returns (bool);
 
     /**
+     * @dev Executes pending punishments queued during epoch blocks.
+     * @param limit Maximum number of pending entries to process.
+     */
+    function executePending(uint256 limit) external;
+
+    /**
      * @dev Gets the number of validators currently being punished.
      * @return uint256 The number of validators in the punishment list.
      */

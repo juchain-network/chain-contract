@@ -93,6 +93,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     event RewardsClaimed(address indexed delegator, address indexed validator, uint256 amount);
     event ValidatorJailed(address indexed validator, uint256 jailUntilBlock);
     event ValidatorUnjailed(address indexed validator);
+    event ValidatorSlashed(address indexed validator, uint256 slashAmount, uint256 rewardAmount, uint256 burnAmount, address indexed reporter, address indexed burnAddress);
 
     modifier onlyValidValidator(address validator) {
         _onlyValidValidator(validator);
@@ -662,6 +663,55 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         validatorStakes[validator].isJailed = true;
         validatorStakes[validator].jailUntilBlock = block.number + jailBlocks;
         emit ValidatorJailed(validator, validatorStakes[validator].jailUntilBlock);
+    }
+
+    /**
+     * @dev Slash a validator's self-stake and distribute reward/burn amounts.
+     * @param validator Validator address to slash
+     * @param slashAmount Absolute slash amount in wei
+     * @param reporter Address to receive the reporter reward
+     * @param rewardAmount Reporter reward amount in wei
+     * @param burnAddress Address to receive the burn amount
+     * @return actualSlash Actual slashed amount
+     * @return actualReward Actual reward paid to reporter
+     */
+    function slashValidator(
+        address validator,
+        uint256 slashAmount,
+        address reporter,
+        uint256 rewardAmount,
+        address burnAddress
+    ) external onlyPunishContract nonReentrant returns (uint256 actualSlash, uint256 actualReward) {
+        require(validator != address(0), "Invalid validator address");
+        require(slashAmount > 0, "Slash amount must be positive");
+        require(burnAddress != address(0), "Invalid burn address");
+
+        ValidatorStake storage stake = validatorStakes[validator];
+        uint256 selfStake = stake.selfStake;
+        if (selfStake == 0) {
+            return (0, 0);
+        }
+
+        actualSlash = slashAmount > selfStake ? selfStake : slashAmount;
+        stake.selfStake = selfStake - actualSlash;
+        totalStaked = totalStaked - actualSlash;
+
+        actualReward = rewardAmount > actualSlash ? actualSlash : rewardAmount;
+        uint256 burnAmount = actualSlash - actualReward;
+
+        if (actualReward > 0) {
+            require(address(this).balance >= actualReward, "Insufficient contract balance");
+            (bool success, ) = payable(reporter).call{value: actualReward}("");
+            require(success, "Reward transfer failed");
+        }
+
+        if (burnAmount > 0) {
+            require(address(this).balance >= burnAmount, "Insufficient contract balance");
+            (bool successBurn, ) = payable(burnAddress).call{value: burnAmount}("");
+            require(successBurn, "Burn transfer failed");
+        }
+
+        emit ValidatorSlashed(validator, actualSlash, actualReward, burnAmount, reporter, burnAddress);
     }
 
     /**

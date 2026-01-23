@@ -30,6 +30,13 @@ interface IValidators {
     function isActiveValidator(address who) external view returns (bool);
 
     /**
+     * @dev Checks if a validator is active (in current set and not jailed).
+     * @param validator Address to check.
+     * @return bool Returns true if the validator is active.
+     */
+    function isValidatorActive(address validator) external view returns (bool);
+
+    /**
      * @dev Checks if an address is a top validator.
      * @param who Address to check.
      * @return bool Returns true if the address is a top validator.
@@ -59,4 +66,11 @@ interface IValidators {
      * @param val Address of the validator to remove.
      */
     function tryRemoveValidator(address val) external;
+
+    /**
+     * @dev Checks if validator exists (has staked).
+     * @param validator Address to check.
+     * @return bool Returns true if validator exists.
+     */
+    function isValidatorExist(address validator) external view returns (bool);
 }
