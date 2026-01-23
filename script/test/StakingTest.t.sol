@@ -292,35 +292,36 @@ contract StakingTest is Test {
         // Correct slot calculation:
         // 1. Params.initialized: slot 0
         // 2. Params.epoch: slot 1
-        // 3. ReentrancyGuard._status: slot 2
-        // 4. proposalLastingPeriod: slot 3
-        // 5. punishThreshold: slot 4
-        // 6. removeThreshold: slot 5
-        // 7. decreaseRate: slot 6
-        // 8. withdrawProfitPeriod: slot 7
-        // 9. blockReward: slot 8
-        // 10. unbondingPeriod: slot 9
-        // 11. validatorUnjailPeriod: slot 10
-        // 12. minValidatorStake: slot 11
-        // 13. maxValidators: slot 12
-        // 14. minDelegation: slot 13
-        // 15. minUndelegation: slot 14
-        // 16. doubleSignSlashAmount: slot 15
-        // 17. doubleSignRewardAmount: slot 16
-        // 18. doubleSignWindow: slot 17
-        // 19. burnAddress: slot 18
-        // 20. pass (mapping): slot 19
-        // 21. proposalPassedHeight (mapping): slot 20
+        // 3. Params.__gap: slots 2-51
+        // 4. ReentrancyGuard._status: slot 52
+        // 5. proposalLastingPeriod: slot 53
+        // 6. punishThreshold: slot 54
+        // 7. removeThreshold: slot 55
+        // 8. decreaseRate: slot 56
+        // 9. withdrawProfitPeriod: slot 57
+        // 10. blockReward: slot 58
+        // 11. unbondingPeriod: slot 59
+        // 12. validatorUnjailPeriod: slot 60
+        // 13. minValidatorStake: slot 61
+        // 14. maxValidators: slot 62
+        // 15. minDelegation: slot 63
+        // 16. minUndelegation: slot 64
+        // 17. doubleSignSlashAmount: slot 65
+        // 18. doubleSignRewardAmount: slot 66
+        // 19. doubleSignWindow: slot 67
+        // 20. burnAddress: slot 68
+        // 21. pass (mapping): slot 69
+        // 22. proposalPassedHeight (mapping): slot 70
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(19))), // pass mapping slot
+            keccak256(abi.encode(validator, uint256(69))), // pass mapping slot
             bytes32(uint256(1))
         );
 
         // Set proposalPassedHeight to current block height (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(20))), // proposalPassedHeight mapping slot
+            keccak256(abi.encode(validator, uint256(70))), // proposalPassedHeight mapping slot
             bytes32(uint256(block.number))
         );
     }
@@ -1605,7 +1606,7 @@ contract StakingTest is Test {
         vm.startPrank(VALIDATOR1);
         
         // Set withdrawProfitPeriod to 100 blocks for faster testing
-        uint256 withdrawPeriodSlot = 6; // withdrawProfitPeriod in Proposal contract
+        uint256 withdrawPeriodSlot = 57; // withdrawProfitPeriod in Proposal contract
         uint256 withdrawPeriod = 100;
         vm.store(PROPOSAL, bytes32(withdrawPeriodSlot), bytes32(uint256(withdrawPeriod)));
         

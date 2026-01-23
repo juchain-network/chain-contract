@@ -10,6 +10,7 @@ contract Params {
 
     uint256 public epoch;
     uint256 public constant CONSENSUS_MAX_VALIDATORS = 21;
+    uint256[50] private __gap;
 
     
     // Production version: constants use SCREAMING_SNAKE_CASE

@@ -83,6 +83,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     // Validator address => number of delegators
     mapping(address => uint256) public validatorDelegatorCount;
 
+    uint256 public revision;
+    uint256[50] private __gap;
+
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
     event CommissionRateUpdated(address indexed validator, uint256 commissionRate);
     event ValidatorStakeIncreased(address indexed delegator, address indexed validator, uint256 amount);
@@ -129,6 +132,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
         _initializeEpoch(proposalContract.epoch());
+        revision = 1;
         initialized = true;
     }
 
@@ -189,7 +193,17 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             emit ValidatorRegistered(validator, minValidatorStake, commissionRate);
         }
 
+        revision = 1;
         initialized = true;
+    }
+
+    /**
+     * @dev Reinitialize for upgrades (v2).
+     * @notice Only miner can call. Can be called once.
+     */
+    function reinitializeV2() external onlyInitialized onlyMiner {
+        require(revision < 2, "Already reinitialized");
+        revision = 2;
     }
 
     /**

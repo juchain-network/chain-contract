@@ -64,6 +64,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     // Record the operations is done or not.
     mapping(uint256 => mapping(uint8 => bool)) operationsDone;
 
+    uint256 public revision;
+    uint256[50] private __gap;
+
     event LogEditValidator(address indexed val, address indexed fee, uint256 time);
     event LogActive(address indexed val, uint256 time);
     event LogAddToTopValidators(address indexed val, uint256 time);
@@ -123,7 +126,17 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             // They are activated by default and don't need separate staking to start producing blocks
         }
 
+        revision = 1;
         initialized = true;
+    }
+
+    /**
+     * @dev Reinitialize for upgrades (v2).
+     * @notice Only miner can call. Can be called once.
+     */
+    function reinitializeV2() external onlyInitialized onlyMiner {
+        require(revision < 2, "Already reinitialized");
+        revision = 2;
     }
 
     /**

@@ -30,6 +30,9 @@ contract Punish is Params, ReentrancyGuard {
     mapping(address => uint256) pendingIndex;
     mapping(uint256 => mapping(address => bool)) doubleSigned;
 
+    uint256 public revision;
+    uint256[50] private __gap;
+
     uint256 private constant SECP256K1N_HALF =
         0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0;
 
@@ -81,7 +84,17 @@ contract Punish is Params, ReentrancyGuard {
         staking = IStaking(staking_);
         _initializeEpoch(proposal.epoch());
 
+        revision = 1;
         initialized = true;
+    }
+
+    /**
+     * @dev Reinitialize for upgrades (v2).
+     * @notice Only miner can call. Can be called once.
+     */
+    function reinitializeV2() external onlyInitialized onlyMiner {
+        require(revision < 2, "Already reinitialized");
+        revision = 2;
     }
 
     /**

@@ -105,6 +105,8 @@ contract Proposal is Params, ReentrancyGuard {
     mapping(address => mapping(bytes32 => VoteInfo)) public votes;
 
     IValidators validators;
+    uint256 public revision;
+    uint256[50] private __gap;
 
     event LogCreateProposal(bytes32 indexed id, address indexed proposer, address indexed dst, bool flag, uint256 time);
     event LogCreateConfigProposal(
@@ -167,7 +169,17 @@ contract Proposal is Params, ReentrancyGuard {
         doubleSignRewardAmount = DEFAULT_DOUBLE_SIGN_REWARD_AMOUNT;
         doubleSignWindow = DEFAULT_DOUBLE_SIGN_WINDOW;
         burnAddress = DEFAULT_BURN_ADDRESS;
+        revision = 1;
         initialized = true;
+    }
+
+    /**
+     * @dev Reinitialize for upgrades (v2).
+     * @notice Only miner can call. Can be called once.
+     */
+    function reinitializeV2() external onlyInitialized onlyMiner {
+        require(revision < 2, "Already reinitialized");
+        revision = 2;
     }
 
     /**
