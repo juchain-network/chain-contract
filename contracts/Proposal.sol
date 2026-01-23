@@ -125,7 +125,7 @@ contract Proposal is Params, ReentrancyGuard {
     }
 
     function _onlyValidator() internal view {
-        require(validators.isActiveValidator(msg.sender), "Validator only");
+        require(validators.isValidatorActive(msg.sender), "Validator only");
     }
 
     /**
@@ -297,7 +297,9 @@ contract Proposal is Params, ReentrancyGuard {
             // do nothing if proposal already has result.
             return true;
         }
-        if (results[id].agree >= validators.getActiveValidatorCount() / 2 + 1) {
+        uint256 votingCount = validators.getVotingValidatorCount();
+        uint256 threshold = votingCount / 2 + 1;
+        if (results[id].agree >= threshold) {
             results[id].resultExist = true;
 
             // Handle different proposal types with if-else statements
@@ -325,7 +327,7 @@ contract Proposal is Params, ReentrancyGuard {
             return true;
         }
 
-        if (results[id].reject >= validators.getActiveValidatorCount() / 2 + 1) {
+        if (results[id].reject >= threshold) {
             results[id].resultExist = true;
             emit LogRejectProposal(id, block.timestamp);
         }

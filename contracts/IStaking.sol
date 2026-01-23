@@ -53,6 +53,12 @@ interface IStaking {
     );
 
     /**
+     * @dev Update last active block for a validator (called by Validators contract).
+     * @param validator Validator address to update.
+     */
+    function updateLastActiveBlock(address validator) external;
+
+    /**
      * @dev Jails a validator for a specified number of blocks.
      * @param validator Address of the validator to jail.
      * @param jailBlocks Number of blocks the validator will be jailed.

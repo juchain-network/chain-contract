@@ -23,6 +23,12 @@ interface IValidators {
     function getActiveValidatorCount() external view returns (uint256);
 
     /**
+     * @dev Get count of voting validators (active and not jailed).
+     * @return Count of validators eligible to vote.
+     */
+    function getVotingValidatorCount() external view returns (uint256);
+
+    /**
      * @dev Checks if an address is an active validator.
      * @param who Address to check.
      * @return bool Returns true if the address is an active validator.

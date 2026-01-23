@@ -47,6 +47,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
     // Validator address => ValidatorStake
     mapping(address => ValidatorStake) public validatorStakes;
+    // Validator address => last active block (set by Validators.distributeBlockReward)
+    mapping(address => uint256) public lastActiveBlock;
 
     // Delegator => Validator => Delegation
     mapping(address => mapping(address => Delegation)) public delegations;
@@ -292,6 +294,13 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function resignValidator() external onlyNotEpoch onlyValidValidator(msg.sender) nonReentrant {
         ValidatorStake storage stake = validatorStakes[msg.sender];
+        uint256 lastBlock = lastActiveBlock[msg.sender];
+        if (lastBlock != 0) {
+            require(
+                block.number > lastBlock + proposalContract.doubleSignWindow(),
+                "Exit blocked in doubleSignWindow"
+            );
+        }
 
         // Cannot resign if already jailed/resigned
         require(!stake.isJailed, "Validator already resigned or jailed");
@@ -315,6 +324,13 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function exitValidator() external onlyNotEpoch nonReentrant onlyValidValidator(msg.sender) {
         ValidatorStake storage stake = validatorStakes[msg.sender];
+        uint256 lastBlock = lastActiveBlock[msg.sender];
+        if (lastBlock != 0) {
+            require(
+                block.number > lastBlock + proposalContract.doubleSignWindow(),
+                "Exit blocked in doubleSignWindow"
+            );
+        }
         uint256 withdrawAmount = stake.selfStake;
         require(withdrawAmount > 0, "Validator has no stake to withdraw");
 
@@ -712,6 +728,15 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         }
 
         emit ValidatorSlashed(validator, actualSlash, actualReward, burnAmount, reporter, burnAddress);
+    }
+
+    /**
+     * @dev Update last active block for a validator (called by Validators contract)
+     * @param validator Validator address to update
+     */
+    function updateLastActiveBlock(address validator) external onlyValidatorsContract {
+        require(validator != address(0), "Invalid validator address");
+        lastActiveBlock[validator] = block.number;
     }
 
     /**

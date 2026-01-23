@@ -253,6 +253,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         if (!this.isValidatorExist(val)) {
             return;
         }
+        staking.updateLastActiveBlock(val);
 
         // Check if the block producer is jailed
         if (staking.isValidatorJailed(val)) {
@@ -327,7 +328,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      */
     function tryRemoveValidator(address val) external onlyProposalContract onlyNotEpoch nonReentrant {
         // Jail validator first to ensure no more rewards are distributed
-        staking.jailValidator(val, proposal.validatorUnjailPeriod());
+        if (getVotingValidatorCount() > 1) {
+            staking.jailValidator(val, proposal.validatorUnjailPeriod());
+        }
         // Remove validator from active set
         removeValidatorInternal(val);
     }
@@ -490,6 +493,22 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Return currentValidatorSet length directly - no need to filter jailed validators
         // Jailed validators will be excluded at the next epoch update
         return currentValidatorSet.length;
+    }
+
+    /**
+     * @dev Get count of voting validators (active and not jailed)
+     * @return Count of validators eligible to vote
+     */
+    function getVotingValidatorCount() public view returns (uint256) {
+        uint256 currentSetLength = currentValidatorSet.length;
+        uint256 count = 0;
+        for (uint256 i = 0; i < currentSetLength; i++) {
+            address validator = currentValidatorSet[i];
+            if (!staking.isValidatorJailed(validator)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**

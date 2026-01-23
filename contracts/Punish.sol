@@ -100,8 +100,10 @@ contract Punish is Params, ReentrancyGuard {
                 pendingRemove[val] = false;
                 pendingRemoveIncoming[val] = false;
                 punishRecords[val].missedBlocksCounter = 0;
-                staking.jailValidator(val, proposal.validatorUnjailPeriod());
-                validators.removeValidator(val);
+                if (validators.getVotingValidatorCount() > 1) {
+                    staking.jailValidator(val, proposal.validatorUnjailPeriod());
+                    validators.removeValidator(val);
+                }
                 emit LogPunishValidator(val, block.timestamp);
                 return;
             }
@@ -136,10 +138,12 @@ contract Punish is Params, ReentrancyGuard {
         if (punishRecords[val].missedBlocksCounter % proposal.removeThreshold() == 0) {
             // reset validator's missed blocks counter
             punishRecords[val].missedBlocksCounter = 0;
-            // jail validator first (sets isJailed in Staking contract)
-            staking.jailValidator(val, proposal.validatorUnjailPeriod());
-            // then remove validator (which will check isJailed status)
-            validators.removeValidator(val);
+            if (validators.getVotingValidatorCount() > 1) {
+                // jail validator first (sets isJailed in Staking contract)
+                staking.jailValidator(val, proposal.validatorUnjailPeriod());
+                // then remove validator (which will check isJailed status)
+                validators.removeValidator(val);
+            }
         } else if (punishRecords[val].missedBlocksCounter % proposal.punishThreshold() == 0) {
             validators.removeValidatorIncoming(val);
         }
@@ -162,8 +166,10 @@ contract Punish is Params, ReentrancyGuard {
                 pendingRemove[val] = false;
                 pendingRemoveIncoming[val] = false;
                 punishRecords[val].missedBlocksCounter = 0;
-                staking.jailValidator(val, proposal.validatorUnjailPeriod());
-                validators.removeValidator(val);
+                if (validators.getVotingValidatorCount() > 1) {
+                    staking.jailValidator(val, proposal.validatorUnjailPeriod());
+                    validators.removeValidator(val);
+                }
             } else if (pendingRemoveIncoming[val]) {
                 pendingRemoveIncoming[val] = false;
                 validators.removeValidatorIncoming(val);
@@ -198,7 +204,10 @@ contract Punish is Params, ReentrancyGuard {
 
         doubleSigned[number1][signer1] = true;
 
-        staking.jailValidator(signer1, proposal.validatorUnjailPeriod());
+        bool canJail = validators.getVotingValidatorCount() > 1;
+        if (canJail) {
+            staking.jailValidator(signer1, proposal.validatorUnjailPeriod());
+        }
         (uint256 actualSlash, uint256 actualReward) = staking.slashValidator(
             signer1,
             proposal.doubleSignSlashAmount(),
@@ -206,6 +215,9 @@ contract Punish is Params, ReentrancyGuard {
             proposal.doubleSignRewardAmount(),
             proposal.burnAddress()
         );
+        if (canJail) {
+            validators.removeValidator(signer1);
+        }
 
         emit LogDoubleSignPunish(signer1, msg.sender, number1, actualSlash, actualReward, block.timestamp);
     }

@@ -152,24 +152,17 @@ contract PunishMissingFoundryTest is BaseSetup {
         require(isJailed(v1), "v1 should now be jailed");
         require(punish.getPunishRecord(v1) == 0, "v1 punish record should be reset after removal");
         
-        // Now both validators are jailed, but they are still in currentValidatorSet (until next epoch)
-        // Jailed validators can still vote because they are still in currentValidatorSet
-        // According to design logic: threshold = activeValidatorCount / 2 + 1
-        // When activeValidatorCount = 3 (v1, v2, v3 all in currentValidatorSet): threshold = 3 / 2 + 1 = 2
-        // So at least 2 votes are needed to pass proposal
+        // Now both validators are jailed, only v3 is active for voting
+        // According to design logic: threshold = votingValidatorCount / 2 + 1
+        // When votingValidatorCount = 1 (only v3 active): threshold = 1
         vm.warp(6_000_000);
         vm.prank(v3); // v3 is the only unjailed validator
         bytes32 id = Proposal(PROPOSAL).createProposal(v1, true, "");
         
-        // v3 votes (1 vote)
+        // v3 votes (1 vote), should pass
         vm.prank(v3); Proposal(PROPOSAL).voteProposal(id, true);
         
-        // Proposal should not pass, because threshold = 2, only 1 vote
-        // Need one more vote (can be v1 or v2, although they are jailed, they are still in currentValidatorSet)
-        vm.prank(v1); Proposal(PROPOSAL).voteProposal(id, true);
-        
-        // Now with 2 votes, should pass (threshold = 2)
-        require(Proposal(PROPOSAL).pass(v1), "proposal should pass with 2 votes when threshold is 2");
+        require(Proposal(PROPOSAL).pass(v1), "proposal should pass with 1 vote when only one active validator");
         // Note: Proposal passing only sets pass[v1] = true, v1 is still in jailed state
         // v1 needs to unjail first, then register staking to become active validator again
         require(isJailed(v1), "v1 should still be jailed (proposal passing doesn't auto unjail)");
