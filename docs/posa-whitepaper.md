@@ -30,6 +30,7 @@ The core of the JPoSA consensus mechanism lies in selecting block producers thro
 ### 5. Security Mechanisms
 - Sets unbonding period to prevent sudden exits
 - Punishment mechanism targets bad behavior
+- Double-sign evidence slashing with reporter reward and burn
 - Re-entry attack protection and parameter validation
 
 ## Governance Mechanism
@@ -70,6 +71,7 @@ The punishment system monitors validator behavior and executes corresponding pen
 - Tracking validators' missed block situations
 - Implementing punishment measures when thresholds are reached
 - Automatically jailing jailed validators
+- Double-sign evidence slashing (jail + slash), reporter rewarded, remainder burned
 
 The governance mechanism achieves decentralized network management through the collaborative work of these four systems, ensuring that all major decisions are fully discussed and voted on by the validator community.
 
@@ -304,6 +306,22 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
    - Default value: 86,400 blocks (approximately 24 hours)
    - Time required for jailed validators to return to normal state after removal, only after this time can validators reapply to join the validator set
 
+5. **Double-Sign Slash Amount** (doubleSignSlashAmount)
+   - Default value: 50,000 JU
+   - Absolute slash applied to validator self-stake upon double-sign evidence
+
+6. **Double-Sign Reporter Reward** (doubleSignRewardAmount)
+   - Default value: 10,000 JU
+   - Reward paid to the evidence reporter (<= slash amount)
+
+7. **Double-Sign Evidence Window** (doubleSignWindow)
+   - Default value: 86,400 blocks (approximately 24 hours)
+   - Evidence must be submitted within this window
+
+8. **Burn Address** (burnAddress)
+   - Default value: `0x000000000000000000000000000000000000dEaD`
+   - Receives the slashed remainder after reporter reward
+
 ### Reward-Related Parameters
 
 1. **Profit Withdrawal Cycle** (withdrawProfitPeriod)
@@ -328,6 +346,14 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
    - Minimum staking amount required to become a validator
    - Default value: 100,000 JU
    - Ensures validators have sufficient economic incentives to maintain network security
+
+3. **Minimum Delegation** (minDelegation)
+   - Minimum delegation amount per delegator
+   - Default value: 10 JU
+
+4. **Minimum Undelegation** (minUndelegation)
+   - Minimum undelegation amount per delegator
+   - Default value: 1 JU
 
 All parameter adjustments require governance proposals and sufficient votes to take effect, ensuring transparency and security of network parameter changes.
 

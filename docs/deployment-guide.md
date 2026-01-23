@@ -67,27 +67,35 @@ Core consensus parameters configured in the genesis block:
 
 ### System Contract Parameter Details
 
-These parameters are set at contract compilation time, and modifications require recompilation and genesis block update:
+These parameters are initialized with defaults at deployment (genesis). After initialization, they can be updated via governance proposals (see below); recompilation/genesis updates are only needed if you want different defaults:
 
 | Parameter Name | Default Value | Unit | Description |
 |----------|--------|------|------|
-| `proposalLastingPeriod` | 86400 | Seconds | Proposal validity period (24 hours) |
+| `proposalLastingPeriod` | 604800 | Blocks | Proposal validity period (~7 days) |
 | `punishThreshold` | 24 | Blocks | Continuous missed blocks triggering profit confiscation |
 | `removeThreshold` | 48 | Blocks | Continuous missed blocks triggering validator removal |
 | `decreaseRate` | 24 | % | Reduction rate during punishment |
-| `withdrawProfitPeriod` | 28800 | Blocks | Profit withdrawal interval (~24 hours) |
-| `blockReward` | 1000000000000000000 | Wei | Block reward amount |
-| `unbondingPeriod` | 201600 | Blocks | Unbonding period (7 days) |
-| `validatorUnjailPeriod` | 86400 | Seconds | Validator unjail period (24 hours) |
-| `minValidatorStake` | 10000000000000000000000 | Wei | Minimum validator staking amount (10000 JU) |
+| `withdrawProfitPeriod` | 86400 | Blocks | Profit withdrawal interval (~24 hours) |
+| `blockReward` | 200000000000000000 | Wei | Block reward amount (0.2 JU) |
+| `unbondingPeriod` | 604800 | Blocks | Unbonding period (7 days) |
+| `validatorUnjailPeriod` | 86400 | Blocks | Validator unjail period (~24 hours) |
+| `minValidatorStake` | 100000000000000000000000 | Wei | Minimum validator staking amount (100,000 JU) |
 | `maxValidators` | 21 | Count | Maximum number of active validators |
+| `minDelegation` | 10000000000000000000 | Wei | Minimum delegation amount (10 JU) |
+| `minUndelegation` | 1000000000000000000 | Wei | Minimum undelegation amount (1 JU) |
+| `doubleSignSlashAmount` | 50000000000000000000000 | Wei | Double-sign slash amount (50,000 JU) |
+| `doubleSignRewardAmount` | 10000000000000000000000 | Wei | Double-sign reporter reward (10,000 JU) |
+| `doubleSignWindow` | 86400 | Blocks | Double-sign evidence window (~24 hours) |
+| `burnAddress` | 0x000000000000000000000000000000000000dEaD | Address | Burn destination for slashed remainder |
 
-> ⚠️ **Important Reminder**: Modifying contract parameters requires:
+> ⚠️ **Important Reminder**: If you want different **default** parameters at genesis, you must:
 >
 > 1. Recompile system contracts (`forge build`)
 > 2. Generate new contract bytecode (`npm run generate`)
 > 3. Update genesis block file (`npm run init-genesis`)
 > 4. Reinitialize all node data directories
+>
+> For changes after launch, use governance proposals (see below).
 
 ### Staking Mechanism Parameters
 
@@ -96,9 +104,9 @@ JuChain introduces a dual-contract validator management mechanism:
 ```json
 {
   "staking": {
-    "minStakeAmount": "10000000000000000000000",  // 10000 JU (wei)
+    "minStakeAmount": "100000000000000000000000",  // 100000 JU (wei)
     "maxCommissionRate": 5000,                    // Maximum commission rate 50%
-    "unbondingPeriod": 201600,                    // Unbonding period 7 days (blocks)
+    "unbondingPeriod": 604800,                    // Unbonding period 7 days (blocks)
     "maxValidators": 21,                          // Maximum active validator count
   }
 }
@@ -987,16 +995,22 @@ echo "✅ System parameter modification proposal created"
 
 | Parameter Index | Parameter Name | Description | Default Value |
 |----------|----------|------|--------|
-| 0 | proposalLastingPeriod | Proposal validity period (1 hour - 30 days) | 86400 seconds (24 hours) |
+| 0 | proposalLastingPeriod | Proposal validity period (1 hour - 30 days) | 604800 blocks (~7 days) |
 | 1 | punishThreshold | Continuous missed blocks triggering profit confiscation | 24 blocks |
 | 2 | removeThreshold | Continuous missed blocks triggering validator removal | 48 blocks |
 | 3 | decreaseRate | Reduction rate during punishment | 24% |
-| 4 | withdrawProfitPeriod | Profit withdrawal interval | 28800 blocks (~24 hours) |
-| 5 | blockReward | Block reward amount | 1000000000000000000 wei (1 JU) |
-| 6 | unbondingPeriod | Unbonding period | 201600 blocks (7 days) |
-| 7 | validatorUnjailPeriod | Validator unjail period | 86400 seconds (24 hours) |
-| 8 | minValidatorStake | Minimum validator staking amount | 10000000000000000000000 wei (10000 JU) |
+| 4 | withdrawProfitPeriod | Profit withdrawal interval | 86400 blocks (~24 hours) |
+| 5 | blockReward | Block reward amount | 200000000000000000 wei (0.2 JU) |
+| 6 | unbondingPeriod | Unbonding period | 604800 blocks (7 days) |
+| 7 | validatorUnjailPeriod | Validator unjail period | 86400 blocks (~24 hours) |
+| 8 | minValidatorStake | Minimum validator staking amount | 100000000000000000000000 wei (100,000 JU) |
 | 9 | maxValidators | Maximum number of active validators | 21 |
+| 10 | minDelegation | Minimum delegation amount | 10000000000000000000 wei (10 JU) |
+| 11 | minUndelegation | Minimum undelegation amount | 1000000000000000000 wei (1 JU) |
+| 12 | doubleSignSlashAmount | Double-sign slash amount | 50000000000000000000000 wei (50,000 JU) |
+| 13 | doubleSignRewardAmount | Double-sign reporter reward | 10000000000000000000000 wei (10,000 JU) |
+| 14 | burnAddress | Burn destination for slashed remainder | 0x000000000000000000000000000000000000dEaD |
+| 15 | doubleSignWindow | Double-sign evidence window | 86400 blocks (~24 hours) |
 
 ## 🔧 System Configuration Management
 
@@ -1015,9 +1029,15 @@ echo "3: decreaseRate (Reduction rate during punishment, %)"
 echo "4: withdrawProfitPeriod (Profit withdrawal interval, blocks)"
 echo "5: blockReward (Block reward amount, wei)"
 echo "6: unbondingPeriod (Unbonding period, blocks)"
-echo "7: validatorUnjailPeriod (Validator unjail period, seconds)"
+echo "7: validatorUnjailPeriod (Validator unjail period, blocks)"
 echo "8: minValidatorStake (Minimum validator staking amount, wei)"
 echo "9: maxValidators (Maximum number of active validators)"
+echo "10: minDelegation (Minimum delegation amount, wei)"
+echo "11: minUndelegation (Minimum undelegation amount, wei)"
+echo "12: doubleSignSlashAmount (Double-sign slash amount, wei)"
+echo "13: doubleSignRewardAmount (Double-sign reporter reward, wei)"
+echo "14: burnAddress (Burn destination, address as uint256)"
+echo "15: doubleSignWindow (Double-sign evidence window, blocks)"
 
 # Example: Modify proposal validity period to 48 hours
 PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"

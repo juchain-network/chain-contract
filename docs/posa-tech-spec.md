@@ -95,18 +95,26 @@
      - `cid = 5`: block reward (>0, wei)
      - `cid = 6`: unbondingPeriod (>0, blocks)
      - `cid = 7`: validatorUnjailPeriod (>0, blocks)
+     - `cid = 8`: minValidatorStake (>0, wei)
+     - `cid = 9`: maxValidators (>0, <= consensus max)
+     - `cid = 10`: minDelegation (>0, wei)
+     - `cid = 11`: minUndelegation (>0, wei)
+     - `cid = 12`: doubleSignSlashAmount (>0, wei; >= reward)
+     - `cid = 13`: doubleSignRewardAmount (>0, wei; <= slash)
+     - `cid = 14`: burnAddress (non-zero address, encoded as uint256)
+     - `cid = 15`: doubleSignWindow (>0, blocks)
 
 3) **Proposal state**
    - `pass[address]`: whether an address passed governance
-   - `proposalPassedTime[address]`: timestamp for 7-day registration window
-   - `isProposalValidForStaking(address)`: checks 7-day window (new registrations only)
-   - Important: 7-day window applies **only** to new registrations; existing validators are not constrained
+   - `proposalPassedHeight[address]`: block height for registration window (`proposalLastingPeriod`)
+   - `isProposalValidForStaking(address)`: checks proposalLastingPeriod window (new registrations only)
+   - Important: proposalLastingPeriod window applies **only** to new registrations; existing validators are not constrained
 
 #### Key Data
 
 ```solidity
 mapping(address => bool) public pass;
-mapping(address => uint256) public proposalPassedTime;
+mapping(address => uint256) public proposalPassedHeight;
 mapping(bytes32 => ProposalInfo) public proposals;
 mapping(bytes32 => ResultInfo) public results;
 ```
@@ -114,7 +122,7 @@ mapping(bytes32 => ResultInfo) public results;
 #### Relationships
 
 - Depends on **Validators** for active validator list / vote counting
-- Used by **Staking**: checks `pass` and `isProposalValidForStaking()` on registration (7-day window only for new)
+- Used by **Staking**: checks `pass` and `isProposalValidForStaking()` on registration (proposalLastingPeriod window; default ~7 days)
 - Called by **Validators**: `setUnpassed()` clears authorization when removed/exit
 
 ---
@@ -126,7 +134,7 @@ mapping(bytes32 => ResultInfo) public results;
 #### Main Features
 
 1) **Validator staking**
-   - `registerValidator(uint256 commissionRate)`: register (must have passed proposal; must register within 7 days)
+   - `registerValidator(uint256 commissionRate)`: register (must have passed proposal; must register within proposalLastingPeriod)
    - `addValidatorStake()`: increase self-stake
    - `withdrawValidatorStake(uint256 amount)`: partial withdraw (remaining ≥ MIN_VALIDATOR_STAKE)
    - `emergencyExit()`: exit all stake; if still in currentValidatorSet, validator is jailed first
@@ -239,6 +247,11 @@ mapping(address => Validator) validatorInfo;
    - `decreaseMissedBlocksCounter(uint256 epoch)` on epoch
    - `cleanPunishRecord(address val)` when re-staking
 
+3) **Double-sign slashing**
+   - `submitDoubleSignEvidence(bytes header1, bytes header2)` (anyone, non-epoch blocks)
+   - checks same height, different header hash, same signer, within `doubleSignWindow`
+   - on success: `jailValidator()` + `slashValidator()`; reporter rewarded, remainder burned
+
 #### Key Data
 
 ```solidity
@@ -271,15 +284,15 @@ struct PunishRecord {
    - count active votes via getActiveVoteCount()
    - when agree >= activeValidators/2 + 1:
        pass[dst] = true
-       proposalPassedTime[dst] = block.timestamp
+       proposalPassedHeight[dst] = block.number
    - only current active validators are counted
 
-3) Wait 7 days
+3) Register within proposal window (default ~7 days)
    - Proposal.isProposalValidForStaking(dst) for new registrations
 
 4) Staking.registerValidator(commissionRate) {value >= 100000 ether}
    - require proposal.pass(msg.sender)
-   - require isProposalValidForStaking(msg.sender) (within 7 days)
+   - require isProposalValidForStaking(msg.sender) (within proposalLastingPeriod)
    - create ValidatorStake
    - validators.tryAddValidatorToHighestSet(msg.sender)
 
@@ -312,6 +325,20 @@ struct PunishRecord {
 5) Next Epoch
    - Staking.getTopValidators() filters jailed
    - validator no longer in active set
+```
+
+Double-sign evidence (non-epoch blocks):
+
+```
+1) Anyone submits submitDoubleSignEvidence(header1, header2)
+   - same height, different header hash, same signer
+   - within doubleSignWindow, not already punished
+
+2) Punish validates evidence
+   - mark doubleSigned[height][signer] = true
+   - Staking.jailValidator(signer, validatorUnjailPeriod)
+   - Staking.slashValidator(signer, doubleSignSlashAmount,
+                            reporter, doubleSignRewardAmount, burnAddress)
 ```
 
 ### 4.3 Reward Distribution
@@ -447,7 +474,7 @@ Key mechanisms:
    - `selfStake >= MIN_VALIDATOR_STAKE` (100000 ether)
    - `!isJailed`
    - `proposal.pass(validator) == true`
-   - Note: does **not** check `isProposalValidForStaking()`; the 7-day window is only in `registerValidator()`
+   - Note: does **not** check `isProposalValidForStaking()`; proposalLastingPeriod window is only in `registerValidator()`
 2. Sort by `selfStake + totalDelegated`
 3. Return top `MAX_VALIDATORS` (21)
 
@@ -464,7 +491,7 @@ Key mechanisms:
 graph TD
     A[Create Proposal] --> B[Validator Voting]
     B --> C{Majority Vote Passed?}
-    C -->|Yes| D[Wait 7 Days]
+    C -->|Yes| D[Registration Window]
     C -->|No| E[Proposal Failed]
     D --> F[Stake & Register]
     F --> G[Wait for Next Epoch]
@@ -473,7 +500,7 @@ graph TD
     A --> A1[Proposal.createProposal<br/>dst=0xxx,details]
     B --> B1[Mulitple Validators Call<br/>Proposal.voteProposal<br/>id=0xxx]
     C --> C1[Check Active Validator Count<br/>agree >= activeValidators/2 + 1]
-    D --> D1[block.timestamp >=<br/>proposalPassedTime + 7 days]
+    D --> D1[block.number <=<br/>proposalPassedHeight + proposalLastingPeriod]
     F --> F1[Staking.registerValidator<br/>commissionRate<br/>#123;value >= 100000 ether#125;]
     G --> G1[block.number % 86400 == 0<br/>Consensus calls Staking.getTopValidators<br/>Consensus calls Validators.updateActiveValidatorSet]
     H --> H1[Appear in Validator Set<br/>Can seal blocks and receive rewards]
@@ -483,7 +510,7 @@ graph TD
 Stage 1: Create proposal
   Proposal.createProposal(dst, true, details)
     - ensure !pass[dst]
-    - id = keccak256(proposer, dst, flag, details, timestamp)
+    - id = keccak256(proposer, dst, flag, details, proposerNonce)
     - proposalType = 1, flag = true
 
 Stage 2: Validator voting
@@ -494,14 +521,14 @@ Stage 2: Validator voting
     - check threshold on active votes:
         agree >= getActiveValidatorCount()/2 + 1
         -> pass[dst] = true
-        -> proposalPassedTime[dst] = block.timestamp
+        -> proposalPassedHeight[dst] = block.number
         -> emit LogPassProposal
     - only votes from currently active validators count
 
-Stage 3: Wait 7 days
-  block.timestamp >= proposalPassedTime[dst] + 7 days
+Stage 3: Register within proposal window (default ~7 days)
+  block.number <= proposalPassedHeight[dst] + proposalLastingPeriod
   Proposal.isProposalValidForStaking(dst) == true
-  (window applies to new registrations only)
+  (window applies to new registrations only; default ~7 days)
 
 Stage 4: Stake & register
   Staking.registerValidator(commissionRate) {value >= 100000 ether}
@@ -509,7 +536,7 @@ Stage 4: Stake & register
     - commissionRate <= COMMISSION_RATE_BASE
     - selfStake == 0 (not registered)
     - proposal.pass(msg.sender) == true
-    - isProposalValidForStaking(msg.sender) == true (within 7 days)
+    - isProposalValidForStaking(msg.sender) == true (within proposalLastingPeriod)
     - !isJailed or jail period ended
     - create ValidatorStake; add to allValidators; update totalStaked
     - validators.tryAddValidatorToHighestSet(msg.sender)
@@ -595,7 +622,7 @@ Notes:
 graph TD
     A[Validator Stake Registration] --> B[Pre-checks]
     B --> B1[proposal.pass#40;msg.sender#41; == true]
-    B --> B2[isProposalValidForStaking == true<br/>within 7 days for new registrations]
+    B --> B2[isProposalValidForStaking == true<br/>within proposalLastingPeriod (default ~7 days)]
     B --> B3[selfStake == 0<br/>not registered]
     B --> B4[#33;isJailed or jailUntilBlock passed]
     B1 --> C
@@ -628,7 +655,7 @@ graph TD
 ```
 Pre-checks:
   proposal.pass(msg.sender) == true
-  isProposalValidForStaking(msg.sender) == true (within 7 days; new registrations only)
+  isProposalValidForStaking(msg.sender) == true (within proposalLastingPeriod; new registrations only)
   selfStake == 0 (not registered)
   !isJailed or jailUntilBlock passed
 
@@ -979,7 +1006,7 @@ graph TD
    - isJailed=false, jailUntilBlock=0
 5) Next epoch: consensus sorts by stake; validator re-enters currentValidatorSet if stake/pass ok
 
-If self-stake was withdrawn (< MIN_VALIDATOR_STAKE), must re-register after proposal pass (within 7-day window).
+If self-stake was withdrawn (< MIN_VALIDATOR_STAKE), must re-register after proposal pass (within proposalLastingPeriod window).
 ```
 
 ### 6.10 Epoch Update End-to-End
@@ -1059,8 +1086,8 @@ Validators.editValidator(feeAddr, moniker, identity, website, email, details)
 
 ### 7.1 Proposal Mechanics
 
-**7-day registration window**
-- After pass, validator must register stake within 7 days or lose eligibility
+**proposalLastingPeriod registration window (default ~7 days)**
+- After pass, validator must register stake within proposalLastingPeriod or lose eligibility
 - Checked only in `registerValidator()`
 - Applies only to new registrations; existing validators unaffected
 - Purpose: prevent malicious quick flips; enforce timely onboarding
@@ -1287,7 +1314,8 @@ sequenceDiagram
 | Name                  | Value          | Note                                      |
 |-----------------------|----------------|-------------------------------------------|
 | `MIN_VALIDATOR_STAKE` | 100000 ether    | minimum validator self-stake              |
-| `MIN_DELEGATION`      | 1 ether        | minimum delegation                        |
+| `MIN_DELEGATION`      | 10 ether       | minimum delegation                        |
+| `MIN_UNDELEGATION`    | 1 ether        | minimum undelegation                      |
 | `MAX_VALIDATORS`      | 21             | max validators                            |
 | `MIN_VALIDATORS`      | 3              | minimum validators (safety guideline)     |
 | `COMMISSION_RATE_BASE`| 10000          | 10000 = 100%                              |
@@ -1299,15 +1327,19 @@ sequenceDiagram
 | `Epoch`                  | 86400 blocks       | ~24h                                      |
 | `validatorUnjailPeriod`  | 86400 blocks (def) | ~24h, configurable via cid = 7            |
 | `unbondingPeriod`        | 604800 blocks (def)| ~7d, configurable via cid = 6             |
-| `PROPOSAL_STAKING_DELAY` | 7 days             | wait after pass for new registrations     |
+| `proposalLastingPeriod`  | 604800 blocks (def)| registration window for new validators    |
 
 ### 9.3 Punishment
 
-| Name                 | Value   | Note                                           |
-|----------------------|---------|------------------------------------------------|
-| `punishThreshold`    | 24 blk  | clear income                                   |
-| `removeThreshold`    | 48 blk  | jail + remove                                  |
-| Auto-restore cutoff  | 3 times | If <3 violations auto restore; ≥4 need proposal|
+| Name                    | Value       | Note                                                      |
+|-------------------------|-------------|-----------------------------------------------------------|
+| `punishThreshold`       | 24 blk      | clear income                                              |
+| `removeThreshold`       | 48 blk      | jail + remove                                             |
+| `decreaseRate`          | 24          | reduce missedBlocksCounter by removeThreshold/decreaseRate |
+| `doubleSignSlashAmount` | 50000 ether | slash amount on double-sign evidence                      |
+| `doubleSignRewardAmount`| 10000 ether | reporter reward (<= slash)                                |
+| `doubleSignWindow`      | 86400 blk   | evidence window                                           |
+| `burnAddress`           | 0x...dEaD   | burn destination for slashed remainder                    |
 
 ### 9.4 Addresses
 
@@ -1368,7 +1400,7 @@ Applies to:
 
 ### 10.4 Proposal Security
 
-- 7-day registration window enforced only in registerValidator (new only)
+- proposalLastingPeriod window enforced only in registerValidator (new only)
 - Thresholds based on current active validators; votes from removed validators don’t count
 - Ensures majority of *current* active validators approve
 
@@ -1395,10 +1427,10 @@ Applies to:
 **Q: How long from proposal to producing blocks?**  
 A:  
 1. Proposal & voting: depends on validator turnout (hours–days)  
-2. 7-day registration window: must stake within 7 days of pass  
+2. proposalLastingPeriod window: must stake within proposalLastingPeriod of pass (default ~7 days)  
 3. Registration: effective immediately on stake  
 4. Epoch update: up to next epoch (~24h)  
-**Minimum: 7 days + voting time (must register within 7 days).**
+**Minimum: proposalLastingPeriod + voting time (default ~7 days).**
 
 **Q: How to recover after jail?**  
 A:  
@@ -1411,7 +1443,7 @@ A:
 ### 11.2 Staking & Delegation
 
 **Q: Can a validator withdraw part of the stake?**  
-A: Yes, if remaining selfStake ≥ MIN_VALIDATOR_STAKE (10,000 ether).  
+A: Yes, if remaining selfStake ≥ MIN_VALIDATOR_STAKE (100,000 ether).  
 Otherwise transaction reverts; use `emergencyExit()` to fully exit.  
 `emergencyExit()` also checks remaining active validators ≥ MIN_VALIDATORS (3).
 
@@ -1451,15 +1483,15 @@ A:
 ### 12.1 Principles
 
 1. Governance-gated admission (proposal required)  
-2. Minimum self-stake 10,000 ether  
-3. 7-day window for new registrations after pass (existing validators exempt)  
+2. Minimum self-stake 100,000 ether  
+3. proposalLastingPeriod window for new registrations after pass (default ~7 days; existing validators exempt)  
 4. Validator set updates only on epoch blocks  
 5. Jail: rewards filtered this epoch; removal next epoch  
 6. Unified state ownership: jail in Staking, authorization in Proposal
 
 ### 12.2 Key Flows
 
-1. Join: proposal → vote → 7-day wait → stake → epoch update  
+1. Join: proposal → vote → proposal window (default ~7 days) → stake → epoch update  
 2. Punish: miss → Punish counter → threshold → jail+remove+clear pass → re-propose + wait jail + unjail  
 3. Exit: `resignValidator()` (technical jail + clear pass) → leave active set → `emergencyExit()` full withdraw  
 4. Recover: re-propose, wait jail end, call `unjailValidator()`; re-register if stake < minimum  
@@ -1498,7 +1530,7 @@ A:
 
 **Changes (v1.2):**
 - getTopValidators filters: removed isProposalValidForStaking; only pass + !isJailed
-- 7-day window enforced only in registerValidator
+- proposalLastingPeriod window enforced only in registerValidator
 - emergencyExit flow and totalStaked fixes
 - getActiveValidators distinction from getTopValidators
 
