@@ -323,7 +323,7 @@ contract Punish is Params, ReentrancyGuard {
         return punishRecords[val].missedBlocksCounter;
     }
 
-    struct RLPItem {
+    struct RlpItem {
         uint256 offset;
         uint256 len;
     }
@@ -332,7 +332,7 @@ contract Punish is Params, ReentrancyGuard {
         bytes memory headerMem = header;
         headerHash = keccak256(headerMem);
 
-        (RLPItem[] memory items, uint256 listOffset, uint256 listLen) = _decodeListItems(headerMem);
+        (RlpItem[] memory items, uint256 listOffset, uint256 listLen) = _decodeListItems(headerMem);
         require(items.length >= 15 && items.length <= 20, "Invalid header length");
         require(listOffset + listLen == headerMem.length, "Invalid header length");
 
@@ -345,7 +345,7 @@ contract Punish is Params, ReentrancyGuard {
         require(signer == coinbase, "Signer != coinbase");
     }
 
-    function _extractHeaderEvidence(bytes memory headerMem, RLPItem[] memory items)
+    function _extractHeaderEvidence(bytes memory headerMem, RlpItem[] memory items)
         private
         pure
         returns (uint256 number, address coinbase, bytes memory sig, bytes memory encodedExtra)
@@ -359,7 +359,7 @@ contract Punish is Params, ReentrancyGuard {
         encodedExtra = _encodeBytes(extraTrimmed);
     }
 
-    function _computeSealHash(bytes memory headerMem, RLPItem[] memory items, bytes memory encodedExtra)
+    function _computeSealHash(bytes memory headerMem, RlpItem[] memory items, bytes memory encodedExtra)
         private
         pure
         returns (bytes32)
@@ -385,7 +385,11 @@ contract Punish is Params, ReentrancyGuard {
             }
         }
 
-        return keccak256(out);
+        bytes32 hash;
+        assembly {
+            hash := keccak256(add(out, 32), mload(out))
+        }
+        return hash;
     }
 
     function _recoverSigner(bytes32 sealHash, bytes memory sig) private pure returns (address) {
@@ -411,7 +415,7 @@ contract Punish is Params, ReentrancyGuard {
     function _decodeListItems(bytes memory data)
         private
         pure
-        returns (RLPItem[] memory items, uint256 listOffset, uint256 listLen)
+        returns (RlpItem[] memory items, uint256 listOffset, uint256 listLen)
     {
         (uint256 itemLen, uint256 payloadOffset, uint256 payloadLen, bool isList) = _decodeItem(data, 0);
         require(isList, "Not a list");
@@ -429,20 +433,20 @@ contract Punish is Params, ReentrancyGuard {
         }
         require(offset == end, "Invalid list");
 
-        items = new RLPItem[](count);
+        items = new RlpItem[](count);
         offset = listOffset;
         for (uint256 i = 0; i < count; i++) {
             (uint256 len,, ,) = _decodeItem(data, offset);
-            items[i] = RLPItem(offset, len);
+            items[i] = RlpItem({offset: offset, len: len});
             offset += len;
         }
     }
 
-    function _payloadOffsetLen(bytes memory data, RLPItem memory item) private pure returns (uint256 offset, uint256 len) {
+    function _payloadOffsetLen(bytes memory data, RlpItem memory item) private pure returns (uint256 offset, uint256 len) {
         (, offset, len,) = _decodeItem(data, item.offset);
     }
 
-    function _decodeUint(bytes memory data, RLPItem memory item) private pure returns (uint256 value) {
+    function _decodeUint(bytes memory data, RlpItem memory item) private pure returns (uint256 value) {
         (uint256 offset, uint256 len) = _payloadOffsetLen(data, item);
         require(len <= 32, "RLP uint too large");
         if (len == 0) {
@@ -453,13 +457,14 @@ contract Punish is Params, ReentrancyGuard {
         }
     }
 
-    function _decodeAddress(bytes memory data, RLPItem memory item) private pure returns (address) {
+    function _decodeAddress(bytes memory data, RlpItem memory item) private pure returns (address) {
         (uint256 offset, uint256 len) = _payloadOffsetLen(data, item);
         require(len == 20, "Invalid address length");
         uint256 value = 0;
         for (uint256 i = 0; i < len; i++) {
             value = (value << 8) | uint8(data[offset + i]);
         }
+        // forge-lint: disable-next-line(unsafe-typecast)
         return address(uint160(value));
     }
 
@@ -516,6 +521,7 @@ contract Punish is Params, ReentrancyGuard {
         }
         if (len <= 55) {
             out = new bytes(1 + len);
+            // forge-lint: disable-next-line(unsafe-typecast)
             out[0] = bytes1(uint8(0x80 + len));
             _copyBytesSlice(out, 1, data, 0, len);
             return out;
@@ -531,6 +537,7 @@ contract Punish is Params, ReentrancyGuard {
     function _encodeListPrefix(uint256 len) private pure returns (bytes memory out) {
         if (len <= 55) {
             out = new bytes(1);
+            // forge-lint: disable-next-line(unsafe-typecast)
             out[0] = bytes1(uint8(0xc0 + len));
             return out;
         }
@@ -552,6 +559,7 @@ contract Punish is Params, ReentrancyGuard {
         }
         out = new bytes(len);
         for (uint256 i = len; i > 0; i--) {
+            // forge-lint: disable-next-line(unsafe-typecast)
             out[i - 1] = bytes1(uint8(value));
             value >>= 8;
         }

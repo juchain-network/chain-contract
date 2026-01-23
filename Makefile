@@ -4,6 +4,8 @@
 # Variables
 ABIGEN = ../chain/build/bin/abigen
 GO_CLIENT_DIR = tools/contracts
+STORAGE_DIR = storage
+STORAGE_LAYOUT_TARGETS = contracts/Proposal.sol:Proposal contracts/Validators.sol:Validators contracts/Punish.sol:Punish contracts/Staking.sol:Staking
 
 # Colors for output
 GREEN = \033[0;32m
@@ -12,7 +14,7 @@ RED = \033[0;31m
 NC = \033[0m # No Color
 
 # Define all phony targets
-.PHONY: help clean build test fmt security coverage coverage-html gas-test all update version addresses generate-contracts generate-go-client test-by-forge test-by-shell test-all anvil-start anvil-stop anvil-status anvil-clean get-system-params load-env
+.PHONY: help clean build test fmt security coverage coverage-html gas-test all update version addresses generate-contracts generate-go-client storage-layout test-by-forge test-by-shell test-all anvil-start anvil-stop anvil-status anvil-clean get-system-params load-env
 
 help:
 	@echo "$(YELLOW)Available targets:$(NC)"
@@ -40,6 +42,7 @@ help:
 	@echo "  $(GREEN)addresses$(NC)           - Show system contract addresses"
 	@echo "  $(GREEN)generate-contracts$(NC)   - Generate production contracts from templates"
 	@echo "  $(GREEN)generate-go-client$(NC)   - Generate Go client code using abigen"
+	@echo "  $(GREEN)storage-layout$(NC)        - Export storage layout JSON to ./storage"
 	@echo "  $(GREEN)get-system-params$(NC)    - Get system configuration parameters from deployed contracts"
 	@echo ""
 	@echo "$(YELLOW)Anvil Test Environment:$(NC)"
@@ -153,6 +156,17 @@ version:
 generate-go-client: clean generate-contracts build
 	@echo "$(YELLOW)Generating Go client code...$(NC)"
 	@node generate-go-client.js
+
+# Export storage layout for system contracts
+storage-layout: build
+	@echo "$(YELLOW)Exporting storage layouts...$(NC)"
+	@mkdir -p $(STORAGE_DIR)
+	@for target in $(STORAGE_LAYOUT_TARGETS); do \
+		name=$${target##*:}; \
+		echo "  - $$name"; \
+		forge inspect $$target storage-layout > $(STORAGE_DIR)/$$name.storage.json; \
+	done
+	@echo "$(GREEN)✅ Storage layouts exported to ./$(STORAGE_DIR)$(NC)"
 
 # =========================
 # Anvil Test Environment

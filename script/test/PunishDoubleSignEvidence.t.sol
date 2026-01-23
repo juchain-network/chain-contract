@@ -273,6 +273,7 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         }
         if (len <= 55) {
             out = new bytes(1 + len);
+            // forge-lint: disable-next-line(unsafe-typecast)
             out[0] = bytes1(uint8(0x80 + len));
             _copyBytesSlice(out, 1, data, 0, len);
             return out;
@@ -288,6 +289,7 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
     function _encodeListPrefix(uint256 len) internal pure returns (bytes memory out) {
         if (len <= 55) {
             out = new bytes(1);
+            // forge-lint: disable-next-line(unsafe-typecast)
             out[0] = bytes1(uint8(0xc0 + len));
             return out;
         }
@@ -309,6 +311,7 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         }
         out = new bytes(len);
         for (uint256 i = len; i > 0; i--) {
+            // forge-lint: disable-next-line(unsafe-typecast)
             out[i - 1] = bytes1(uint8(value));
             value >>= 8;
         }

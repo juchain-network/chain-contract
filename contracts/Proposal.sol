@@ -411,6 +411,7 @@ contract Proposal is Params, ReentrancyGuard {
             require(value <= doubleSignSlashAmount, "doubleSignRewardAmount must be <= doubleSignSlashAmount");
         } else if (cid == 14) {
             require(value <= type(uint160).max, "burnAddress invalid");
+            // forge-lint: disable-next-line(unsafe-typecast)
             require(address(uint160(value)) != address(0), "burnAddress must be non-zero");
         } else if (cid == 15) {
             require(value > 0, "doubleSignWindow must be positive");
@@ -464,6 +465,7 @@ contract Proposal is Params, ReentrancyGuard {
         } else if (cid == 13) {
             doubleSignRewardAmount = value;
         } else if (cid == 14) {
+            // forge-lint: disable-next-line(unsafe-typecast)
             burnAddress = address(uint160(value));
         } else if (cid == 15) {
             doubleSignWindow = value;
