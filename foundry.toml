@@ -16,8 +16,9 @@ gas_price = 1000000000  # 1 gwei
 gas_reports = ["*"]
 
 remappings = [
-  "@openzeppelin/=node_modules/@openzeppelin/",
 ]
+
+auto_detect_remappings = false
 
 # RPC
 [rpc_endpoints]
