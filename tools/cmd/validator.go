@@ -146,13 +146,15 @@ func queryOneInfo(addr string, validatorInstance *contracts.Validators, stakingI
 }
 
 // formatValidatorStatus converts numeric status to a concise, friendly label
-// 1 -> "Active ✅"; 2 -> "Inactive ❌"; others -> "Unknown"
+// 0 -> "Not Exist ❌"; 1 -> "Active ✅"; 2 -> "Jailed ⚠️"; others -> "Unknown"
 func formatValidatorStatus(status uint64) string {
 	switch status {
+	case 0:
+		return "Not Exist ❌"
 	case 1:
 		return "Active ✅"
 	case 2:
-		return "Inactive ❌"
+		return "Jailed ⚠️"
 	default:
 		return "Unknown"
 	}

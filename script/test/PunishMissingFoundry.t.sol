@@ -405,4 +405,136 @@ contract PunishMissingFoundryTest is BaseSetup {
         // Now v1 has 2 missed blocks, should be reset to 0
         require(punish.getPunishRecord(v1) == 0, "v1 should have 0 missed blocks after second decrease");
     }
+
+    function testExecutePendingLimitZero() public {
+        Punish(PUNISH).executePending(0);
+    }
+
+    function testPendingRemoveExecutesOnNextNonEpochPunish() public {
+        Punish punish = Punish(PUNISH);
+        uint256 removeThreshold = Proposal(PROPOSAL).removeThreshold();
+        address miner = VALIDATORS;
+        vm.coinbase(miner);
+
+        for (uint256 i = 0; i < removeThreshold - 1; i++) {
+            vm.roll(block.number + 1);
+            vm.prank(miner);
+            punish.punish(v1);
+        }
+
+        uint256 epoch = punish.epoch();
+        uint256 nextEpoch = ((block.number / epoch) + 1) * epoch;
+        vm.roll(nextEpoch);
+        vm.prank(miner);
+        punish.punish(v1);
+
+        vm.roll(nextEpoch + 1);
+        vm.prank(miner);
+        punish.punish(v1);
+
+        require(isJailed(v1), "v1 should be jailed after pending remove");
+        require(punish.getPunishRecord(v1) == 0, "v1 punish record should be reset");
+    }
+
+    function testExecutePendingProcessesIncoming() public {
+        Punish punish = Punish(PUNISH);
+        uint256 punishThreshold = Proposal(PROPOSAL).punishThreshold();
+        address miner = VALIDATORS;
+        vm.coinbase(miner);
+
+        for (uint256 i = 0; i < punishThreshold - 1; i++) {
+            vm.roll(block.number + 1);
+            vm.prank(miner);
+            punish.punish(v2);
+        }
+
+        uint256 epoch = punish.epoch();
+        uint256 nextEpoch = ((block.number / epoch) + 1) * epoch;
+        vm.roll(nextEpoch);
+        vm.prank(miner);
+        punish.punish(v2);
+
+        vm.roll(nextEpoch + 1);
+        punish.executePending(1);
+
+        vm.roll(nextEpoch + 2);
+        vm.prank(miner);
+        punish.punish(v2);
+        require(punish.getPunishRecord(v2) == punishThreshold + 1, "v2 should continue to accumulate after pending");
+    }
+
+    function testPendingRemoveIncomingExecutesOnNextNonEpochPunish() public {
+        Punish punish = Punish(PUNISH);
+        uint256 punishThreshold = Proposal(PROPOSAL).punishThreshold();
+        address miner = VALIDATORS;
+        vm.coinbase(miner);
+
+        for (uint256 i = 0; i < punishThreshold - 1; i++) {
+            vm.roll(block.number + 1);
+            vm.prank(miner);
+            punish.punish(v3);
+        }
+
+        uint256 epoch = punish.epoch();
+        uint256 nextEpoch = ((block.number / epoch) + 1) * epoch;
+        vm.roll(nextEpoch);
+        vm.prank(miner);
+        punish.punish(v3);
+
+        vm.roll(nextEpoch + 1);
+        vm.prank(miner);
+        punish.punish(v3);
+
+        require(punish.getPunishRecord(v3) == punishThreshold, "v3 should keep record after pending incoming");
+    }
+
+    function testExecutePendingProcessesRemove() public {
+        Punish punish = Punish(PUNISH);
+        uint256 removeThreshold = Proposal(PROPOSAL).removeThreshold();
+        address miner = VALIDATORS;
+        vm.coinbase(miner);
+
+        for (uint256 i = 0; i < removeThreshold - 1; i++) {
+            vm.roll(block.number + 1);
+            vm.prank(miner);
+            punish.punish(v2);
+        }
+
+        uint256 epoch = punish.epoch();
+        uint256 nextEpoch = ((block.number / epoch) + 1) * epoch;
+        vm.roll(nextEpoch);
+        vm.prank(miner);
+        punish.punish(v2);
+
+        vm.roll(nextEpoch + 1);
+        punish.executePending(1);
+
+        require(isJailed(v2), "v2 should be jailed after pending remove");
+        require(punish.getPunishRecord(v2) == 0, "v2 punish record should be reset after pending remove");
+    }
+
+    function testCleanPunishRecordSwap() public {
+        Punish punish = Punish(PUNISH);
+        address miner = VALIDATORS;
+        vm.coinbase(miner);
+
+        vm.roll(block.number + 1);
+        vm.prank(miner);
+        punish.punish(v1);
+        vm.roll(block.number + 1);
+        vm.prank(miner);
+        punish.punish(v2);
+
+        require(punish.getPunishValidatorsLen() == 2, "should have two punish validators");
+
+        vm.prank(VALIDATORS);
+        punish.cleanPunishRecord(v1);
+
+        require(punish.getPunishValidatorsLen() == 1, "should have one punish validator after clean");
+        require(punish.getPunishRecord(v1) == 0, "v1 punish record should be cleared");
+        require(punish.getPunishRecord(v2) == 1, "v2 punish record should remain");
+
+        vm.prank(VALIDATORS);
+        punish.cleanPunishRecord(v3);
+    }
 }

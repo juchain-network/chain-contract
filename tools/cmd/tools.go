@@ -13,12 +13,13 @@ import (
 	"crypto/ecdsa"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"golang.org/x/crypto/sha3"
 	"juchain.org/chain/tools/contracts"
 )
 
@@ -225,59 +226,69 @@ func waitEthTxFinished(client *ethclient.Client, txhash common.Hash) (error, *bi
 func BuildProposalId(from, dest string, flag bool, details string, blockNum uint64, client *ethclient.Client) (string, error) {
 	sender := common.HexToAddress(from) // Proposer
 	dst := common.HexToAddress(dest)    // Candidate
-	flagValue := big.NewInt(0)
-	if flag {
-		flagValue.SetInt64(1)
-	}
-	block, err := client.BlockByNumber(context.Background(), big.NewInt(int64(blockNum)))
+	instance, err := contracts.NewProposal(common.HexToAddress(ProposalContractAddr), client)
 	if err != nil {
 		return "", err
 	}
+	if blockNum == 0 {
+		return "", fmt.Errorf("block number must be positive")
+	}
 
-	// // Calculate proposal ID (equivalent to Solidity keccak256(abi.encodePacked(...)))
-	// id := crypto.Keccak256(
-	// 	sender.Bytes(),
-	// 	dst.Bytes(),
-	// 	common.LeftPadBytes(flagValue.Bytes(), 32), // Pad flag to 32 bytes
-	// 	[]byte(nil),
-	// 	common.LeftPadBytes(big.NewInt(int64(block.Header().Time)).Bytes(), 32), // timestamp (uint256)
-	// )
-	// return common.BytesToHash(id).Hex(), nil
+	// proposerNonces is incremented after proposal creation. We use (nonceAtBlock - 1).
+	nonceAtBlock, err := instance.ProposerNonces(&bind.CallOpts{BlockNumber: big.NewInt(int64(blockNum))}, sender)
+	if err != nil {
+		return "", err
+	}
+	if nonceAtBlock.Sign() == 0 {
+		return "", fmt.Errorf("no proposer nonce found at block %d", blockNum)
+	}
+	nonce := new(big.Int).Sub(nonceAtBlock, big.NewInt(1))
+	if nonce.Sign() < 0 {
+		return "", fmt.Errorf("invalid proposer nonce at block %d", blockNum)
+	}
 
-	return buildId(sender, dst, flag, "", int64(block.Header().Time)), nil
+	return buildIdWithNonce(sender, dst, flag, details, nonce)
 
 }
 
-func buildId(
+func buildIdWithNonce(
 	sender common.Address,
 	dst common.Address,
 	flag bool,
 	details string,
-	timestamp int64,
-) string {
-	// Pack arguments in the same order as Solidity
-	data := append(
-		sender.Bytes(),
-		dst.Bytes()...,
-	)
-	if flag {
-		data = append(data, byte(1))
-	} else {
-		data = append(data, byte(0))
+	nonce *big.Int,
+) (string, error) {
+	addressType, err := abi.NewType("address", "", nil)
+	if err != nil {
+		return "", err
 	}
-	data = append(data, []byte(details)...)
-	data = append(data, big.NewInt(timestamp).Bytes()...)
+	boolType, err := abi.NewType("bool", "", nil)
+	if err != nil {
+		return "", err
+	}
+	stringType, err := abi.NewType("string", "", nil)
+	if err != nil {
+		return "", err
+	}
+	uint256Type, err := abi.NewType("uint256", "", nil)
+	if err != nil {
+		return "", err
+	}
 
-	// Compute Keccak-256 hash (Ethereum's custom SHA-3 variant)
-	hash := sha3.NewLegacyKeccak256()
-	hash.Write(data)
-	id := hash.Sum(nil)
+	args := abi.Arguments{
+		{Type: addressType},
+		{Type: addressType},
+		{Type: boolType},
+		{Type: stringType},
+		{Type: uint256Type},
+	}
+	encoded, err := args.Pack(sender, dst, flag, details, nonce)
+	if err != nil {
+		return "", err
+	}
 
-	return hex.EncodeToString(id)
-
-	// // Compute Keccak-256 hash (not SHA-3!)
-	// hash := crypto.Keccak256(data)
-	// return hex.EncodeToString(hash) // Returns bytes32 as hex string
+	hash := crypto.Keccak256(encoded)
+	return hex.EncodeToString(hash), nil
 }
 
 // Query contracts proposal ID

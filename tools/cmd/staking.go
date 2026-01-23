@@ -575,20 +575,15 @@ func queryDelegationInfo(cmd *cobra.Command, args []string) {
 	// Convert wei to JU
 	amount := delegationInfo.Amount
 	pendingRewards := delegationInfo.PendingRewards
-	unbondingAmount := delegationInfo.UnbondingAmount
-	unbondingBlock := delegationInfo.UnbondingBlock
 
 	amountJU := new(big.Int).Div(amount, big.NewInt(1e18))
 	pendingRewardsJU := new(big.Int).Div(pendingRewards, big.NewInt(1e18))
-	unbondingAmountJU := new(big.Int).Div(unbondingAmount, big.NewInt(1e18))
 
 	PrintSuccess("Delegation Information")
 	fmt.Printf("Delegator: %s\n", delegatorStr)
 	fmt.Printf("Validator: %s\n", validatorStr)
 	fmt.Printf("Delegated Amount: %s JU\n", amountJU.String())
 	fmt.Printf("Pending Rewards: %s JU\n", pendingRewardsJU.String())
-	fmt.Printf("Unbonding Amount: %s JU\n", unbondingAmountJU.String())
-	fmt.Printf("Unbonding Block: %s\n", unbondingBlock.String())
 }
 
 // Query available unbonded amounts implementation

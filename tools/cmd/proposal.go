@@ -103,9 +103,9 @@ func CreateConfigProposalCmd() *cobra.Command {
 func createConfigProposalFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("proposer", "p", "", "Proposer address (must be a valid validator)")
 	_ = cmd.MarkFlagRequired("proposer")
-	cmd.Flags().Int64P("cid", "i", 0, "Config ID (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod, 5 blockReward, 6 unbondingPeriod, 7 validatorUnjailPeriod, 8 minValidatorStake, 9 maxValidators)")
+	cmd.Flags().Int64P("cid", "i", 0, "Config ID (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod, 5 blockReward, 6 unbondingPeriod, 7 validatorUnjailPeriod, 8 minValidatorStake, 9 maxValidators, 10 minDelegation, 11 minUndelegation, 12 doubleSignSlashAmount, 13 doubleSignRewardAmount, 14 burnAddress, 15 doubleSignWindow)")
 	_ = cmd.MarkFlagRequired("cid")
-	cmd.Flags().Int64P("value", "v", 0, "New configuration value")
+	cmd.Flags().StringP("value", "v", "", "New configuration value (decimal wei, 0x hex/address, or with unit: wei/gwei/ether/ju)")
 	_ = cmd.MarkFlagRequired("value")
 }
 
@@ -113,7 +113,7 @@ func createConfigProposalTx(cmd *cobra.Command, _ []string) {
 	rpc := GetRPCEndpoint(cmd) // Use config-aware function
 	proposer, _ := cmd.Flags().GetString("proposer")
 	cid, _ := cmd.Flags().GetInt64("cid")
-	cvalue, _ := cmd.Flags().GetInt64("value")
+	rawValue, _ := cmd.Flags().GetString("value")
 
 	// Validate input parameters
 	if err := ValidateRPCURL(rpc); err != nil {
@@ -131,13 +131,18 @@ func createConfigProposalTx(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	if cvalue < 0 {
-		PrintValidationError(fmt.Errorf("config value must be non-negative: %d", cvalue))
+	cvalue, err := ParseConfigValue(rawValue, cid)
+	if err != nil {
+		PrintValidationError(err)
+		return
+	}
+	if cvalue.Sign() <= 0 {
+		PrintValidationError(fmt.Errorf("config value must be positive: %s", rawValue))
 		return
 	}
 
-	PrintInfo(fmt.Sprintf("Creating config update proposal for %s (ID: %d) with value: %d",
-		GetConfigIDName(cid), cid, cvalue))
+	PrintInfo(fmt.Sprintf("Creating config update proposal for %s (ID: %d) with value: %s",
+		GetConfigIDName(cid), cid, cvalue.String()))
 
 	if err := innerCreateConfigProposal(proposer, cid, cvalue, rpc); err != nil {
 		PrintError("Failed to create config proposal", err)
@@ -145,13 +150,13 @@ func createConfigProposalTx(cmd *cobra.Command, _ []string) {
 	}
 }
 
-func innerCreateConfigProposal(proposer string, cid, cvalue int64, rpc string) error {
+func innerCreateConfigProposal(proposer string, cid int64, cvalue *big.Int, rpc string) error {
 	proposalAbi, err := abi.JSON(strings.NewReader(contracts.ProposalABI))
 	if err != nil {
 		return fmt.Errorf("failed to parse proposal ABI: %w", err)
 	}
 
-	abiData, err := proposalAbi.Pack("createUpdateConfigProposal", big.NewInt(cid), big.NewInt(cvalue))
+	abiData, err := proposalAbi.Pack("createUpdateConfigProposal", big.NewInt(cid), cvalue)
 	if err != nil {
 		return fmt.Errorf("failed to pack config proposal data: %w", err)
 	}
@@ -366,6 +371,18 @@ func getConfigIDName(cid int64) string {
 		return "Min Validator Stake"
 	case 9:
 		return "Max Validators"
+	case 10:
+		return "Min Delegation"
+	case 11:
+		return "Min Undelegation"
+	case 12:
+		return "Double-Sign Slash Amount"
+	case 13:
+		return "Double-Sign Reward Amount"
+	case 14:
+		return "Burn Address"
+	case 15:
+		return "Double-Sign Window"
 	default:
 		return "Unknown Config"
 	}

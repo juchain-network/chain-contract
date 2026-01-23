@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -138,13 +140,18 @@ func TestValidateConfigID(t *testing.T) {
 			wantErr:  false,
 		},
 		{
+			name:     "valid config ID 15",
+			configID: 15,
+			wantErr:  false,
+		},
+		{
 			name:     "invalid config ID negative",
 			configID: -1,
 			wantErr:  true,
 		},
 		{
 			name:     "invalid config ID too large",
-			configID: 10,
+			configID: 16,
 			wantErr:  true,
 		},
 	}
@@ -183,8 +190,13 @@ func TestGetConfigIDName(t *testing.T) {
 			expected: "withdrawProfitPeriod",
 		},
 		{
-			name:     "invalid config ID",
+			name:     "config ID 10",
 			configID: 10,
+			expected: "minDelegation",
+		},
+		{
+			name:     "invalid config ID",
+			configID: 16,
 			expected: "unknown",
 		},
 	}
@@ -193,6 +205,78 @@ func TestGetConfigIDName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := GetConfigIDName(tt.configID)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestParseConfigValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawValue string
+		cid      int64
+		expected *big.Int
+		wantErr  bool
+	}{
+		{
+			name:     "decimal wei",
+			rawValue: "12345",
+			cid:      0,
+			expected: big.NewInt(12345),
+			wantErr:  false,
+		},
+		{
+			name:     "hex value",
+			rawValue: "0x10",
+			cid:      1,
+			expected: big.NewInt(16),
+			wantErr:  false,
+		},
+		{
+			name:     "ether with decimals",
+			rawValue: "1.5 ether",
+			cid:      5,
+			expected: big.NewInt(1_500_000_000_000_000_000),
+			wantErr:  false,
+		},
+		{
+			name:     "ju unit",
+			rawValue: "2 ju",
+			cid:      8,
+			expected: big.NewInt(2_000_000_000_000_000_000),
+			wantErr:  false,
+		},
+		{
+			name:     "gwei unit",
+			rawValue: "3 gwei",
+			cid:      5,
+			expected: big.NewInt(3_000_000_000),
+			wantErr:  false,
+		},
+		{
+			name:     "burn address value",
+			rawValue: "0x000000000000000000000000000000000000dEaD",
+			cid:      14,
+			expected: new(big.Int).SetBytes(common.HexToAddress("0x000000000000000000000000000000000000dEaD").Bytes()),
+			wantErr:  false,
+		},
+		{
+			name:     "fractional wei without unit",
+			rawValue: "1.5",
+			cid:      0,
+			expected: nil,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParseConfigValue(tt.rawValue, tt.cid)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, 0, result.Cmp(tt.expected))
 		})
 	}
 }

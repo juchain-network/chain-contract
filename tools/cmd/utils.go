@@ -73,10 +73,116 @@ func ValidateOperation(operation string) error {
 
 // ValidateConfigID validates configuration ID
 func ValidateConfigID(cid int64) error {
-	if cid < 0 || cid > 9 {
-		return fmt.Errorf("invalid config ID: %d, must be 0-9", cid)
+	if cid < 0 || cid > 15 {
+		return fmt.Errorf("invalid config ID: %d, must be 0-15", cid)
 	}
 	return nil
+}
+
+var (
+	numberUnitRegexp = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z]+)?$`)
+	hexValueRegexp   = regexp.MustCompile(`^[0-9a-f]+$`)
+)
+
+// ParseConfigValue parses config value with support for decimal, hex/address, and unit suffixes.
+// Supported units: wei, gwei, ether, eth, ju (case-insensitive).
+func ParseConfigValue(raw string, cid int64) (*big.Int, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil, fmt.Errorf("config value cannot be empty")
+	}
+
+	lower := strings.ToLower(value)
+
+	if strings.HasPrefix(lower, "0x") {
+		return parseHexOrAddressValue(lower, cid)
+	}
+
+	// Address without 0x prefix is only valid for burnAddress (cid=14).
+	if cid == 14 && common.IsHexAddress(value) {
+		addr := common.HexToAddress(value)
+		return addressToValue(addr)
+	}
+
+	matches := numberUnitRegexp.FindStringSubmatch(lower)
+	if matches == nil {
+		return nil, fmt.Errorf("invalid config value format: %s", raw)
+	}
+
+	number := matches[1]
+	unit := matches[2]
+	if unit == "" {
+		if strings.Contains(number, ".") {
+			return nil, fmt.Errorf("fractional wei requires a unit suffix (e.g. 1.5 ether)")
+		}
+		intValue, ok := new(big.Int).SetString(number, 10)
+		if !ok {
+			return nil, fmt.Errorf("invalid decimal value: %s", raw)
+		}
+		return intValue, nil
+	}
+
+	multiplier, ok := unitMultiplier(unit)
+	if !ok {
+		return nil, fmt.Errorf("unsupported unit: %s", unit)
+	}
+
+	rat, ok := new(big.Rat).SetString(number)
+	if !ok {
+		return nil, fmt.Errorf("invalid decimal value: %s", raw)
+	}
+	rat.Mul(rat, new(big.Rat).SetInt(multiplier))
+	if !rat.IsInt() {
+		return nil, fmt.Errorf("value has too much precision for unit %s", unit)
+	}
+
+	intValue := new(big.Int).Quo(rat.Num(), rat.Denom())
+	return intValue, nil
+}
+
+func parseHexOrAddressValue(raw string, cid int64) (*big.Int, error) {
+	hexStr := strings.TrimPrefix(raw, "0x")
+	if hexStr == "" {
+		return nil, fmt.Errorf("invalid hex value: %s", raw)
+	}
+	if !hexValueRegexp.MatchString(hexStr) {
+		return nil, fmt.Errorf("invalid hex value: %s", raw)
+	}
+
+	if cid == 14 && len(hexStr) <= 40 {
+		addr := common.HexToAddress(raw)
+		return addressToValue(addr)
+	}
+
+	intValue, ok := new(big.Int).SetString(hexStr, 16)
+	if !ok {
+		return nil, fmt.Errorf("invalid hex value: %s", raw)
+	}
+	if cid == 14 && intValue.BitLen() > 160 {
+		return nil, fmt.Errorf("burnAddress exceeds uint160 range")
+	}
+	return intValue, nil
+}
+
+func addressToValue(addr common.Address) (*big.Int, error) {
+	value := new(big.Int).SetBytes(addr.Bytes())
+	if value.Sign() <= 0 {
+		return nil, fmt.Errorf("burnAddress must be non-zero")
+	}
+	return value, nil
+}
+
+func unitMultiplier(unit string) (*big.Int, bool) {
+	switch strings.ToLower(unit) {
+	case "wei":
+		return big.NewInt(1), true
+	case "gwei":
+		return big.NewInt(1_000_000_000), true
+	case "ether", "eth", "ju":
+		return big.NewInt(1_000_000_000_000_000_000), true
+	default:
+		return nil, false
+	}
 }
 
 // ValidateProposalID validates proposal ID format
@@ -117,6 +223,22 @@ func GetConfigIDName(cid int64) string {
 		return "unbondingPeriod"
 	case 7:
 		return "validatorUnjailPeriod"
+	case 8:
+		return "minValidatorStake"
+	case 9:
+		return "maxValidators"
+	case 10:
+		return "minDelegation"
+	case 11:
+		return "minUndelegation"
+	case 12:
+		return "doubleSignSlashAmount"
+	case 13:
+		return "doubleSignRewardAmount"
+	case 14:
+		return "burnAddress"
+	case 15:
+		return "doubleSignWindow"
 	default:
 		return "unknown"
 	}

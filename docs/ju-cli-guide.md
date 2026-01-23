@@ -110,8 +110,8 @@ Create a proposal to update system parameters:
 
 **Parameters:**
 - `-p, --proposer` - Proposer address (must be a valid validator)
-- `-i, --cid` - Configuration ID (0-9)
-- `-v, --value` - New configuration value
+- `-i, --cid` - Configuration ID (0-15)
+- `-v, --value` - New configuration value (decimal wei, 0x hex/address, or with unit: wei/gwei/ether/ju)
 - `-r, --rpc` - RPC endpoint URL
 
 **Output:** `createUpdateConfigProposal.json`

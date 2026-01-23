@@ -5,8 +5,10 @@ import {BaseSetup} from "./BaseSetup.t.sol";
 import {Proposal} from "../../contracts/Proposal.sol";
 import {Validators} from "../../contracts/Validators.sol";
 import {Staking} from "../../contracts/Staking.sol";
+import {StdStorage, stdStorage} from "forge-std/StdStorage.sol";
 
 contract ProposalFoundryTest is BaseSetup {
+    using stdStorage for StdStorage;
 
     address v1;
     address v2;
@@ -328,5 +330,22 @@ contract ProposalFoundryTest is BaseSetup {
         // 验证计数器状态被重置
         require(!p.pass(newValidator), "pass should be reset to false");
         require(p.proposalPassedHeight(newValidator) == 0, "proposalPassedHeight should be reset to 0");
+    }
+
+    function testVoteProposalInvalidTypeReverts() public {
+        Proposal p = Proposal(PROPOSAL);
+        address candidate = makeAddr("invalidTypeCandidate");
+
+        vm.prank(v1);
+        bytes32 id = p.createProposal(candidate, true, "");
+
+        stdstore.target(address(p)).sig("proposals(bytes32)").with_key(id).depth(3).checked_write(uint256(99));
+
+        vm.prank(v1);
+        p.voteProposal(id, true);
+
+        vm.prank(v2);
+        vm.expectRevert("Invalid proposal type");
+        p.voteProposal(id, true);
     }
 }

@@ -50,4 +50,5 @@ const (
 const (
 	ValidatorStatusActive   = 1
 	ValidatorStatusInactive = 0
+	ValidatorStatusJailed   = 2
 )

@@ -738,6 +738,61 @@ contract ProposalMissingFoundryTest is BaseSetup {
         p.createUpdateConfigProposal(11, invalidValue);
     }
 
+    function testUpdateConfigCID12() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 rewardAmount = p.doubleSignRewardAmount();
+        uint256 validValue = rewardAmount + 1;
+
+        vm.prank(v1);
+        bytes32 id = p.createUpdateConfigProposal(12, validValue);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+
+        require(p.doubleSignSlashAmount() == validValue, "doubleSignSlashAmount should be updated");
+    }
+
+    function testUpdateConfigCID13() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 slashAmount = p.doubleSignSlashAmount();
+        uint256 validValue = slashAmount - 1;
+
+        vm.prank(v1);
+        bytes32 id = p.createUpdateConfigProposal(13, validValue);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+
+        require(p.doubleSignRewardAmount() == validValue, "doubleSignRewardAmount should be updated");
+    }
+
+    function testUpdateConfigCID14() public {
+        Proposal p = Proposal(PROPOSAL);
+        address newBurn = makeAddr("burn");
+        uint256 validValue = uint256(uint160(newBurn));
+
+        vm.prank(v1);
+        bytes32 id = p.createUpdateConfigProposal(14, validValue);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+
+        require(p.burnAddress() == newBurn, "burnAddress should be updated");
+    }
+
+    function testUpdateConfigCID15() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 validValue = p.doubleSignWindow() + 1;
+
+        vm.prank(v1);
+        bytes32 id = p.createUpdateConfigProposal(15, validValue);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+
+        require(p.doubleSignWindow() == validValue, "doubleSignWindow should be updated");
+    }
+
     function testInvalidProposalType() public {
         // Test invalid proposal type in voteProposal
         // Note: This case is theoretically unreachable in normal operation

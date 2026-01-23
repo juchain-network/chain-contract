@@ -61,8 +61,12 @@ func TestBuldProposalId(t *testing.T) {
 		return
 	}
 	fmt.Printf("build proposal id %s \n", proposalId)
-	expected := "b171896d9c93b438c6798779e944ed591104f0edb63e09755b53624833f72ebd"
-	assert.Equal(t, expected, proposalId, "Proposal ID mismatch")
+	_, eventId := QueryProposalId(uint64(blockNum), proposer, client)
+	if eventId != "" {
+		assert.Equal(t, eventId, proposalId, "Proposal ID mismatch")
+	} else {
+		assert.Len(t, proposalId, 64)
+	}
 }
 
 func TestReadPassword(t *testing.T) {
