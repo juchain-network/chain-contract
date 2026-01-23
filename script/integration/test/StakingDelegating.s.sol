@@ -75,7 +75,7 @@ contract StakingDelegating is StakingUtils, DelegatorUtils {
         console.log("\n1. Validator 1 Stake Verification:");
         (uint256 validator1Stake, , , , , , , , , ) = staking.getValidatorInfo(validator1);
         console.log("   Validator 1 current stake:", validator1Stake / 1 ether, "ETH");
-        require(validator1Stake == 100000 ether, "Validator 1 stake should be 100000 ETH");
+        require(validator1Stake == 1 ether, "Validator 1 stake should be 1 ETH");
         
         // Verify Delegator 1's delegation to Validator 1
         console.log("\n2. Delegator 1 Delegation to Validator 1:");

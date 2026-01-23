@@ -201,9 +201,9 @@ contract ValidatorsAdditionalTest is BaseSetup {
         (address[] memory validators, uint256[] memory stakes) = Validators(VALIDATORS).getActiveValidatorsWithStakes();
         assertEq(validators.length, 3, "Should have 3 validators");
         assertEq(stakes.length, 3, "Should have 3 stakes");
-        // All genesis validators have 1000 stake by default (as set in BaseSetup)
-        assertEq(stakes[0], 100000000000000000000000, "First validator should have 100000000000000000000000 stake");
-        assertEq(stakes[1], 100000000000000000000000, "Second validator should have 100000000000000000000000 stake");
-        assertEq(stakes[2], 100000000000000000000000, "Third validator should have 100000000000000000000000 stake");
+        // All genesis validators have 1 ether stake by default (as set in BaseSetup)
+        assertEq(stakes[0], 1 ether, "First validator should have 1 ether stake");
+        assertEq(stakes[1], 1 ether, "Second validator should have 1 ether stake");
+        assertEq(stakes[2], 1 ether, "Third validator should have 1 ether stake");
     }
 }

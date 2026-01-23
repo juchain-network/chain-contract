@@ -110,11 +110,36 @@ Create a proposal to update system parameters:
 
 **Parameters:**
 - `-p, --proposer` - Proposer address (must be a valid validator)
-- `-i, --cid` - Configuration ID (0-15)
+- `-i, --cid` - Configuration ID (0-19)
 - `-v, --value` - New configuration value (decimal wei, 0x hex/address, or with unit: wei/gwei/ether/ju)
 - `-r, --rpc` - RPC endpoint URL
 
 **Output:** `createUpdateConfigProposal.json`
+
+**Configuration ID Reference (0-19):**
+
+| ID | Parameter | Notes |
+|----|-----------|-------|
+| 0 | proposalLastingPeriod | Proposal validity period (blocks) |
+| 1 | punishThreshold | Punishment threshold (blocks) |
+| 2 | removeThreshold | Removal threshold (blocks) |
+| 3 | decreaseRate | Punishment decrease rate (%) |
+| 4 | withdrawProfitPeriod | Profit withdrawal interval (blocks) |
+| 5 | blockReward | Block reward (wei) |
+| 6 | unbondingPeriod | Unbonding period (blocks) |
+| 7 | validatorUnjailPeriod | Validator unjail period (blocks) |
+| 8 | minValidatorStake | Minimum validator stake (wei) |
+| 9 | maxValidators | Maximum active validators |
+| 10 | minDelegation | Minimum delegation (wei) |
+| 11 | minUndelegation | Minimum undelegation (wei) |
+| 12 | doubleSignSlashAmount | Double-sign slash amount (wei) |
+| 13 | doubleSignRewardAmount | Double-sign reward amount (wei) |
+| 14 | burnAddress | Burn address (uint256-encoded address) |
+| 15 | doubleSignWindow | Double-sign evidence window (blocks) |
+| 16 | commissionUpdateCooldown | Commission update cooldown (blocks) |
+| 17 | baseRewardRatio | Base reward ratio (0-10000) |
+| 18 | maxCommissionRate | Max commission rate (0-10000) |
+| 19 | proposalCooldown | Proposal creation cooldown (blocks) |
 
 ### 1.3 Vote on Proposal
 

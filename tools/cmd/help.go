@@ -165,6 +165,10 @@ func showUsageGuide(cmd *cobra.Command, _ []string) {
 	fmt.Println(" 13: doubleSignRewardAmount (double-sign reward amount)")
 	fmt.Println(" 14: burnAddress (burn address)")
 	fmt.Println(" 15: doubleSignWindow (double-sign evidence window)")
+	fmt.Println(" 16: commissionUpdateCooldown (commission update cooldown)")
+	fmt.Println(" 17: baseRewardRatio (base reward ratio, 0-10000)")
+	fmt.Println(" 18: maxCommissionRate (max commission rate, 0-10000)")
+	fmt.Println(" 19: proposalCooldown (proposal creation cooldown)")
 	fmt.Println()
 
 	fmt.Println("Current Network Validators (Local Testnet):")

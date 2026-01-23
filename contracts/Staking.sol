@@ -164,8 +164,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         proposalContract = IProposal(proposal_);
         _initializeEpoch(proposalContract.epoch());
 
-        // Cache the minimum validator stake outside the loop
-        uint256 minValidatorStake = proposalContract.minValidatorStake();
+        // Genesis validators use a fixed initial stake
+        uint256 initialStake = 1 ether;
 
         // Pre-register all initial validators with default stake
         // This automatically performs the same logic as registerValidator for genesis validators
@@ -176,7 +176,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
             // Set up validator stake (same as registerValidator)
             validatorStakes[validator] = ValidatorStake({
-                selfStake: minValidatorStake,
+                selfStake: initialStake,
                 totalDelegated: 0,
                 commissionRate: commissionRate,
                 totalRewards: 0,
@@ -190,9 +190,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
             // Add to validators list (same as registerValidator)
             allValidators.push(validator);
-            totalStaked = totalStaked + minValidatorStake;
+            totalStaked = totalStaked + initialStake;
             // Emit event for each validator (more accurate than single event)
-            emit ValidatorRegistered(validator, minValidatorStake, commissionRate);
+            emit ValidatorRegistered(validator, initialStake, commissionRate);
         }
 
         revision = 1;

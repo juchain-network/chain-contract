@@ -145,13 +145,18 @@ func TestValidateConfigID(t *testing.T) {
 			wantErr:  false,
 		},
 		{
+			name:     "valid config ID 19",
+			configID: 19,
+			wantErr:  false,
+		},
+		{
 			name:     "invalid config ID negative",
 			configID: -1,
 			wantErr:  true,
 		},
 		{
 			name:     "invalid config ID too large",
-			configID: 16,
+			configID: 20,
 			wantErr:  true,
 		},
 	}
@@ -195,8 +200,13 @@ func TestGetConfigIDName(t *testing.T) {
 			expected: "minDelegation",
 		},
 		{
+			name:     "config ID 18",
+			configID: 18,
+			expected: "maxCommissionRate",
+		},
+		{
 			name:     "invalid config ID",
-			configID: 16,
+			configID: 20,
 			expected: "unknown",
 		},
 	}

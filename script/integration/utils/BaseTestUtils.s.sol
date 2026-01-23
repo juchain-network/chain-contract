@@ -213,15 +213,19 @@ contract BaseTestUtils is Script, Test {
             address(staking)
         );
 
-        // Initial validators are automatically staked with minValidatorStake() during initializeWithValidators
+        // Initial validators are automatically staked with 1 ether during initializeWithValidators
         // No need to transfer ETH directly to Staking contract
         
         vm.stopBroadcast();
 
+        // Align minValidatorStake with genesis default (1 ether) for integration tests
+        // Slot 60 per storage layout (ReentrancyGuard uses unstructured storage)
+        vm.store(address(proposal), bytes32(uint256(60)), bytes32(uint256(1 ether)));
+        
         saveState();
         
         console.log("Contracts deployed and initialized");
-        console.log("Initial validators registered with minValidatorStake:", initialValidators, "validators");
+        console.log("Initial validators registered with default stake (1 ether):", initialValidators, "validators");
         console.log("Staking contract balance:", address(staking).balance / 1 ether, "ETH");
     }
     

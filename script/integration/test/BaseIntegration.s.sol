@@ -44,7 +44,7 @@ contract BaseIntegration is BaseTestUtils {
         for (uint256 i = 0; i < initialValidators; i++) {
             address validator = validatorAccounts[i];
             (uint256 selfStake, , , , , , , , , ) = staking.getValidatorInfo(validator);
-            require(selfStake >= 100000 ether, "Validator should have correct self-stake");
+            require(selfStake == 1 ether, "Validator should have correct self-stake");
         }
         
         // Test 2: Validator should be active

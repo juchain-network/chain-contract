@@ -87,6 +87,10 @@ These parameters are initialized with defaults at deployment (genesis). After in
 | `doubleSignRewardAmount` | 10000000000000000000000 | Wei | Double-sign reporter reward (10,000 JU) |
 | `doubleSignWindow` | 86400 | Blocks | Double-sign evidence window (~24 hours) |
 | `burnAddress` | 0x000000000000000000000000000000000000dEaD | Address | Burn destination for slashed remainder |
+| `commissionUpdateCooldown` | 604800 | Blocks | Commission update cooldown (~7 days) |
+| `baseRewardRatio` | 3000 | BPS | Base reward ratio (30.00%) |
+| `maxCommissionRate` | 6000 | BPS | Maximum commission rate (60.00%) |
+| `proposalCooldown` | 100 | Blocks | Proposal creation cooldown |
 
 > ⚠️ **Important Reminder**: If you want different **default** parameters at genesis, you must:
 >
@@ -105,7 +109,7 @@ JuChain introduces a dual-contract validator management mechanism:
 {
   "staking": {
     "minStakeAmount": "100000000000000000000000",  // 100000 JU (wei)
-    "maxCommissionRate": 5000,                    // Maximum commission rate 50%
+    "maxCommissionRate": 6000,                    // Maximum commission rate 60%
     "unbondingPeriod": 604800,                    // Unbonding period 7 days (blocks)
     "maxValidators": 21,                          // Maximum active validator count
   }
@@ -1011,6 +1015,10 @@ echo "✅ System parameter modification proposal created"
 | 13 | doubleSignRewardAmount | Double-sign reporter reward | 10000000000000000000000 wei (10,000 JU) |
 | 14 | burnAddress | Burn destination for slashed remainder | 0x000000000000000000000000000000000000dEaD |
 | 15 | doubleSignWindow | Double-sign evidence window | 86400 blocks (~24 hours) |
+| 16 | commissionUpdateCooldown | Commission update cooldown | 604800 blocks (~7 days) |
+| 17 | baseRewardRatio | Base reward ratio (0-10000) | 3000 (30.00%) |
+| 18 | maxCommissionRate | Max commission rate (0-10000) | 6000 (60.00%) |
+| 19 | proposalCooldown | Proposal creation cooldown | 100 blocks |
 
 ## 🔧 System Configuration Management
 
@@ -1038,6 +1046,10 @@ echo "12: doubleSignSlashAmount (Double-sign slash amount, wei)"
 echo "13: doubleSignRewardAmount (Double-sign reporter reward, wei)"
 echo "14: burnAddress (Burn destination, address as uint256)"
 echo "15: doubleSignWindow (Double-sign evidence window, blocks)"
+echo "16: commissionUpdateCooldown (Commission update cooldown, blocks)"
+echo "17: baseRewardRatio (Base reward ratio, 0-10000)"
+echo "18: maxCommissionRate (Max commission rate, 0-10000)"
+echo "19: proposalCooldown (Proposal creation cooldown, blocks)"
 
 # Example: Modify proposal validity period to 48 hours
 PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"

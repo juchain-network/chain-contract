@@ -103,6 +103,10 @@
      - `cid = 13`: doubleSignRewardAmount (>0, wei; <= slash)
      - `cid = 14`: burnAddress (non-zero address, encoded as uint256)
      - `cid = 15`: doubleSignWindow (>0, blocks)
+     - `cid = 16`: commissionUpdateCooldown (>0, blocks)
+     - `cid = 17`: baseRewardRatio (0-10000)
+     - `cid = 18`: maxCommissionRate (0-10000)
+     - `cid = 19`: proposalCooldown (>0, blocks)
 
 3) **Proposal state**
    - `pass[address]`: whether an address passed governance
@@ -1318,6 +1322,8 @@ sequenceDiagram
 | `MIN_UNDELEGATION`    | 1 ether        | minimum undelegation                      |
 | `MAX_VALIDATORS`      | 21             | max validators                            |
 | `MIN_VALIDATORS`      | 3              | minimum validators (safety guideline)     |
+| `maxCommissionRate`   | 6000           | max commission rate (60%, cid = 18)       |
+| `baseRewardRatio`     | 3000           | base reward ratio (30%, cid = 17)         |
 | `COMMISSION_RATE_BASE`| 10000          | 10000 = 100%                              |
 
 ### 9.2 Time
@@ -1328,6 +1334,8 @@ sequenceDiagram
 | `validatorUnjailPeriod`  | 86400 blocks (def) | ~24h, configurable via cid = 7            |
 | `unbondingPeriod`        | 604800 blocks (def)| ~7d, configurable via cid = 6             |
 | `proposalLastingPeriod`  | 604800 blocks (def)| registration window for new validators    |
+| `commissionUpdateCooldown` | 604800 blocks (def) | commission update cooldown (cid = 16)   |
+| `proposalCooldown`       | 100 blocks (def)  | proposal creation cooldown (cid = 19)     |
 
 ### 9.3 Punishment
 

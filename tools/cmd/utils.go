@@ -73,8 +73,8 @@ func ValidateOperation(operation string) error {
 
 // ValidateConfigID validates configuration ID
 func ValidateConfigID(cid int64) error {
-	if cid < 0 || cid > 15 {
-		return fmt.Errorf("invalid config ID: %d, must be 0-15", cid)
+	if cid < 0 || cid > 19 {
+		return fmt.Errorf("invalid config ID: %d, must be 0-19", cid)
 	}
 	return nil
 }
@@ -239,6 +239,14 @@ func GetConfigIDName(cid int64) string {
 		return "burnAddress"
 	case 15:
 		return "doubleSignWindow"
+	case 16:
+		return "commissionUpdateCooldown"
+	case 17:
+		return "baseRewardRatio"
+	case 18:
+		return "maxCommissionRate"
+	case 19:
+		return "proposalCooldown"
 	default:
 		return "unknown"
 	}

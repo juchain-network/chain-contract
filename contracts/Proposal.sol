@@ -384,13 +384,14 @@ contract Proposal is Params, ReentrancyGuard {
      *   - 9: maxValidators (must > 0)
      *   - 10: minDelegation (must > 0, in wei)
      *   - 11: minUndelegation (must > 0, in wei)
-     *   - 12: doubleSignSlashAmount (must > 0)
-     *   - 13: doubleSignRewardAmount (must > 0)
+     *   - 12: doubleSignSlashAmount (must > 0, in wei)
+     *   - 13: doubleSignRewardAmount (must > 0, in wei)
      *   - 14: burnAddress (must be non-zero)
      *   - 15: doubleSignWindow (must > 0)
      *   - 16: commissionUpdateCooldown (must > 0)
      *   - 17: baseRewardRatio (must <= 10000)
      *   - 18: maxCommissionRate (must <= 10000)
+     *   - 19: proposalCooldown (must > 0)
      * @param value New configuration value
      */
     function validateConfig(uint256 cid, uint256 value) internal view returns (bool) {

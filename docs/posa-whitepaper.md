@@ -288,6 +288,14 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
    - Default value: 86,400 blocks (approximately 24 hours)
    - Time required for jailed validators to return to normal state
 
+4. **Commission Update Cooldown** (commissionUpdateCooldown)
+   - Default value: 604,800 blocks (approximately 7 days)
+   - Minimum interval between validator commission rate updates
+
+5. **Proposal Cooldown** (proposalCooldown)
+   - Default value: 100 blocks
+   - Minimum interval between proposals created by the same validator
+
 ### Punishment-Related Parameters
 
 1. **Punishment Threshold** (punishThreshold)
@@ -332,7 +340,15 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
    - Basic reward amount produced per block
    - Default value: 0.2 JU
 
-3. **Commission Rate Base** (COMMISSION_RATE_BASE)
+3. **Base Reward Ratio** (baseRewardRatio)
+   - Default value: 3000 (30.00%)
+   - Base reward ratio used for reward distribution (0-10000)
+
+4. **Max Commission Rate** (maxCommissionRate)
+   - Default value: 6000 (60.00%)
+   - Upper bound for validator commission rates (0-10000)
+
+5. **Commission Rate Base** (COMMISSION_RATE_BASE)
    - Used to calculate validator commission rates
    - 10000 represents 100%
 

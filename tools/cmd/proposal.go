@@ -103,7 +103,7 @@ func CreateConfigProposalCmd() *cobra.Command {
 func createConfigProposalFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("proposer", "p", "", "Proposer address (must be a valid validator)")
 	_ = cmd.MarkFlagRequired("proposer")
-	cmd.Flags().Int64P("cid", "i", 0, "Config ID (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod, 5 blockReward, 6 unbondingPeriod, 7 validatorUnjailPeriod, 8 minValidatorStake, 9 maxValidators, 10 minDelegation, 11 minUndelegation, 12 doubleSignSlashAmount, 13 doubleSignRewardAmount, 14 burnAddress, 15 doubleSignWindow)")
+	cmd.Flags().Int64P("cid", "i", 0, "Config ID (0 proposalLastingPeriod, 1 punishThreshold, 2 removeThreshold, 3 decreaseRate, 4 withdrawProfitPeriod, 5 blockReward, 6 unbondingPeriod, 7 validatorUnjailPeriod, 8 minValidatorStake, 9 maxValidators, 10 minDelegation, 11 minUndelegation, 12 doubleSignSlashAmount, 13 doubleSignRewardAmount, 14 burnAddress, 15 doubleSignWindow, 16 commissionUpdateCooldown, 17 baseRewardRatio, 18 maxCommissionRate, 19 proposalCooldown)")
 	_ = cmd.MarkFlagRequired("cid")
 	cmd.Flags().StringP("value", "v", "", "New configuration value (decimal wei, 0x hex/address, or with unit: wei/gwei/ether/ju)")
 	_ = cmd.MarkFlagRequired("value")
@@ -383,6 +383,14 @@ func getConfigIDName(cid int64) string {
 		return "Burn Address"
 	case 15:
 		return "Double-Sign Window"
+	case 16:
+		return "Commission Update Cooldown"
+	case 17:
+		return "Base Reward Ratio"
+	case 18:
+		return "Max Commission Rate"
+	case 19:
+		return "Proposal Cooldown"
 	default:
 		return "Unknown Config"
 	}
@@ -559,4 +567,124 @@ func getProposalStatus(agree uint16, reject uint16, resultExist bool) (string, s
 	} else {
 		return "❌", "Rejected"
 	}
+}
+
+// QueryParamCmd creates a command to query a specific governance parameter
+func QueryParamCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "param",
+		Short: "Query a governance parameter value",
+		Run:   queryParamTx,
+	}
+	queryParamFlags(cmd)
+	return cmd
+}
+
+func queryParamFlags(cmd *cobra.Command) {
+	cmd.Flags().Int64P("cid", "c", -1, "Config ID (0-19)")
+	_ = cmd.MarkFlagRequired("cid")
+}
+
+func queryParamTx(cmd *cobra.Command, _ []string) {
+	rpc := GetRPCEndpoint(cmd)
+	cid, _ := cmd.Flags().GetInt64("cid")
+
+	// Validate input parameters
+	if err := ValidateRPCURL(rpc); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	if err := ValidateConfigID(cid); err != nil {
+		PrintValidationError(err)
+		return
+	}
+
+	PrintInfo(fmt.Sprintf("Fetching value for config ID %d (%s)...", cid, GetConfigIDName(cid)))
+
+	if err := innerQueryParam(cid, rpc); err != nil {
+		PrintError("Failed to query parameter", err)
+		return
+	}
+}
+
+func innerQueryParam(cid int64, rpc string) error {
+	client, err := ethclient.Dial(rpc)
+	if err != nil {
+		return fmt.Errorf("failed to connect to RPC: %w", err)
+	}
+	defer client.Close()
+
+	proposalContract, err := contracts.NewProposal(common.HexToAddress(ProposalContractAddr), client)
+	if err != nil {
+		return fmt.Errorf("failed to instantiate proposal contract: %w", err)
+	}
+
+	var value interface{}
+	var errQuery error
+
+	opts := &bind.CallOpts{Context: context.Background()}
+
+	switch cid {
+	case 0:
+		value, errQuery = proposalContract.ProposalLastingPeriod(opts)
+	case 1:
+		value, errQuery = proposalContract.PunishThreshold(opts)
+	case 2:
+		value, errQuery = proposalContract.RemoveThreshold(opts)
+	case 3:
+		value, errQuery = proposalContract.DecreaseRate(opts)
+	case 4:
+		value, errQuery = proposalContract.WithdrawProfitPeriod(opts)
+	case 5:
+		value, errQuery = proposalContract.BlockReward(opts)
+	case 6:
+		value, errQuery = proposalContract.UnbondingPeriod(opts)
+	case 7:
+		value, errQuery = proposalContract.ValidatorUnjailPeriod(opts)
+	case 8:
+		value, errQuery = proposalContract.MinValidatorStake(opts)
+	case 9:
+		value, errQuery = proposalContract.MaxValidators(opts)
+	case 10:
+		value, errQuery = proposalContract.MinDelegation(opts)
+	case 11:
+		value, errQuery = proposalContract.MinUndelegation(opts)
+	case 12:
+		value, errQuery = proposalContract.DoubleSignSlashAmount(opts)
+	case 13:
+		value, errQuery = proposalContract.DoubleSignRewardAmount(opts)
+	case 14:
+		value, errQuery = proposalContract.BurnAddress(opts)
+	case 15:
+		value, errQuery = proposalContract.DoubleSignWindow(opts)
+	case 16:
+		value, errQuery = proposalContract.CommissionUpdateCooldown(opts)
+	case 17:
+		value, errQuery = proposalContract.BaseRewardRatio(opts)
+	case 18:
+		value, errQuery = proposalContract.MaxCommissionRate(opts)
+	case 19:
+		value, errQuery = proposalContract.ProposalCooldown(opts)
+	default:
+		return fmt.Errorf("unknown config ID: %d", cid)
+	}
+
+	if errQuery != nil {
+		return fmt.Errorf("failed to query contract: %w", errQuery)
+	}
+
+	fmt.Println("📋 Parameter Details:")
+	fmt.Printf("ID: %d\n", cid)
+	fmt.Printf("Name: %s\n", GetConfigIDName(cid))
+
+	if cid == 14 {
+		// Address type
+		fmt.Printf("Value: %s\n", value.(common.Address).Hex())
+	} else {
+		// BigInt type
+		fmt.Printf("Value: %s\n", value.(*big.Int).String())
+	}
+
+	return nil
 }

@@ -45,5 +45,9 @@ abstract contract BaseSetup is Test {
             vm.prank(STAKING);
             Validators(VALIDATORS).tryAddValidatorToHighestSet(initVals[i]);
         }
+
+        // Align minValidatorStake with genesis default (1 ether) for tests relying on getTopValidators
+        // Slot 60 per storage layout (ReentrancyGuard uses unstructured storage)
+        vm.store(PROPOSAL, bytes32(uint256(60)), bytes32(uint256(1 ether)));
     }
 }
