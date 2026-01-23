@@ -30,7 +30,6 @@ contract Punish is Params, ReentrancyGuard {
     mapping(address => uint256) pendingIndex;
     mapping(uint256 => mapping(address => bool)) doubleSigned;
 
-    uint256 public constant DOUBLE_SIGN_WINDOW = 86400;
     uint256 private constant SECP256K1N_HALF =
         0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0;
 
@@ -195,7 +194,7 @@ contract Punish is Params, ReentrancyGuard {
         require(validators.isValidatorExist(signer1), "Signer not exist");
         require(!doubleSigned[number1][signer1], "Already punished");
         require(block.number >= number1, "Future block");
-        require(block.number - number1 <= DOUBLE_SIGN_WINDOW, "Evidence expired");
+        require(block.number - number1 <= proposal.doubleSignWindow(), "Evidence expired");
 
         doubleSigned[number1][signer1] = true;
 

@@ -109,6 +109,12 @@ interface IProposal {
     function doubleSignRewardAmount() external view returns (uint256);
 
     /**
+     * @dev Returns the double-sign evidence window (in blocks).
+     * @return uint256 The evidence window in blocks.
+     */
+    function doubleSignWindow() external view returns (uint256);
+
+    /**
      * @dev Returns the burn address for slashed funds after reward.
      * @return address The burn address.
      */

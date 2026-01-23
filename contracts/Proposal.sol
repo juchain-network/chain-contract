@@ -22,6 +22,7 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 private constant DEFAULT_MIN_UNDELEGATION = 1 ether; // 1 JU
     uint256 private constant DEFAULT_DOUBLE_SIGN_SLASH_AMOUNT = 50000 ether;
     uint256 private constant DEFAULT_DOUBLE_SIGN_REWARD_AMOUNT = 10000 ether;
+    uint256 private constant DEFAULT_DOUBLE_SIGN_WINDOW = 86400; // 1 day in blocks
     address private constant DEFAULT_BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     // How many blocks a proposal will exist
@@ -49,6 +50,8 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 public doubleSignSlashAmount;
     // Double-sign reporter reward amount (absolute, in wei)
     uint256 public doubleSignRewardAmount;
+    // Double-sign evidence window (in blocks)
+    uint256 public doubleSignWindow;
     // Burn address for slashed funds after reward
     address public burnAddress;
 
@@ -162,6 +165,7 @@ contract Proposal is Params, ReentrancyGuard {
         minUndelegation = DEFAULT_MIN_UNDELEGATION;
         doubleSignSlashAmount = DEFAULT_DOUBLE_SIGN_SLASH_AMOUNT;
         doubleSignRewardAmount = DEFAULT_DOUBLE_SIGN_REWARD_AMOUNT;
+        doubleSignWindow = DEFAULT_DOUBLE_SIGN_WINDOW;
         burnAddress = DEFAULT_BURN_ADDRESS;
         initialized = true;
     }
@@ -347,10 +351,11 @@ contract Proposal is Params, ReentrancyGuard {
      *   - 12: doubleSignSlashAmount (must > 0)
      *   - 13: doubleSignRewardAmount (must > 0)
      *   - 14: burnAddress (must be non-zero)
+     *   - 15: doubleSignWindow (must > 0)
      * @param value New configuration value
      */
     function validateConfig(uint256 cid, uint256 value) internal view returns (bool) {
-        require(cid <= 14, "Invalid config ID");
+        require(cid <= 15, "Invalid config ID");
         require(value > 0, "Config value must be positive");
         if (cid == 1) {
             require(value < removeThreshold, "punishThreshold must be < removeThreshold");
@@ -368,6 +373,8 @@ contract Proposal is Params, ReentrancyGuard {
         } else if (cid == 14) {
             require(value <= type(uint160).max, "burnAddress invalid");
             require(address(uint160(value)) != address(0), "burnAddress must be non-zero");
+        } else if (cid == 15) {
+            require(value > 0, "doubleSignWindow must be positive");
         }
         return true;
     }
@@ -411,6 +418,8 @@ contract Proposal is Params, ReentrancyGuard {
             doubleSignRewardAmount = value;
         } else if (cid == 14) {
             burnAddress = address(uint160(value));
+        } else if (cid == 15) {
+            doubleSignWindow = value;
         } else {
             revert("Unknown config ID"); // Fail fast for new config IDs
         }
