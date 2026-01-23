@@ -49,6 +49,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     mapping(address => ValidatorStake) public validatorStakes;
     // Validator address => last active block (set by Validators.distributeBlockReward)
     mapping(address => uint256) public lastActiveBlock;
+    // Validator address => last commission update block
+    mapping(address => uint256) public lastCommissionUpdateBlock;
 
     // Delegator => Validator => Delegation
     mapping(address => mapping(address => Delegation)) public delegations;
@@ -156,7 +158,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(proposal_ != address(0), "Invalid proposal address");
         require(initialValidators.length > 0, "No validators provided");
         require(commissionRate > 0, "Commission rate must be greater than 0");
-        require(commissionRate < COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
+        require(commissionRate <= COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
 
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
@@ -212,7 +214,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function registerValidator(uint256 commissionRate) external payable onlyInitialized onlyNotEpoch nonReentrant {
         require(commissionRate > 0, "Commission rate must be greater than 0");
-        require(commissionRate <= COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
+        require(commissionRate <= proposalContract.maxCommissionRate(), "Commission rate exceeds maximum allowed");
         require(!validatorStakes[msg.sender].isRegistered, "Already registered");
         require(proposalContract.pass(msg.sender), "Must pass proposal first");
         // Check if proposal is still valid (within 7 days)
@@ -260,7 +262,17 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      */
     function updateCommissionRate(uint256 newCommissionRate) external onlyValidValidator(msg.sender) nonReentrant {
         require(newCommissionRate > 0, "Commission rate must be greater than 0");
-        require(newCommissionRate < COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
+        require(newCommissionRate <= proposalContract.maxCommissionRate(), "Commission rate exceeds maximum allowed");
+
+        uint256 cooldown = proposalContract.commissionUpdateCooldown();
+        uint256 lastUpdate = lastCommissionUpdateBlock[msg.sender];
+        if (lastUpdate > 0) {
+            require(
+                block.number >= lastUpdate + cooldown,
+                "Commission update too frequent"
+            );
+        }
+        lastCommissionUpdateBlock[msg.sender] = block.number;
 
         validatorStakes[msg.sender].commissionRate = newCommissionRate;
         emit CommissionRateUpdated(msg.sender, newCommissionRate);

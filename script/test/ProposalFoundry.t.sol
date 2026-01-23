@@ -107,6 +107,7 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testCreateProposalConstraints() public {
         Proposal p = Proposal(PROPOSAL);
+        uint256 cooldown = p.proposalCooldown();
         // can remove a not passed dst (choose an address not initialized) - now allowed
         address notPassed = makeAddr("np");
         vm.prank(v1);
@@ -115,6 +116,7 @@ contract ProposalFoundryTest is BaseSetup {
 
         // details too long
         string memory tooLong = new string(3001);
+        vm.roll(block.number + cooldown);
         vm.prank(v1);
         vm.expectRevert("Details too long");
         p.createProposal(address(0xAAA1), true, tooLong);
@@ -128,6 +130,7 @@ contract ProposalFoundryTest is BaseSetup {
     vm.prank(v1); p.voteProposal(id, true);
     vm.prank(v2); p.voteProposal(id, true);
     vm.prank(v3); p.voteProposal(id, true);
+    vm.roll(block.number + cooldown);
     vm.prank(v1);
     vm.expectRevert("Can't add an already passed dst");
     p.createProposal(address(0xBBB2), true, "");
@@ -210,6 +213,7 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testConfigUpdateAll() public {
         Proposal p = Proposal(PROPOSAL);
+        uint256 cooldown = p.proposalCooldown();
         uint256[8] memory cids = [uint256(0),1,2,3,4,5,6,7];
 
         uint256[8] memory vals = [uint256(3600),20,60,30,500,833_000_000_000_000_000,604800,86400];
@@ -229,6 +233,10 @@ contract ProposalFoundryTest is BaseSetup {
             else if (cids[i]==5) require(p.blockReward()==vals[5], "cid5");
             else if (cids[i]==6) require(p.unbondingPeriod()==vals[6], "cid6");
             else if (cids[i]==7) require(p.validatorUnjailPeriod()==vals[7], "cid7");
+
+            if (i + 1 < cids.length) {
+                vm.roll(block.number + cooldown);
+            }
         }
     }
 

@@ -310,18 +310,23 @@ contract StakingTest is Test {
         // 18. doubleSignRewardAmount: slot 66
         // 19. doubleSignWindow: slot 67
         // 20. burnAddress: slot 68
-        // 21. pass (mapping): slot 69
-        // 22. proposalPassedHeight (mapping): slot 70
+        // 21. commissionUpdateCooldown: slot 69
+        // 22. baseRewardRatio: slot 70
+        // 23. maxCommissionRate: slot 71
+        // 24. proposalCooldown: slot 72
+        // 25. lastProposalBlock (mapping): slot 73
+        // 26. pass (mapping): slot 74
+        // 27. proposalPassedHeight (mapping): slot 75
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(69))), // pass mapping slot
+            keccak256(abi.encode(validator, uint256(74))), // pass mapping slot
             bytes32(uint256(1))
         );
 
         // Set proposalPassedHeight to current block height (within 7 days)
         vm.store(
             PROPOSAL,
-            keccak256(abi.encode(validator, uint256(70))), // proposalPassedHeight mapping slot
+            keccak256(abi.encode(validator, uint256(75))), // proposalPassedHeight mapping slot
             bytes32(uint256(block.number))
         );
     }
@@ -924,6 +929,42 @@ contract StakingTest is Test {
         // Check updated rate
         (, , uint256 commissionRate, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
         assertEq(commissionRate, newRate);
+    }
+
+    function testUpdateCommissionRate_CooldownRevert() public {
+        // Register a validator first
+        _setupValidatorPass(VALIDATOR1);
+        vm.startPrank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+
+        // First update should succeed
+        Staking(STAKING).updateCommissionRate(2000);
+
+        // Second update within cooldown should revert
+        vm.expectRevert("Commission update too frequent");
+        Staking(STAKING).updateCommissionRate(3000);
+        vm.stopPrank();
+    }
+
+    function testUpdateCommissionRate_AfterCooldown() public {
+        // Register a validator first
+        _setupValidatorPass(VALIDATOR1);
+        vm.startPrank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+
+        // First update
+        Staking(STAKING).updateCommissionRate(2000);
+
+        // Move forward by cooldown blocks
+        uint256 cooldown = Proposal(PROPOSAL).commissionUpdateCooldown();
+        vm.roll(block.number + cooldown);
+
+        // Update again should succeed
+        Staking(STAKING).updateCommissionRate(3000);
+        vm.stopPrank();
+
+        (, , uint256 commissionRate, , , , , , , ) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        assertEq(commissionRate, 3000);
     }
 
     function test_RevertWhen_UpdateInvalidCommissionRate() public {

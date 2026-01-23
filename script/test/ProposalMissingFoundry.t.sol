@@ -402,6 +402,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         // Test creating duplicate proposal (same parameters, different timestamps)
         Proposal p = Proposal(PROPOSAL);
         address candidate = makeAddr("candidate");
+        uint256 cooldown = p.proposalCooldown();
         
         // Create first proposal
         vm.prank(v1); // Use validator v1 as proposer
@@ -409,6 +410,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         require(proposalId1 != bytes32(0), "should create first proposal");
         
         // Create second proposal with different nonce (should succeed)
+        vm.roll(block.number + cooldown);
         vm.prank(v1); // Use validator v1 as proposer
         bytes32 proposalId2 = p.createProposal(candidate, true, "test details");
         require(proposalId2 != bytes32(0), "should create second proposal with different nonce");
@@ -529,6 +531,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         Proposal p = Proposal(PROPOSAL);
         address candidate = makeAddr("candidate");
         string memory details = "test proposal";
+        uint256 cooldown = p.proposalCooldown();
         
         // Create first proposal
         vm.prank(v1);
@@ -536,6 +539,7 @@ contract ProposalMissingFoundryTest is BaseSetup {
         require(proposalId1 != bytes32(0), "should create first proposal successfully");
         
         // Try to create identical proposal again - should succeed with different ID due to nonce increment
+        vm.roll(block.number + cooldown);
         vm.prank(v1);
         bytes32 proposalId2 = p.createProposal(candidate, true, details);
         require(proposalId2 != bytes32(0), "should create second proposal successfully");
@@ -791,6 +795,61 @@ contract ProposalMissingFoundryTest is BaseSetup {
         vm.prank(v3); p.voteProposal(id, true);
 
         require(p.doubleSignWindow() == validValue, "doubleSignWindow should be updated");
+    }
+
+    function testUpdateConfigCID16() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 validValue = p.commissionUpdateCooldown() + 1;
+
+        vm.prank(v1);
+        bytes32 id = p.createUpdateConfigProposal(16, validValue);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+
+        require(p.commissionUpdateCooldown() == validValue, "commissionUpdateCooldown should be updated");
+    }
+
+    function testUpdateConfigCID17() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 validValue = p.baseRewardRatio() + 1;
+
+        vm.prank(v1);
+        bytes32 id = p.createUpdateConfigProposal(17, validValue);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+
+        require(p.baseRewardRatio() == validValue, "baseRewardRatio should be updated");
+    }
+
+    function testUpdateConfigCID17Invalid() public {
+        Proposal p = Proposal(PROPOSAL);
+
+        vm.prank(v1);
+        vm.expectRevert("baseRewardRatio must be <= 10000");
+        p.createUpdateConfigProposal(17, 10001);
+    }
+
+    function testUpdateConfigCID18() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 validValue = p.maxCommissionRate() + 1;
+
+        vm.prank(v1);
+        bytes32 id = p.createUpdateConfigProposal(18, validValue);
+        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v2); p.voteProposal(id, true);
+        vm.prank(v3); p.voteProposal(id, true);
+
+        require(p.maxCommissionRate() == validValue, "maxCommissionRate should be updated");
+    }
+
+    function testUpdateConfigCID18Invalid() public {
+        Proposal p = Proposal(PROPOSAL);
+
+        vm.prank(v1);
+        vm.expectRevert("maxCommissionRate must be <= 10000");
+        p.createUpdateConfigProposal(18, 10001);
     }
 
     function testInvalidProposalType() public {

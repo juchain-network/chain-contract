@@ -23,6 +23,10 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 private constant DEFAULT_DOUBLE_SIGN_SLASH_AMOUNT = 50000 ether;
     uint256 private constant DEFAULT_DOUBLE_SIGN_REWARD_AMOUNT = 10000 ether;
     uint256 private constant DEFAULT_DOUBLE_SIGN_WINDOW = 86400; // 1 day in blocks
+    uint256 private constant DEFAULT_COMMISSION_UPDATE_COOLDOWN = 604800; // 7 days in blocks
+    uint256 private constant DEFAULT_BASE_REWARD_RATIO = 3000; // 30.00%
+    uint256 private constant DEFAULT_MAX_COMMISSION_RATE = 6000; // 60.00%
+    uint256 private constant DEFAULT_PROPOSAL_COOLDOWN = 100; // 100 blocks
     address private constant DEFAULT_BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     // How many blocks a proposal will exist
@@ -54,6 +58,18 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 public doubleSignWindow;
     // Burn address for slashed funds after reward
     address public burnAddress;
+
+    // Commission update cooldown (in blocks)
+    uint256 public commissionUpdateCooldown;
+    // Base reward ratio (0-100)
+    uint256 public baseRewardRatio;
+    // Max commission rate (0-10000)
+    uint256 public maxCommissionRate;
+    // Proposal cooldown (in blocks)
+    uint256 public proposalCooldown;
+
+    // Validator address => last proposal block number
+    mapping(address => uint256) public lastProposalBlock;
 
     // record
     mapping(address => bool) public pass;
@@ -168,6 +184,10 @@ contract Proposal is Params, ReentrancyGuard {
         doubleSignSlashAmount = DEFAULT_DOUBLE_SIGN_SLASH_AMOUNT;
         doubleSignRewardAmount = DEFAULT_DOUBLE_SIGN_REWARD_AMOUNT;
         doubleSignWindow = DEFAULT_DOUBLE_SIGN_WINDOW;
+        commissionUpdateCooldown = DEFAULT_COMMISSION_UPDATE_COOLDOWN;
+        baseRewardRatio = DEFAULT_BASE_REWARD_RATIO;
+        maxCommissionRate = DEFAULT_MAX_COMMISSION_RATE;
+        proposalCooldown = DEFAULT_PROPOSAL_COOLDOWN;
         burnAddress = DEFAULT_BURN_ADDRESS;
         revision = 1;
         initialized = true;
@@ -194,6 +214,7 @@ contract Proposal is Params, ReentrancyGuard {
         bool flag,
         string calldata details
     ) external onlyValidator returns (bytes32) {
+        _checkProposalCooldown();
         // Only add additional checks for add proposals
         if (flag) {
             // Check if validator is already in top validator set
@@ -256,6 +277,7 @@ contract Proposal is Params, ReentrancyGuard {
      * @return bytes32 Unique identifier for the created proposal.
      */
     function createUpdateConfigProposal(uint256 cid, uint256 newValue) external onlyValidator returns (bytes32) {
+        _checkProposalCooldown();
         // Validate config parameters before creating proposal
         require(validateConfig(cid, newValue), "Config validation failed");
 
@@ -366,10 +388,13 @@ contract Proposal is Params, ReentrancyGuard {
      *   - 13: doubleSignRewardAmount (must > 0)
      *   - 14: burnAddress (must be non-zero)
      *   - 15: doubleSignWindow (must > 0)
+     *   - 16: commissionUpdateCooldown (must > 0)
+     *   - 17: baseRewardRatio (must <= 10000)
+     *   - 18: maxCommissionRate (must <= 10000)
      * @param value New configuration value
      */
     function validateConfig(uint256 cid, uint256 value) internal view returns (bool) {
-        require(cid <= 15, "Invalid config ID");
+        require(cid <= 19, "Invalid config ID");
         require(value > 0, "Config value must be positive");
         if (cid == 1) {
             require(value < removeThreshold, "punishThreshold must be < removeThreshold");
@@ -389,6 +414,14 @@ contract Proposal is Params, ReentrancyGuard {
             require(address(uint160(value)) != address(0), "burnAddress must be non-zero");
         } else if (cid == 15) {
             require(value > 0, "doubleSignWindow must be positive");
+        } else if (cid == 16) {
+            require(value > 0, "commissionUpdateCooldown must be positive");
+        } else if (cid == 17) {
+            require(value <= 10000, "baseRewardRatio must be <= 10000");
+        } else if (cid == 18) {
+            require(value <= 10000, "maxCommissionRate must be <= 10000");
+        } else if (cid == 19) {
+            require(value > 0, "proposalCooldown must be positive");
         }
         return true;
     }
@@ -434,6 +467,14 @@ contract Proposal is Params, ReentrancyGuard {
             burnAddress = address(uint160(value));
         } else if (cid == 15) {
             doubleSignWindow = value;
+        } else if (cid == 16) {
+            commissionUpdateCooldown = value;
+        } else if (cid == 17) {
+            baseRewardRatio = value;
+        } else if (cid == 18) {
+            maxCommissionRate = value;
+        } else if (cid == 19) {
+            proposalCooldown = value;
         } else {
             revert("Unknown config ID"); // Fail fast for new config IDs
         }
@@ -470,5 +511,16 @@ contract Proposal is Params, ReentrancyGuard {
         uint256 passedHeight = proposalPassedHeight[validator];
         // Check if within 7 days (604800 blocks) - only applies to NEW registrations
         return block.number <= passedHeight + proposalLastingPeriod;
+    }
+
+    /**
+     * @dev Internal function to check and update proposal cooldown for a validator.
+     */
+    function _checkProposalCooldown() internal {
+        uint256 lastBlock = lastProposalBlock[msg.sender];
+        if (lastBlock > 0) {
+            require(block.number >= lastBlock + proposalCooldown, "Proposal creation too frequent");
+        }
+        lastProposalBlock[msg.sender] = block.number;
     }
 }

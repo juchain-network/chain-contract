@@ -285,6 +285,8 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     // Helper functions
     function _passProposal(address target, bool flag) internal {
         vm.warp(block.timestamp + 1000000);
+        uint256 cooldown = Proposal(PROPOSAL).proposalCooldown();
+        vm.roll(block.number + cooldown);
         
         // Create proposal from v1 (active validator) instead of address(this)
         vm.prank(v1);

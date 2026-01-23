@@ -115,8 +115,20 @@ interface IProposal {
     function doubleSignWindow() external view returns (uint256);
 
     /**
+     * @dev Returns the commission update cooldown (in blocks).
+     * @return uint256 The cooldown in blocks.
+     */
+    function commissionUpdateCooldown() external view returns (uint256);
+
+    /**
      * @dev Returns the burn address for slashed funds after reward.
      * @return address The burn address.
      */
     function burnAddress() external view returns (address);
+
+    /**
+     * @dev Returns the maximum commission rate (basis points).
+     * @return uint256 The maximum commission rate.
+     */
+    function maxCommissionRate() external view returns (uint256);
 }
