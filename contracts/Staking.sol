@@ -838,8 +838,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             address validator = validators[i];
             ValidatorStake storage stake = validatorStakes[validator];
 
-            // Only include validators with self-stake >= MIN_VALIDATOR_STAKE
-            if (stake.selfStake >= minValidatorStake) {
+            // Only include validators with self-stake > 0 (allows genesis validators with stake < minValidatorStake)
+            if (stake.selfStake > 0) {
                 candidateValidators[candidateCount] = validator;
                 totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
                 candidateCount++;
