@@ -4,6 +4,7 @@ pragma solidity ^0.8.29;
 
 import {Params} from "./Params.sol";
 import {IProposal} from "./IProposal.sol";
+import {IPunish} from "./IPunish.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IValidators} from "./IValidators.sol";
 import {IStaking} from "./IStaking.sol";
@@ -21,6 +22,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
     // Maximum number of unbonding entries per delegator-validator pair
     uint256 public constant MAX_UNBONDING_ENTRIES = 20;
+
+    // Limit for executing pending punishments per block
+    uint256 private constant PENDING_EXECUTION_LIMIT = 5;
 
     struct ValidatorStake {
         uint256 selfStake;          // Validator's own stake
@@ -568,6 +572,11 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
 
+        // Try to execute pending punishments (similar to Validators contract)
+        if (block.number % proposalContract.epoch() != 0) {
+            try IPunish(PUNISH_ADDR).executePending(PENDING_EXECUTION_LIMIT) {} catch {}
+        }
+
         // Get block reward from msg.value (consensus layer reads from Proposal contract and passes it here)
         // This avoids duplicate contract calls and saves gas
         uint256 blockReward = msg.value;
@@ -579,6 +588,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
         // Get validator address from block.coinbase (similar to Validators.distributeBlockReward())
         address validator = block.coinbase;
+
+        // Update last active block for double sign window enforcement
+        lastActiveBlock[validator] = block.number;
 
         // Check if validator exists (has staked)
         ValidatorStake storage stake = validatorStakes[validator];
