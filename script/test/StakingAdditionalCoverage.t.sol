@@ -69,7 +69,7 @@ contract StakingAdditionalCoverageTest is Test {
         
         // Initialize Staking contract
         vm.startPrank(deployer);
-        staking.initialize(VALIDATORS, PROPOSAL);
+        staking.initialize(VALIDATORS, PROPOSAL, PUNISH);
         vm.stopPrank();
         
         // Initialize Punish contract
@@ -119,7 +119,7 @@ contract StakingAdditionalCoverageTest is Test {
         newProposal.initialize(initialValidators, VALIDATORS, TEST_EPOCH);
         
         // Initialize the staking contract with the new proposal instance
-        testStaking.initialize(VALIDATORS, address(newProposal));
+        testStaking.initialize(VALIDATORS, address(newProposal), PUNISH);
         vm.stopPrank();
         
         // Mock the necessary functions
@@ -172,7 +172,7 @@ contract StakingAdditionalCoverageTest is Test {
         // Initialize the staking contract
         address deployer = address(this);
         vm.startPrank(deployer);
-        testStaking.initialize(VALIDATORS, PROPOSAL);
+        testStaking.initialize(VALIDATORS, PROPOSAL, PUNISH);
         vm.stopPrank();
         
         // Mock the necessary functions
@@ -231,7 +231,7 @@ contract StakingAdditionalCoverageTest is Test {
         // Initialize the staking contract
         address deployer = address(this);
         vm.startPrank(deployer);
-        testStaking.initialize(VALIDATORS, PROPOSAL);
+        testStaking.initialize(VALIDATORS, PROPOSAL, PUNISH);
         vm.stopPrank();
         
         // Mock the necessary functions
@@ -290,7 +290,7 @@ contract StakingAdditionalCoverageTest is Test {
         // Initialize the staking contract
         address deployer = address(this);
         vm.startPrank(deployer);
-        testStaking.initialize(VALIDATORS, PROPOSAL);
+        testStaking.initialize(VALIDATORS, PROPOSAL, PUNISH);
         vm.stopPrank();
         
         // Mock the necessary functions
@@ -363,7 +363,7 @@ contract StakingAdditionalCoverageTest is Test {
         // Initialize the staking contract
         address deployer = address(this);
         vm.startPrank(deployer);
-        testStaking.initialize(VALIDATORS, PROPOSAL);
+        testStaking.initialize(VALIDATORS, PROPOSAL, PUNISH);
         vm.stopPrank();
         
         // Mock the necessary functions
@@ -442,7 +442,7 @@ contract StakingAdditionalCoverageTest is Test {
         newProposal.initialize(initialValidators, VALIDATORS, TEST_EPOCH);
         
         // Initialize the staking contract with the new proposal instance
-        testStaking.initialize(VALIDATORS, address(newProposal));
+        testStaking.initialize(VALIDATORS, address(newProposal), PUNISH);
         vm.stopPrank();
         
         // Mock the necessary functions

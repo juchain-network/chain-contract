@@ -30,7 +30,7 @@ abstract contract BaseSetup is Test {
         // 2. Staking with genesis validators (but don't call tryAddValidatorToHighestSet yet)
         // Use initializeWithValidators to automatically register genesis validators in Staking
         // This ensures genesis validators are immediately available without needing to register separately
-        Staking(STAKING).initializeWithValidators(VALIDATORS, PROPOSAL, initVals, 1000); // 10% commission
+        Staking(STAKING).initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initVals, 1000); // 10% commission
         
         // 3. Punish (needs Staking)
         Punish(PUNISH).initialize(VALIDATORS, PROPOSAL, STAKING);

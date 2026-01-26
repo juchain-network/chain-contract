@@ -57,10 +57,11 @@ contract DeploymentScript is Script {
         
         // 5. Initialize Staking contract with validators
         staking.initializeWithValidators(
-            address(validators), 
-            address(proposal), 
-            initialValidators, 
-            1000 // 10% commission rate
+            address(validators),
+            address(proposal),
+            address(punish),
+            initialValidators,
+            1000 // 10% commission
         );
         console.log(unicode"✓ Staking contract initialized");
         

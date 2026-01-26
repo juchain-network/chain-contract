@@ -81,6 +81,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     // System contracts
     IValidators public validatorsContract;
     IProposal public proposalContract;
+    IPunish public punishContract;
 
     // Total number of unique delegators
     uint256 public delegatorCount;
@@ -130,13 +131,16 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @dev Initializes the Staking contract with required dependencies.
      * @param validators_ Address of the Validators contract.
      * @param proposal_ Address of the Proposal contract.
+     * @param punish_ Address of the Punish contract.
      */
-    function initialize(address validators_, address proposal_) external onlyNotInitialized {
+    function initialize(address validators_, address proposal_, address punish_) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
         require(proposal_ != address(0), "Invalid proposal address");
+        require(punish_ != address(0), "Invalid punish address");
         
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
+        punishContract = IPunish(punish_);
         _initializeEpoch(proposalContract.epoch());
         revision = 1;
         initialized = true;
@@ -146,6 +150,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @dev Initialize with pre-registered validators (for genesis deployment)
      * @param validators_ Validators contract address
      * @param proposal_ Proposal contract address
+     * @param punish_ Punish contract address
      * @param initialValidators Array of validator addresses to pre-register
      * @param commissionRate Default commission rate for all validators
      * @notice This function automatically performs the same logic as registerValidator for genesis validators
@@ -155,17 +160,20 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function initializeWithValidators(
         address validators_,
         address proposal_,
+        address punish_,
         address[] calldata initialValidators,
         uint256 commissionRate
     ) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
         require(proposal_ != address(0), "Invalid proposal address");
+        require(punish_ != address(0), "Invalid punish address");
         require(initialValidators.length > 0, "No validators provided");
         require(commissionRate > 0, "Commission rate must be greater than 0");
         require(commissionRate <= COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
 
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
+        punishContract = IPunish(punish_);
         _initializeEpoch(proposalContract.epoch());
 
         // Genesis validators use a fixed initial stake
@@ -574,7 +582,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
         // Try to execute pending punishments (similar to Validators contract)
         if (block.number % proposalContract.epoch() != 0) {
-            try IPunish(PUNISH_ADDR).executePending(PENDING_EXECUTION_LIMIT) {} catch {}
+            try punishContract.executePending(PENDING_EXECUTION_LIMIT) {} catch {}
         }
 
         // Get block reward from msg.value (consensus layer reads from Proposal contract and passes it here)

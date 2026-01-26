@@ -60,7 +60,7 @@ contract StakingTest is Test {
         initVals[5] = VALIDATOR6;
         
         Proposal(PROPOSAL).initialize(initVals, VALIDATORS, TEST_EPOCH);
-        Staking(STAKING).initialize(VALIDATORS, PROPOSAL);
+        Staking(STAKING).initialize(VALIDATORS, PROPOSAL, PUNISH);
         Punish(PUNISH).initialize(VALIDATORS, PROPOSAL, STAKING);
         Validators(VALIDATORS).initialize(initVals, PROPOSAL, PUNISH, STAKING);
     }
@@ -430,7 +430,7 @@ contract StakingTest is Test {
         initialValidators[0] = address(0);
         
         vm.expectRevert("Invalid validator address");
-        staking.initializeWithValidators(VALIDATORS, PROPOSAL, initialValidators, COMMISSION_RATE);
+        staking.initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initialValidators, COMMISSION_RATE);
     }
 
     function test_RevertWhen_RegisterWithAlreadyExistingValidator() public {
@@ -442,7 +442,7 @@ contract StakingTest is Test {
         initialValidators[0] = address(0);
         
         vm.expectRevert("Invalid validator address");
-        staking.initializeWithValidators(VALIDATORS, PROPOSAL, initialValidators, COMMISSION_RATE);
+        staking.initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initialValidators, COMMISSION_RATE);
     }
 
     function test_RevertWhen_DoubleRegistration() public {
@@ -2039,62 +2039,88 @@ contract StakingTest is Test {
         assertEq(result[3], VALIDATOR1);
     }
 
-    function testInitialize_RevertWhen_InvalidAddresses() public {
-        // Deploy fresh Staking contract for testing initialize failures
-        Staking staking = new Staking();
-        
-        // Test initialize with invalid validators address
+    function test_RevertWhen_Initialize_ZeroValidators() public {
+        Staking testStaking = new Staking();
         vm.expectRevert("Invalid validators address");
-        staking.initialize(address(0), PROPOSAL);
-        
-        // Test initialize with invalid proposal address
-        vm.expectRevert("Invalid proposal address");
-        staking.initialize(VALIDATORS, address(0));
-        
-        // Test initialize with both addresses invalid
-        vm.expectRevert("Invalid validators address");
-        staking.initialize(address(0), address(0));
+        testStaking.initialize(address(0), PROPOSAL, PUNISH);
     }
 
-    function testInitializeWithValidators_RevertWhen_InvalidParameters() public {
-        // Deploy fresh Staking contract for testing initializeWithValidators failures
-        Staking staking = new Staking();
-        address[] memory validators = new address[](1);
-        validators[0] = VALIDATOR1;
-        
-        // Test with invalid validators address
-        vm.expectRevert("Invalid validators address");
-        staking.initializeWithValidators(address(0), PROPOSAL, validators, COMMISSION_RATE);
-        
-        // Test with invalid proposal address
+    function test_RevertWhen_Initialize_ZeroProposal() public {
+        Staking testStaking = new Staking();
         vm.expectRevert("Invalid proposal address");
-        staking.initializeWithValidators(VALIDATORS, address(0), validators, COMMISSION_RATE);
-        
-        // Test with no validators provided
+        testStaking.initialize(VALIDATORS, address(0), PUNISH);
+    }
+
+    function test_RevertWhen_Initialize_ZeroPunish() public {
+        Staking testStaking = new Staking();
+        vm.expectRevert("Invalid punish address");
+        testStaking.initialize(VALIDATORS, PROPOSAL, address(0));
+    }
+
+    function test_RevertWhen_Initialize_ZeroBoth() public {
+        Staking testStaking = new Staking();
+        vm.expectRevert("Invalid validators address");
+        testStaking.initialize(address(0), address(0), address(0));
+    }
+
+    function test_RevertWhen_InitializeWithValidators_ZeroValidators() public {
+        Staking testStaking = new Staking();
+        address[] memory vals = new address[](1);
+        vals[0] = VALIDATOR1;
+        vm.expectRevert("Invalid validators address");
+        testStaking.initializeWithValidators(address(0), PROPOSAL, PUNISH, vals, COMMISSION_RATE);
+    }
+
+    function test_RevertWhen_InitializeWithValidators_ZeroProposal() public {
+        Staking testStaking = new Staking();
+        address[] memory vals = new address[](1);
+        vals[0] = VALIDATOR1;
+        vm.expectRevert("Invalid proposal address");
+        testStaking.initializeWithValidators(VALIDATORS, address(0), PUNISH, vals, COMMISSION_RATE);
+    }
+
+    function test_RevertWhen_InitializeWithValidators_ZeroPunish() public {
+        Staking testStaking = new Staking();
+        address[] memory vals = new address[](1);
+        vals[0] = VALIDATOR1;
+        vm.expectRevert("Invalid punish address");
+        testStaking.initializeWithValidators(VALIDATORS, PROPOSAL, address(0), vals, COMMISSION_RATE);
+    }
+
+    function test_RevertWhen_InitializeWithValidators_EmptyValidators() public {
+        Staking testStaking = new Staking();
         address[] memory emptyValidators = new address[](0);
         vm.expectRevert("No validators provided");
-        staking.initializeWithValidators(VALIDATORS, PROPOSAL, emptyValidators, COMMISSION_RATE);
-        
-        // Test with invalid commission rate (exceeds maximum)
+        testStaking.initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, emptyValidators, COMMISSION_RATE);
+    }
+
+    function test_RevertWhen_InitializeWithValidators_InvalidCommission() public {
+        Staking testStaking = new Staking();
+        address[] memory vals = new address[](1);
+        vals[0] = VALIDATOR1;
         vm.expectRevert("Commission rate exceeds maximum allowed");
-        staking.initializeWithValidators(VALIDATORS, PROPOSAL, validators, 10001); // COMMISSION_RATE_BASE is 10000
+        testStaking.initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, vals, 10001); // COMMISSION_RATE_BASE is 10000
     }
 
     function test_RevertWhen_InitializeWithZeroAddresses() public {
         // Deploy fresh Staking contract for testing initialize failures
-        Staking staking = new Staking();
+        Staking testStaking = new Staking();
         
         // Test initialize with invalid validators address
         vm.expectRevert("Invalid validators address");
-        staking.initialize(address(0), PROPOSAL);
+        testStaking.initialize(address(0), PROPOSAL, PUNISH);
         
         // Test initialize with invalid proposal address
         vm.expectRevert("Invalid proposal address");
-        staking.initialize(VALIDATORS, address(0));
+        testStaking.initialize(VALIDATORS, address(0), PUNISH);
+
+        // Test initialize with invalid punish address
+        vm.expectRevert("Invalid punish address");
+        testStaking.initialize(VALIDATORS, PROPOSAL, address(0));
         
-        // Test initialize with both addresses invalid
+        // Test initialize with all addresses invalid
         vm.expectRevert("Invalid validators address");
-        staking.initialize(address(0), address(0));
+        testStaking.initialize(address(0), address(0), address(0));
     }
 
     // Additional tests for full branch coverage

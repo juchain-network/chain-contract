@@ -219,7 +219,7 @@ contract DeployToChainScript is Script {
         // 2. Initialize Staking (pass in validators, proposal addresses and initial validators, directly pre-register)
         console.log("Initializing Staking with pre-registered validators...");
         uint256 defaultCommissionRate = 500; // 5% commission rate
-        Staking(staking).initializeWithValidators(validators, proposal, initialValidators, defaultCommissionRate);
+        Staking(staking).initializeWithValidators(validators, proposal, punish, initialValidators, defaultCommissionRate);
         console.log("Staking initialized with", initialValidators.length, "pre-registered validators");
         console.log("Default commission rate: 5%"); // 5% commission rate
 

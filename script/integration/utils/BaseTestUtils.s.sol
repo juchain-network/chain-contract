@@ -180,8 +180,9 @@ contract BaseTestUtils is Script, Test {
         staking.initializeWithValidators(
             address(validators),
             address(proposal),
+            address(punish),
             initialValidatorsArray,
-            commissionRate // Commission rate from environment variable
+            1000 // 10% commission
         );
 
         // Set contract addresses for all contracts

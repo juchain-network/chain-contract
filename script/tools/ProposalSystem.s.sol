@@ -89,8 +89,9 @@ contract ProposalSystemScript is Script, Test {
         staking.initializeWithValidators(
             address(validators),
             address(proposal),
+            address(punish),
             initialValidators,
-            1000 // 10% commission rate
+            1000 // 10% commission
         );
         
         // Contract addresses are already set during initialization
