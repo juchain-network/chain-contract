@@ -37,7 +37,7 @@ func listValidators(cmd *cobra.Command, _ []string) {
 	}
 
 	PrintInfo("Fetching validator information...")
-	vals, err := validatorInstance.GetTopValidators(&bind.CallOpts{})
+	vals, err := validatorInstance.GetHighestValidators(&bind.CallOpts{})
 	if err != nil {
 		PrintError("Failed to get validators", err)
 		return
