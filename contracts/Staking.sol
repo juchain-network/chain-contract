@@ -758,6 +758,11 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         stake.selfStake = selfStake - actualSlash;
         totalStaked = totalStaked - actualSlash;
 
+        // If stake drops to zero, try to remove from highest set to avoid zombies
+        if (stake.selfStake == 0) {
+            try validatorsContract.removeFromHighestSet(validator) {} catch {}
+        }
+
         actualReward = rewardAmount > actualSlash ? actualSlash : rewardAmount;
         uint256 burnAmount = actualSlash - actualReward;
 
