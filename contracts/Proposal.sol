@@ -220,8 +220,8 @@ contract Proposal is Params, ReentrancyGuard {
             // Check if validator is already in top validator set
             bool isTop = validators.isTopValidator(dst);
 
-            // Only block add proposals for validators already in top set
-            if (isTop) {
+            // Only block add proposals for validators already in top set AND passed
+            if (isTop && pass[dst]) {
                 revert("Validator is already in top validator set");
             }
 
