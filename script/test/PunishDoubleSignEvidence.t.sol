@@ -52,11 +52,7 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         assertEq(selfStakeAfter, selfStakeBefore - actualSlash, "selfStake should be slashed");
         assertEq(reporter.balance, reporterBalanceBefore + actualReward, "reporter should be rewarded");
 
-        if (selfStakeAfter == 0) {
-            vm.expectRevert("Signer not exist");
-        } else {
-            vm.expectRevert("Already punished");
-        }
+        vm.expectRevert("Already punished");
         vm.prank(reporter);
         Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
     }
@@ -116,13 +112,6 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
 
             (uint256 selfStakeBefore,,,,,,,,,) = Staking(STAKING).getValidatorInfo(expectedSigner);
             uint256 reporterBalanceBefore = reporter.balance;
-
-            if (selfStakeBefore == 0) {
-                vm.expectRevert("Signer not exist");
-                vm.prank(reporter);
-                Punish(PUNISH).submitDoubleSignEvidence(goHeaders1[i], goHeaders2[i]);
-                continue;
-            }
 
             vm.prank(reporter);
             Punish(PUNISH).submitDoubleSignEvidence(goHeaders1[i], goHeaders2[i]);
