@@ -252,10 +252,6 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
 
-        if (block.number % epoch != 0) {
-            try punish.executePending(PENDING_EXECUTION_LIMIT) {} catch {}
-        }
-        
         address val = msg.sender;
         uint256 hb = msg.value;
 
@@ -266,7 +262,6 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         if (!this.isValidatorExist(val)) {
             return;
         }
-        staking.updateLastActiveBlock(val);
 
         // Check if the block producer is jailed
         if (staking.isValidatorJailed(val)) {
