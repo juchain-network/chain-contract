@@ -575,9 +575,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Whether validator exists (has staked)
      */
     function isValidatorExist(address validator) external view returns (bool) {
-        (uint256 selfStake, , , , , , , , , ) = 
+        (, , , , , , , , bool isRegistered, ) = 
             staking.getValidatorInfo(validator);
-        return selfStake > 0;
+        return isRegistered;
     }
 
     /**
