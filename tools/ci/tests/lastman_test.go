@@ -45,13 +45,16 @@ func TestZ_LastManStanding(t *testing.T) {
 		}
 		for _, vk := range ctx.GenesisValidators {
 			vo, _ := ctx.GetTransactor(vk)
-			ctx.Proposal.VoteProposal(vo, propID, true)
+			txVote, err := ctx.Proposal.VoteProposal(vo, propID, true)
+			if err == nil {
+				ctx.WaitMined(txVote.Hash())
+			}
 		}
 		waitNextBlock()
 
 		pass, _ := ctx.Proposal.Pass(nil, target)
 		if pass {
-			return fmt.Errorf("expected pass=false for removed validator")
+			return fmt.Errorf("expected pass=false for removed validator %s", target.Hex())
 		}
 		return nil
 	}
@@ -83,7 +86,10 @@ func TestZ_LastManStanding(t *testing.T) {
 	}
 	for _, vk := range ctx.GenesisValidators {
 		vo, _ := ctx.GetTransactor(vk)
-		ctx.Proposal.VoteProposal(vo, propID, true)
+		txVote, err := ctx.Proposal.VoteProposal(vo, propID, true)
+		if err == nil {
+			ctx.WaitMined(txVote.Hash())
+		}
 	}
 	waitNextBlock()
 
