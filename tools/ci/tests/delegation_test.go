@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"juchain.org/chain/tools/ci/internal/utils"
 )
 
@@ -85,10 +86,10 @@ func TestE_Delegation(t *testing.T) {
 		utils.AssertTrue(t, infoAfter.AccumulatedRewards.Cmp(big.NewInt(0)) == 0, "rewards should be reset after claim")
 	})
 
-	// [D-04] Validator Resign Impact
-	t.Run("D-04_ValidatorResignImpact", func(t *testing.T) {
+	// [D-04a] Validator Resign Impact
+	t.Run("D-04a_ValidatorResignImpact", func(t *testing.T) {
 		// 1. New Validator
-		key, addr, _ := createAndRegisterValidator(t, "D-04 Validator")
+		key, addr, _ := createAndRegisterValidator(t, "D-04a Validator")
 		
 		// 2. User Delegate
 		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(50))
@@ -109,6 +110,31 @@ func TestE_Delegation(t *testing.T) {
 			t.Fatal("Should not be able to delegate to resigned validator")
 		}
 		t.Logf("Caught expected error: %v", err)
+	})
+
+	// [D-04b] Multi-Delegator Isolation
+	t.Run("D-04b_MultiDelegatorIsolation", func(t *testing.T) {
+		keyA, _, _ := ctx.CreateAndFundAccount(utils.ToWei(100))
+		keyB, _, _ := ctx.CreateAndFundAccount(utils.ToWei(100))
+		
+		optsA, _ := ctx.GetTransactor(keyA)
+		optsB, _ := ctx.GetTransactor(keyB)
+		
+		optsA.Value = utils.ToWei(10)
+		txA, _ := ctx.Staking.Delegate(optsA, valAddr)
+		ctx.WaitMined(txA.Hash())
+		
+		optsB.Value = utils.ToWei(20)
+		txB, _ := ctx.Staking.Delegate(optsB, valAddr)
+		ctx.WaitMined(txB.Hash())
+		
+		waitBlocks(t, 2)
+		
+		infoA, _ := ctx.Staking.GetDelegationInfo(nil, crypto.PubkeyToAddress(keyA.PublicKey), valAddr)
+		infoB, _ := ctx.Staking.GetDelegationInfo(nil, crypto.PubkeyToAddress(keyB.PublicKey), valAddr)
+		
+		utils.AssertBigIntEq(t, infoA.Amount, utils.ToWei(10), "User A amount mismatch")
+		utils.AssertBigIntEq(t, infoB.Amount, utils.ToWei(20), "User B amount mismatch")
 	})
 
 	// [D-08] Delegation Below Min

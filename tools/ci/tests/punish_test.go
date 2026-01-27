@@ -122,6 +122,90 @@ func TestG_DoubleSign(t *testing.T) {
 		// Use Approximate check
 		utils.AssertTrue(t, reporterBalAfter.Cmp(reporterBalBefore) > 0, "Reporter should receive reward")
 	})
+
+	// [P-21] Resign + Double Sign (Should work)
+	t.Run("P-21_ResignThenDoubleSign", func(t *testing.T) {
+		key, addr, _ := createAndRegisterValidator(t, "P-21 ResignDS")
+		opts, _ := ctx.GetTransactor(key)
+		
+		// 1. Resign
+		txR, _ := ctx.Staking.ResignValidator(opts)
+		ctx.WaitMined(txR.Hash())
+		
+		// 2. Submit Double Sign Evidence
+		header, _ := ctx.Clients[0].HeaderByNumber(nil, nil)
+		targetHeight := new(big.Int).Sub(header.Number, big.NewInt(1))
+		
+		h1 := &types.Header{Coinbase: addr, Number: targetHeight, Extra: make([]byte, 32+65), Root: common.Hash{0x21}}
+		h2 := &types.Header{Coinbase: addr, Number: targetHeight, Extra: make([]byte, 32+65), Root: common.Hash{0x22}}
+		
+		rlp1, _ := signHeaderClique(h1, key)
+		rlp2, _ := signHeaderClique(h2, key)
+		
+		txDS, err := ctx.Punish.SubmitDoubleSignEvidence(opts, rlp1, rlp2)
+		utils.AssertNoError(t, err, "Should allow double sign punishment after resign")
+		ctx.WaitMined(txDS.Hash())
+	})
+
+	// [P-22] Exit + Double Sign (Should fail)
+	t.Run("P-22_ExitThenDoubleSign", func(t *testing.T) {
+		key, addr, _ := createAndRegisterValidator(t, "P-22 ExitDS")
+		opts, _ := ctx.GetTransactor(key)
+		
+		// 1. Resign -> Wait -> Exit
+		ctx.Staking.ResignValidator(opts)
+		waitBlocks(t, 55)
+		txE, err := ctx.Staking.ExitValidator(opts)
+		utils.AssertNoError(t, err, "Exit failed")
+		ctx.WaitMined(txE.Hash())
+		
+		// 2. Submit Double Sign Evidence
+		header, _ := ctx.Clients[0].HeaderByNumber(nil, nil)
+		h1 := &types.Header{Coinbase: addr, Number: header.Number, Extra: make([]byte, 32+65), Root: common.Hash{0x31}}
+		h2 := &types.Header{Coinbase: addr, Number: header.Number, Extra: make([]byte, 32+65), Root: common.Hash{0x32}}
+		rlp1, _ := signHeaderClique(h1, key)
+		rlp2, _ := signHeaderClique(h2, key)
+		
+		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, rlp1, rlp2)
+		if err == nil {
+			t.Fatal("Should fail double sign punishment after exit (validator not exist)")
+		}
+	})
+
+	// [P-10~P-14] Double Sign Exceptions
+	t.Run("P-10-14_DoubleSignExceptions", func(t *testing.T) {
+		key, addr, _ := createAndRegisterValidator(t, "DS Exceptions")
+		opts, _ := ctx.GetTransactor(key)
+		header, _ := ctx.Clients[0].HeaderByNumber(nil, nil)
+		
+		hBase := &types.Header{Coinbase: addr, Number: header.Number, Extra: make([]byte, 32+65)}
+		
+		// P-11: Same Header
+		h1_same, _ := signHeaderClique(hBase, key)
+		_, err := ctx.Punish.SubmitDoubleSignEvidence(opts, h1_same, h1_same)
+		if err == nil { t.Fatal("Should fail with 'Same header'") }
+		
+		// P-12: Height Mismatch
+		h1_h1 := *hBase
+		h2_h2 := *hBase
+		h2_h2.Number = new(big.Int).Add(hBase.Number, big.NewInt(1))
+		h2_h2.Root = common.Hash{0x01}
+		rlp1, _ := signHeaderClique(&h1_h1, key)
+		rlp2, _ := signHeaderClique(&h2_h2, key)
+		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, rlp1, rlp2)
+		if err == nil { t.Fatal("Should fail with 'Height mismatch'") }
+		
+		// P-14: Signer != Coinbase (Using different key to sign)
+		otherKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(1))
+		h1_wrong := *hBase
+		h1_wrong.Root = common.Hash{0x05}
+		h2_wrong := *hBase
+		h2_wrong.Root = common.Hash{0x06}
+		rlp1_wrong, _ := signHeaderClique(&h1_wrong, otherKey)
+		rlp2_wrong, _ := signHeaderClique(&h2_wrong, otherKey)
+		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, rlp1_wrong, rlp2_wrong)
+		if err == nil { t.Fatal("Should fail with 'Signer != coinbase'") }
+	})
 }
 
 // signHeaderClique calculates the signature of the header and returns RLP encoded header with signature

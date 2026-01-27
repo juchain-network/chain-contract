@@ -145,12 +145,30 @@ func TestF_PunishAndExit(t *testing.T) {
 		utils.AssertBigIntEq(t, info.Amount, utils.ToWei(10), "Delegation amount check failed")
 	})
 
-	// [P-04] Last Man Standing (Removal Protection)
-	t.Run("P-04_LastManStanding", func(t *testing.T) {
-		// We cannot easily reduce validator set to 1 in this shared env without breaking others.
-		// However, we can check if `removeValidator` reverts if count is 1.
-		// Since we have ~3 validators, this is hard to trigger naturally.
-		// We would need to mock or use a separate test suite with 1 validator.
-		t.Skip("Skipping P-04 as it requires reducing validator set to 1")
+	// [P-20] Punished Redemption Path
+	t.Run("P-20_PunishedRedemption", func(t *testing.T) {
+		// 1. Setup Validator
+		key, addr, _ := createAndRegisterValidator(t, "P-20 Punished")
+		opts, _ := ctx.GetTransactor(key)
+		
+		// 2. Simulate Jail/Resign
+		txR, _ := ctx.Staking.ResignValidator(opts)
+		ctx.WaitMined(txR.Hash())
+		
+		// 3. Must pass proposal again to unjail (Redemption)
+		err := passProposalFor(t, addr, "P-20 Redemption")
+		utils.AssertNoError(t, err, "redemption proposal failed")
+		
+		// 4. Wait jail period (using waitBlocks from delegation_test.go which is in same package)
+		waitBlocks(t, 55)
+		
+		// 5. Unjail
+		txU, err := ctx.Staking.UnjailValidator(opts, addr)
+		utils.AssertNoError(t, err, "unjail failed")
+		ctx.WaitMined(txU.Hash())
+		
+		// 6. Verify Active
+		status, _ := ctx.Validators.IsValidatorActive(nil, addr)
+		utils.AssertTrue(t, status, "Should be active after redemption")
 	})
 }

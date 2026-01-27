@@ -254,6 +254,34 @@ func TestD_StakingManagement(t *testing.T) {
 			t.Logf("Caught error after Resign: %v", err)
 		}
 	})
+
+	// [S-14] Jailed Constraints
+	t.Run("S-14_JailedConstraints", func(t *testing.T) {
+		key, addr, _ := createAndRegisterValidator(t, "S-14 Jailed")
+		opts, _ := ctx.GetTransactor(key)
+		
+		// 1. Resign (Jails the validator)
+		txR, _ := ctx.Staking.ResignValidator(opts)
+		ctx.WaitMined(txR.Hash())
+		
+		// 2. Try to update commission (Should fail with "Validator is jailed")
+		_, err := ctx.Staking.UpdateCommissionRate(opts, big.NewInt(2500))
+		if err == nil {
+			t.Fatal("Should fail updating commission while jailed")
+		}
+		t.Logf("Update commission rejected as expected: %v", err)
+		
+		// 3. Try to add stake (Should be allowed)
+		opts.Value = utils.ToWei(10)
+		txAdd, err := ctx.Staking.AddValidatorStake(opts)
+		utils.AssertNoError(t, err, "Should allow adding stake while jailed")
+		ctx.WaitMined(txAdd.Hash())
+		
+		// 4. Edit Info (Should be allowed)
+		txEdit, err := ctx.Validators.CreateOrEditValidator(opts, addr, "JailedMoniker", "", "", "", "")
+		utils.AssertNoError(t, err, "Should allow editing info while jailed")
+		ctx.WaitMined(txEdit.Hash())
+	})
 }
 
 func createAndRegisterValidator(t *testing.T, name string) (*ecdsa.PrivateKey, common.Address, error) {
