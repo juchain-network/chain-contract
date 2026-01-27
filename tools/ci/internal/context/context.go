@@ -181,7 +181,7 @@ func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, co
 
 // WaitMined waits for a tx to be mined
 func (c *CIContext) WaitMined(txHash common.Hash) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	
 	queryTicker := time.NewTicker(1 * time.Second)

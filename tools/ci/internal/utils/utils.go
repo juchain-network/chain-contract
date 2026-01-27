@@ -27,16 +27,51 @@ func AssertBigIntEq(t *testing.T, a, b *big.Int, msg string) {
 }
 
 // ToWei converts Ether to Wei
+
 func ToWei(ether float64) *big.Int {
+
 	wei := new(big.Int)
+
 	wei.SetString("1000000000000000000", 10) // 10^18
 
+	
+
 	e := new(big.Float).SetFloat64(ether)
+
 	w := new(big.Float).SetInt(wei)
+
+	
 
 	res := new(big.Float).Mul(e, w)
 
+	
+
 	result := new(big.Int)
+
 	res.Int(result)
+
 	return result
+
 }
+
+
+
+// WeiToEther converts Wei to Ether string
+
+func WeiToEther(wei *big.Int) string {
+
+	if wei == nil {
+
+		return "0"
+
+	}
+
+	f := new(big.Float).SetInt(wei)
+
+	f.Quo(f, big.NewFloat(1e18))
+
+	return f.Text('f', 4)
+
+}
+
+
