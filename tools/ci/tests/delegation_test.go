@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -69,6 +70,35 @@ func TestE_Delegation(t *testing.T) {
 		utils.AssertTrue(t, len(entries) > 0, "unbonding entry missing")
 	})
 
+	// [D-01b] Withdraw Unbonded after period
+	t.Run("D-01b_WithdrawUnbonded", func(t *testing.T) {
+		userKey, userAddr, err := ctx.CreateAndFundAccount(utils.ToWei(200))
+		utils.AssertNoError(t, err, "failed to setup delegator")
+		opts, _ := ctx.GetTransactor(userKey)
+
+		// Delegate then undelegate
+		opts.Value = utils.ToWei(20)
+		txD, err := ctx.Staking.Delegate(opts, valAddr)
+		utils.AssertNoError(t, err, "delegate failed")
+		ctx.WaitMined(txD.Hash())
+
+		opts.Value = nil
+		txU, err := ctx.Staking.Undelegate(opts, valAddr, utils.ToWei(10))
+		utils.AssertNoError(t, err, "undelegate failed")
+		ctx.WaitMined(txU.Hash())
+
+		// Wait unbonding period + 1
+		period, _ := ctx.Proposal.UnbondingPeriod(nil)
+		waitBlocks(t, int(new(big.Int).Add(period, big.NewInt(1)).Int64()))
+
+		txW, err := ctx.Staking.WithdrawUnbonded(opts, valAddr, big.NewInt(20))
+		utils.AssertNoError(t, err, "withdraw unbonded failed")
+		ctx.WaitMined(txW.Hash())
+
+		cnt, _ := ctx.Staking.GetUnbondingEntriesCount(nil, userAddr, valAddr)
+		utils.AssertTrue(t, cnt.Sign() == 0, "unbonding entries should be cleared after withdraw")
+	})
+
 	// [D-02] Validator Claims Commission
 	t.Run("D-02_ClaimCommission", func(t *testing.T) {
 		infoBefore, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
@@ -84,6 +114,16 @@ func TestE_Delegation(t *testing.T) {
 		
 		infoAfter, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		utils.AssertTrue(t, infoAfter.AccumulatedRewards.Cmp(big.NewInt(0)) == 0, "rewards should be reset after claim")
+	})
+
+	// [D-02b] Claim rewards without delegation
+	t.Run("D-02b_ClaimNoDelegation", func(t *testing.T) {
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(10))
+		opts, _ := ctx.GetTransactor(userKey)
+		_, err := ctx.Staking.ClaimRewards(opts, valAddr)
+		if err == nil {
+			t.Fatal("Should fail claim rewards with no delegation")
+		}
 	})
 
 	// [D-04a] Validator Resign Impact
@@ -369,6 +409,26 @@ func TestE_Delegation(t *testing.T) {
 		}
 	})
 
+	// [D-18] Undelegate Below Minimum
+	t.Run("D-18_UndelegateBelowMin", func(t *testing.T) {
+		minUndel, _ := ctx.Proposal.MinUndelegation(nil)
+		if minUndel.Cmp(big.NewInt(1)) <= 0 {
+			t.Skip("minUndelegation too small to test below-min path")
+		}
+
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(50))
+		opts, _ := ctx.GetTransactor(userKey)
+		opts.Value = utils.ToWei(10)
+		ctx.Staking.Delegate(opts, valAddr)
+
+		opts.Value = nil
+		belowMin := new(big.Int).Sub(minUndel, big.NewInt(1))
+		_, err := ctx.Staking.Undelegate(opts, valAddr, belowMin)
+		if err == nil {
+			t.Fatal("Should fail undelegate below minUndelegation")
+		}
+	})
+
 	// [D-12] Delegate to Jailed
 	t.Run("D-12_DelegateToJailed", func(t *testing.T) {
 		// Need a jailed validator. We can reuse one from D-17 or create new.
@@ -433,19 +493,67 @@ func TestE_Delegation(t *testing.T) {
 		}
 		t.Logf("Caught expected error: %v", err)
 	})
+
+	// [D-19] Invalid maxEntries for withdrawUnbonded
+	t.Run("D-19_InvalidMaxEntries", func(t *testing.T) {
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(10))
+		opts, _ := ctx.GetTransactor(userKey)
+		_, err := ctx.Staking.WithdrawUnbonded(opts, valAddr, big.NewInt(0))
+		if err == nil {
+			t.Fatal("Should fail with maxEntries=0")
+		}
+		_, err = ctx.Staking.WithdrawUnbonded(opts, valAddr, big.NewInt(21))
+		if err == nil {
+			t.Fatal("Should fail with maxEntries too large")
+		}
+	})
 }
 
 // Helper to wait for N blocks
 func waitBlocks(t *testing.T, n int) {
+	if n <= 0 || ctx == nil || len(ctx.Clients) == 0 {
+		return
+	}
+
+	// Try fast mining if the RPC supports it.
+	rpcClient := ctx.Clients[0].Client()
+	if rpcClient != nil {
+		var res interface{}
+		// anvil_mine supports a block count
+		if err := rpcClient.CallContext(context.Background(), &res, "anvil_mine", n); err == nil {
+			return
+		}
+		// hardhat_mine expects hex string
+		if err := rpcClient.CallContext(context.Background(), &res, "hardhat_mine", fmt.Sprintf("0x%x", n)); err == nil {
+			return
+		}
+		// evm_mine one by one
+		ok := true
+		for i := 0; i < n; i++ {
+			if err := rpcClient.CallContext(context.Background(), &res, "evm_mine"); err != nil {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return
+		}
+	}
+
+	// Fallback: wait for blocks by polling.
 	header, err := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	start := header.Number.Uint64()
 	target := start + uint64(n)
-	
+
 	for {
 		time.Sleep(2 * time.Second)
 		h, err := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
-		if err != nil { continue }
+		if err != nil {
+			continue
+		}
 		if h.Number.Uint64() >= target {
 			break
 		}

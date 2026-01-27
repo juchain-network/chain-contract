@@ -121,6 +121,12 @@ func TestG_DoubleSign(t *testing.T) {
 		
 		// Use Approximate check
 		utils.AssertTrue(t, reporterBalAfter.Cmp(reporterBalBefore) > 0, "Reporter should receive reward")
+
+		// Duplicate evidence should fail
+		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, rlp1, rlp2)
+		if err == nil {
+			t.Fatal("Duplicate evidence should fail")
+		}
 	})
 
 	// [P-21] Resign + Double Sign (Should work)
@@ -174,7 +180,10 @@ func TestG_DoubleSign(t *testing.T) {
 
 	// [P-10~P-14] Double Sign Exceptions
 	t.Run("P-10-14_DoubleSignExceptions", func(t *testing.T) {
-		key, addr, _ := createAndRegisterValidator(t, "DS Exceptions")
+		key, addr, err := createAndRegisterValidator(t, "DS Exceptions")
+		if err != nil {
+			t.Skipf("create validator failed: %v", err)
+		}
 		opts, _ := ctx.GetTransactor(key)
 		header, _ := ctx.Clients[0].HeaderByNumber(nil, nil)
 		
@@ -182,7 +191,7 @@ func TestG_DoubleSign(t *testing.T) {
 		
 		// P-11: Same Header
 		h1_same, _ := signHeaderClique(hBase, key)
-		_, err := ctx.Punish.SubmitDoubleSignEvidence(opts, h1_same, h1_same)
+		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, h1_same, h1_same)
 		if err == nil { t.Fatal("Should fail with 'Same header'") }
 		
 		// P-12: Height Mismatch
@@ -205,6 +214,42 @@ func TestG_DoubleSign(t *testing.T) {
 		rlp2_wrong, _ := signHeaderClique(&h2_wrong, otherKey)
 		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, rlp1_wrong, rlp2_wrong)
 		if err == nil { t.Fatal("Should fail with 'Signer != coinbase'") }
+
+		// P-10: Future block
+		hFuture := *hBase
+		hFuture.Number = new(big.Int).Add(hBase.Number, big.NewInt(1))
+		hFuture.Root = common.Hash{0x07}
+		rlpFuture1, _ := signHeaderClique(&hFuture, key)
+		hFuture2 := hFuture
+		hFuture2.Root = common.Hash{0x08}
+		rlpFuture2, _ := signHeaderClique(&hFuture2, key)
+		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, rlpFuture1, rlpFuture2)
+		if err == nil { t.Fatal("Should fail with 'Future block'") }
+
+		// P-13: Non-validator signer
+		nonValKey, nonValAddr, _ := ctx.CreateAndFundAccount(utils.ToWei(1))
+		hNonVal := &types.Header{Coinbase: nonValAddr, Number: hBase.Number, Extra: make([]byte, 32+65), Root: common.Hash{0x09}}
+		hNonVal2 := &types.Header{Coinbase: nonValAddr, Number: hBase.Number, Extra: make([]byte, 32+65), Root: common.Hash{0x0a}}
+		rlpNon1, _ := signHeaderClique(hNonVal, nonValKey)
+		rlpNon2, _ := signHeaderClique(hNonVal2, nonValKey)
+		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, rlpNon1, rlpNon2)
+		if err == nil { t.Fatal("Should fail with 'Signer not exist'") }
+
+		// P-10 (Malformed): invalid header bytes
+		_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, []byte{0x01, 0x02}, []byte{0x03})
+		if err == nil { t.Fatal("Should fail with malformed header") }
+
+		// P-11: Evidence expired (if chain height is high enough)
+		window, _ := ctx.Proposal.DoubleSignWindow(nil)
+		if hBase.Number.Cmp(window) > 0 {
+			expiredHeight := new(big.Int).Sub(hBase.Number, new(big.Int).Add(window, big.NewInt(1)))
+			hExp1 := &types.Header{Coinbase: addr, Number: expiredHeight, Extra: make([]byte, 32+65), Root: common.Hash{0x0b}}
+			hExp2 := &types.Header{Coinbase: addr, Number: expiredHeight, Extra: make([]byte, 32+65), Root: common.Hash{0x0c}}
+			rlpExp1, _ := signHeaderClique(hExp1, key)
+			rlpExp2, _ := signHeaderClique(hExp2, key)
+			_, err = ctx.Punish.SubmitDoubleSignEvidence(opts, rlpExp1, rlpExp2)
+			if err == nil { t.Fatal("Should fail with expired evidence") }
+		}
 	})
 }
 

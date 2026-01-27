@@ -57,9 +57,30 @@ func TestB_Governance_Dynamic(t *testing.T) {
 		}
 		
 		// Test Expired (Wait for expiry)
-		// ProposalLastingPeriod is 200 blocks (from Phase 0). Waiting 200 blocks is too slow for CI.
-		// We can skip this or set a very short period in another test.
-		// For now, skipping "Expired" check to avoid long wait.
+		// Create a fresh proposal so we can let it expire.
+		_, candAddr2, _ := ctx.CreateAndFundAccount(utils.ToWei(1))
+		tx2, err := ctx.Proposal.CreateProposal(opts, candAddr2, true, "G-08 Expiry")
+		if err != nil && err.Error() == "execution reverted: Proposal creation too frequent" {
+			waitNextBlock()
+			tx2, err = ctx.Proposal.CreateProposal(opts, candAddr2, true, "G-08 Expiry Retry")
+		}
+		utils.AssertNoError(t, err, "create expiry proposal failed")
+		ctx.WaitMined(tx2.Hash())
+		receipt2, _ := ctx.Clients[0].TransactionReceipt(context.Background(), tx2.Hash())
+		var propID2 [32]byte
+		for _, l := range receipt2.Logs {
+			if ev, err := ctx.Proposal.ParseLogCreateProposal(*l); err == nil { propID2 = ev.Id; break }
+		}
+		period, _ := ctx.Proposal.ProposalLastingPeriod(nil)
+		if period.Sign() == 0 {
+			t.Skip("proposalLastingPeriod is zero")
+		}
+		// Mine period+1 blocks to expire
+		waitBlocks(t, int(new(big.Int).Add(period, big.NewInt(1)).Int64()))
+		_, err = ctx.Proposal.VoteProposal(voteOpts, propID2, true)
+		if err == nil {
+			t.Fatal("Vote on expired proposal should fail")
+		}
 	})
 
 	// [G-12] Last Man Standing (Removal Protection)

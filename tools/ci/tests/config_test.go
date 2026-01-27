@@ -230,6 +230,9 @@ func TestB_ConfigBoundaryChecks(t *testing.T) {
 	// [C-04] Consensus & Safety
 	runRevertTest("Max Validators Overflow", ConfigID_MaxValidators, big.NewInt(22), "maxValidators exceeds consensus limit")
 	runRevertTest("Zero Burn Address", ConfigID_BurnAddress, big.NewInt(0), "burnAddress must be non-zero")
+	// Burn address out of uint160 range
+	burnTooLarge := new(big.Int).Lsh(big.NewInt(1), 160)
+	runRevertTest("Burn Address Overflow", ConfigID_BurnAddress, burnTooLarge, "burnAddress invalid")
 
 	// [C-05] Economic
 	// Default DoubleSignSlash=50000 ether, Reward=10000 ether

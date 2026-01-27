@@ -248,11 +248,5 @@ func TestB_Governance(t *testing.T) {
 }
 
 func waitNextBlock() {
-	header, _ := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
-	current := header.Number.Uint64()
-	for {
-		time.Sleep(1 * time.Second)
-		newH, _ := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
-		if newH.Number.Uint64() > current { break }
-	}
+	waitBlocks(nil, 1)
 }

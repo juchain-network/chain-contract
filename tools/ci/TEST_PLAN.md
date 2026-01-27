@@ -44,6 +44,7 @@ This section covers validation logic for all configuration parameters.
 *   **[C-04] Consensus & Safety Parameters (CID 9, 14)**
     *   **Max Validators Overflow**: Set `maxValidators` (CID 9) > 21 (Hardcoded consensus limit). Expected: Revert "maxValidators exceeds consensus limit".
     *   **Zero Burn Address**: Set `burnAddress` (CID 14) to 0 address. Expected: Revert "burnAddress must be non-zero".
+    *   **Burn Address Overflow**: Set `burnAddress` (CID 14) > uint160 max. Expected: Revert "burnAddress invalid".
 
 *   **[C-05] Economic Model Parameters (CID 12, 13, 17, 18)**
     *   **Reward > Slash**: Set `doubleSignRewardAmount` (CID 13) > current `doubleSignSlashAmount`. Expected: Revert "doubleSignRewardAmount must be <= doubleSignSlashAmount".
@@ -143,8 +144,8 @@ This section covers validation logic for all configuration parameters.
 
 ### 2.2 Combined Scenarios
 *   **[S-05] Reincarnation Flow**
-    *   **Steps**: `resign` -> `exit` -> Proposal(Add) -> `register`.
-    *   **Expected**: Successfully "revived", state fully reset.
+    *   **Steps**: `resign` -> Proposal(Add) -> wait `validatorUnjailPeriod` -> `unjail`.
+    *   **Expected**: Successfully "revived" and reactivated (via unjail + tryActive).
 *   **[S-17] Stake Jitter**
     *   **Steps**: Add Stake -> Wait -> Decrease Stake -> Wait -> Add Stake.
     *   **Expected**: `accumulatedRewards` settled and accumulated before each change.
@@ -183,6 +184,32 @@ This section covers validation logic for all configuration parameters.
         2. `createOrEditValidator` (Success).
         3. `addValidatorStake` (Success).
         4. `updateCommissionRate` (Fail, Revert "Validator is jailed").
+*   **[S-01b] Add Stake Zero**
+    *   **Steps**: Validator calls `addValidatorStake` with `msg.value = 0`.
+    *   **Expected**: Revert "Amount must be positive".
+*   **[S-04b] Invalid Commission Rate**
+    *   **Steps**: `updateCommissionRate(0)` or `updateCommissionRate(>maxCommissionRate)`.
+    *   **Expected**: Revert "Commission rate must be greater than 0" / "Commission rate exceeds maximum allowed".
+
+### 2.4 Additional Robustness & System Hooks
+*   **[S-15] Proposal Expiry Boundary**
+    *   **Steps**: Proposal passes -> wait `proposalLastingPeriod` -> attempt `registerValidator`.
+    *   **Expected**: Revert "Proposal expired, must repropose".
+*   **[S-16] Zero Delegated Rewards**
+    *   **Steps**: Validator with `totalDelegated = 0` receives rewards.
+    *   **Expected**: Rewards accumulate to validator (no delegator split).
+*   **[S-19] Unbonding Limit (Validator Self-Stake)**
+    *   **Steps**: Call `decreaseValidatorStake` 20 times; 21st fails.
+    *   **Expected**: Revert "Too many unbonding entries".
+*   **[S-20] Double-Sign Safety Window**
+    *   **Steps**: Validator tries to `resign` within `doubleSignWindow` of last active block.
+    *   **Expected**: Revert "Exit blocked in doubleSignWindow".
+*   **[S-21] Initialization Protection**
+    *   **Steps**: Call `initialize`/`initializeWithValidators` again.
+    *   **Expected**: Revert "Already initialized".
+*   **[S-22] Distribute Rewards & Claim Cooldown**
+    *   **Steps**: Miner calls `distributeRewards` -> validator claims -> distribute again -> claim before cooldown.
+    *   **Expected**: First claim success; second claim reverts "Must wait withdrawProfitPeriod blocks between claims".
 
 ---
 
@@ -192,9 +219,15 @@ This section covers validation logic for all configuration parameters.
 *   **[D-01] Full Delegation & Withdrawal**
     *   **Steps**: `delegate` -> `claimRewards` -> `undelegate` -> `withdrawUnbonded`.
     *   **Expected**: Rewards received, principal successfully withdrawn.
+*   **[D-01b] Withdraw Unbonded (After Period)**
+    *   **Steps**: `delegate` -> `undelegate` -> wait `unbondingPeriod` -> `withdrawUnbonded`.
+    *   **Expected**: Unbonded entries cleared, principal withdrawn.
 *   **[D-02] Validator Claims Commission**
     *   **Steps**: Wait `withdrawProfitPeriod` -> `claimValidatorRewards`.
     *   **Expected**: Successful claim.
+*   **[D-02b] Claim Without Delegation**
+    *   **Steps**: Call `claimRewards` without any delegation.
+    *   **Expected**: Revert "No delegation found".
 
 ### 3.2 Combined Scenarios
 *   **[D-03] Compound Delegation**
@@ -235,6 +268,9 @@ This section covers validation logic for all configuration parameters.
 *   **[D-11] Zero Undelegate**
     *   **Steps**: `undelegate(0)`.
     *   **Expected**: Revert "Amount must be positive".
+*   **[D-18] Undelegate Below Minimum**
+    *   **Steps**: `undelegate` with `amount < minUndelegation` and `amount > 0`.
+    *   **Expected**: Revert "Insufficient undelegation amount".
 *   **[D-12] Delegate to Jailed**
     *   **Steps**: Call `delegate` on jailed validator.
     *   **Expected**: Revert "Validator is jailed".
@@ -244,6 +280,9 @@ This section covers validation logic for all configuration parameters.
 *   **[D-14] Unbonding Queue Full**
     *   **Steps**: Call `undelegate` 21 times (assuming MAX=20).
     *   **Expected**: Revert "Too many unbonding entries".
+*   **[D-19] Invalid `maxEntries` on `withdrawUnbonded`**
+    *   **Steps**: Call `withdrawUnbonded` with `maxEntries=0` or `> MAX`.
+    *   **Expected**: Revert "maxEntries must be positive" / "maxEntries too large".
 
 ---
 
@@ -295,6 +334,68 @@ This section covers validation logic for all configuration parameters.
     *   **Expected**: Revert (Expired, Future, Malformed, Non-Validator, Duplicate).
 *   **[P-15~P-17] Withdrawal Exceptions**
     *   **Expected**: Revert (Frequency, Zero profit, Non-Fee address).
+
+### 4.4 Punish Engine & Consensus Hooks
+*   **[P-23] Punish Normal Path**
+    *   **Steps**: Miner calls `punish(val)` once on non-epoch block.
+    *   **Expected**: `missedBlocksCounter` increments; validator appears in punish list.
+*   **[P-24] Execute Pending (No-op)**
+    *   **Steps**: Call `executePending(0)` and `executePending(1)` when queue empty.
+    *   **Expected**: No revert; no state change.
+*   **[P-25] Decrease Missed Blocks Counter (Epoch)**
+    *   **Steps**: Miner calls `decreaseMissedBlocksCounter(epoch)` on epoch block.
+    *   **Expected**: Counter decreases (or no-op if list empty), event emitted.
+
+---
+
+## 5. Validators & Consensus Reward Hooks
+
+### 5.1 Rewards & Fees
+*   **[V-03] Distribute Block Reward**
+    *   **Steps**: Miner calls `Validators.distributeBlockReward()` with non-zero value.
+    *   **Expected**: Fee income increases for active miner (or redistributes if jailed).
+*   **[S-22] Distribute Rewards & Claim Cooldown**
+    *   **Steps**: Miner calls `Staking.distributeRewards()` -> validator claims -> distribute again -> claim before cooldown.
+    *   **Expected**: First claim success; second claim reverts due to cooldown.
+*   **[V-04] Withdraw Profits Exceptions**
+    *   **Steps**: Non-fee caller withdraws; fee caller withdraws with zero profit.
+    *   **Expected**: Revert "You are not the fee receiver..." / "You don't have any profits".
+
+### 5.2 Validator Set Updates (Consensus)
+*   **[V-07] Update Active Validator Set (Non-Epoch)**
+    *   **Steps**: Miner calls `updateActiveValidatorSet` on non-epoch block.
+    *   **Expected**: Revert "Block epoch only".
+*   **[V-08] Update Active Validator Set (Epoch)**
+    *   **Steps**: Miner calls `updateActiveValidatorSet` on epoch block with expected set.
+    *   **Expected**: `currentValidatorSet` updated.
+
+### 5.3 Validator Info Validation & Queries
+*   **[V-02] Description Boundary (Moniker)**
+    *   **Steps**: `createOrEditValidator` with moniker > 70 bytes.
+    *   **Expected**: Revert "Invalid moniker length".
+*   **[V-02b] Description Boundary (Identity/Website/Email/Details)**
+    *   **Steps**: Exceed max lengths (identity 3000, website 140, email 140, details 280).
+    *   **Expected**: Revert with corresponding "Invalid ... length".
+*   **[V-05] Active Validators With Stakes**
+    *   **Steps**: Call `getActiveValidatorsWithStakes`.
+    *   **Expected**: Array lengths match, values returned.
+
+---
+
+## 6. Public Query APIs (Smoke)
+*   **[Q-01] Core Query Coverage**
+    *   **Steps**: Call view getters for proposal/pass/nonces, validator status, staking counts, unbonding counts.
+    *   **Expected**: No revert; basic invariants hold (lengths match, counts non-negative).
+
+---
+
+## 7. Init & Upgrade Guards
+*   **[U-01] Initialization Guards**
+    *   **Steps**: Call `initialize`/`initializeWithValidators` on already-initialized contracts.
+    *   **Expected**: Revert "Already initialized".
+*   **[U-02] Reinitialize V2**
+    *   **Steps**: Miner calls `reinitializeV2` once; second call should fail.
+    *   **Expected**: `revision` updates; second call reverts "Already reinitialized".
 
 ---
 

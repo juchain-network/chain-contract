@@ -68,11 +68,12 @@ func TestB_Governance_Extended(t *testing.T) {
 	t.Run("G-14_ParallelGovernance", func(t *testing.T) {
 		// Create two proposals simultaneously: one for Config, one for Validator
 		
-		// 1. Config Proposal
+		// 1. Config Proposal (burnAddress, CID 14)
 		proposerKey := ctx.GenesisValidators[0]
 		opts1, _ := ctx.GetTransactor(proposerKey)
-		// Change MinDelegation (CID 14) to 11 ETH temporarily
-		targetVal := utils.ToWei(11) 
+		origBurn, _ := ctx.Proposal.BurnAddress(nil)
+		targetBurn := common.HexToAddress("0x000000000000000000000000000000000000bEEF")
+		targetVal := new(big.Int).SetBytes(targetBurn.Bytes())
 		tx1, err := ctx.Proposal.CreateUpdateConfigProposal(opts1, big.NewInt(14), targetVal)
 		if err != nil { t.Logf("Config proposal err: %v", err) } // might hit cooldown
 		
@@ -118,19 +119,31 @@ func TestB_Governance_Extended(t *testing.T) {
 		waitNextBlock()
 		
 		// Check Config
-		val, _ := ctx.Proposal.MinDelegation(nil)
-		utils.AssertBigIntEq(t, val, targetVal, "Parallel config update failed")
+		burn, _ := ctx.Proposal.BurnAddress(nil)
+		utils.AssertTrue(t, burn == targetBurn, "Parallel config update failed")
 		
 		// Check Validator
 		pass, _ := ctx.Proposal.Pass(nil, candAddr)
 		utils.AssertTrue(t, pass, "Parallel validator passed failed")
 		
-		// Revert config change
+		// Revert config change to original burn address
 		opts1, _ = ctx.GetTransactor(proposerKey)
 		waitNextBlock()
-		// Reset to 10 ETH
-		ctx.Proposal.CreateUpdateConfigProposal(opts1, big.NewInt(14), utils.ToWei(10))
-		// (Skipping voting for revert to save time, assuming it works)
+		origVal := new(big.Int).SetBytes(origBurn.Bytes())
+		txReset, err := ctx.Proposal.CreateUpdateConfigProposal(opts1, big.NewInt(14), origVal)
+		if err == nil {
+			ctx.WaitMined(txReset.Hash())
+			recReset, _ := ctx.Clients[0].TransactionReceipt(context.Background(), txReset.Hash())
+			var idReset [32]byte
+			for _, l := range recReset.Logs {
+				if ev, err := ctx.Proposal.ParseLogCreateConfigProposal(*l); err == nil { idReset = ev.Id; break }
+			}
+			for _, vk := range ctx.GenesisValidators {
+				vo, _ := ctx.GetTransactor(vk)
+				ctx.Proposal.VoteProposal(vo, idReset, true)
+			}
+			waitNextBlock()
+		}
 	})
 
 	// [G-10] Already in Top Validator Set

@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +39,16 @@ func TestD_StakingManagement(t *testing.T) {
 		newInfo, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		expected := new(big.Int).Add(initialInfo.SelfStake, addAmount)
 		utils.AssertBigIntEq(t, newInfo.SelfStake, expected, "stake not increased correctly")
+	})
+
+	// [S-01b] Add Stake Zero
+	t.Run("S-01b_AddStakeZero", func(t *testing.T) {
+		opts, _ := ctx.GetTransactor(valKey)
+		opts.Value = nil
+		_, err := ctx.Staking.AddValidatorStake(opts)
+		if err == nil {
+			t.Fatal("Should fail adding zero stake")
+		}
 	})
 
 	// [S-02] Decrease Stake
@@ -84,6 +95,22 @@ func TestD_StakingManagement(t *testing.T) {
 		ctx.WaitMined(tx.Hash())
 		info, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		utils.AssertBigIntEq(t, info.CommissionRate, newRate, "commission rate not updated")
+	})
+
+	// [S-04b] Invalid Commission Rate
+	t.Run("S-04b_InvalidCommissionRate", func(t *testing.T) {
+		opts, _ := ctx.GetTransactor(valKey)
+		_, err := ctx.Staking.UpdateCommissionRate(opts, big.NewInt(0))
+		if err == nil {
+			t.Fatal("Should fail with zero commission rate")
+		}
+
+		maxRate, _ := ctx.Proposal.MaxCommissionRate(nil)
+		tooHigh := new(big.Int).Add(maxRate, big.NewInt(1))
+		_, err = ctx.Staking.UpdateCommissionRate(opts, tooHigh)
+		if err == nil {
+			t.Fatal("Should fail with commission rate above max")
+		}
 	})
 
 	// [S-07] Decrease Below Min
@@ -158,6 +185,26 @@ func TestD_StakingManagement(t *testing.T) {
 		utils.AssertNoError(t, err, "resign failed")
 		ctx.WaitMined(tx.Hash())
 		t.Logf("Validator %s resigned", newValAddr.Hex())
+
+		// Reproposal + Unjail (reincarnation)
+		err = passProposalFor(t, newValAddr, "S-05 Reproposal")
+		if err != nil {
+			t.Fatalf("reproposal failed: %v", err)
+		}
+		unjailPeriod, _ := ctx.Proposal.ValidatorUnjailPeriod(nil)
+		waitBlocks(t, int(new(big.Int).Add(unjailPeriod, big.NewInt(1)).Int64()))
+
+		txU, err := ctx.Staking.UnjailValidator(opts, newValAddr)
+		if err != nil {
+			if strings.Contains(err.Error(), "Too many new validators in this epoch") {
+				t.Skip("unjail rate limit hit")
+			}
+			t.Fatalf("unjail failed: %v", err)
+		}
+		ctx.WaitMined(txU.Hash())
+
+		active, _ := ctx.Validators.IsValidatorActive(nil, newValAddr)
+		utils.AssertTrue(t, active, "validator should be active after unjail")
 	})
 
 	// [S-06] Stake Below Minimum
