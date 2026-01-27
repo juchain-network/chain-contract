@@ -91,6 +91,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     mapping(address => uint256) public validatorDelegatorCount;
 
     uint256 public revision;
+    uint256 public currentEpochId;
+    uint256 public validatorsAddedInEpoch;
     uint256[50] private __gap;
 
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
@@ -125,6 +127,24 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function _onlyActiveValidator(address validator) internal view {
         require(validatorStakes[validator].selfStake >= proposalContract.minValidatorStake(), "Not a valid validator");
         require(!validatorStakes[validator].isJailed, "Validator is jailed");
+    }
+
+    /**
+     * @dev Internal function to check and mark validator addition
+     * @notice Limits the number of validators that can be added (registered or unjailed) to 1 per epoch
+     */
+    function _checkAndMarkValidatorAddition() internal {
+        uint256 epoch = proposalContract.epoch();
+        if (epoch == 0) return; // Should not happen after init
+
+        uint256 epochId = block.number / epoch;
+        if (epochId > currentEpochId) {
+            currentEpochId = epochId;
+            validatorsAddedInEpoch = 0;
+        }
+
+        require(validatorsAddedInEpoch < 1, "Too many new validators in this epoch");
+        validatorsAddedInEpoch++;
     }
 
     /**
@@ -225,6 +245,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @param commissionRate Commission rate (0-10000, representing 0%-100%)
      */
     function registerValidator(uint256 commissionRate) external payable onlyInitialized onlyNotEpoch nonReentrant {
+        _checkAndMarkValidatorAddition();
         require(commissionRate > 0, "Commission rate must be greater than 0");
         require(commissionRate <= proposalContract.maxCommissionRate(), "Commission rate exceeds maximum allowed");
         require(!validatorStakes[msg.sender].isRegistered, "Already registered");
@@ -797,6 +818,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @notice Once jailed, validator must go through the voting process again to regain validator status
      */
     function unjailValidator(address validator) external onlyNotEpoch nonReentrant {
+        _checkAndMarkValidatorAddition();
         require(validator != address(0), "Invalid validator address");
         require(msg.sender == validator, "Only validator can unjail themselves");
         require(validatorStakes[validator].isJailed, "Validator not jailed");

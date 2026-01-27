@@ -276,9 +276,13 @@ contract StakingTest is Test {
             if (selfStake > 0) {
                 return;
             }
-        } else {
-            _setupValidatorPass(validator);
         }
+        
+        // Fast forward to next epoch to avoid rate limit
+        vm.roll(block.number + TEST_EPOCH);
+        
+        // Refresh proposal pass status/height after roll because it might have expired
+        _setupValidatorPass(validator);
         
         // Register validator in Staking contract
         vm.prank(validator);
@@ -447,10 +451,14 @@ contract StakingTest is Test {
 
     function test_RevertWhen_DoubleRegistration() public {
         _setupValidatorPass(VALIDATOR1);
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         vm.deal(VALIDATOR1, MIN_STAKE);
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         vm.expectRevert("Already registered");
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
@@ -458,25 +466,33 @@ contract StakingTest is Test {
 
     function testMinimumValidatorsRequirement() public {
         // Register 3 validators (minimum required)
+        address[3] memory validatorAddrs = [VALIDATOR1, VALIDATOR2, VALIDATOR3];
+        
         _setupValidatorPass(VALIDATOR1);
         _setupValidatorPass(VALIDATOR2);
         _setupValidatorPass(VALIDATOR3);
         
-        vm.prank(VALIDATOR1);
-        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        
-        vm.prank(VALIDATOR2);
-        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        
-        vm.prank(VALIDATOR3);
-        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        for (uint i = 0; i < 3; i++) {
+            vm.roll(block.number + TEST_EPOCH);
+            _setupValidatorPass(validatorAddrs[i]);
+            vm.prank(validatorAddrs[i]);
+            Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        }
         
         // Update active validator set to make validators active
         _updateActiveValidatorSet();
         
-        assertEq(Validators(VALIDATORS).getActiveValidatorCount(), 3);
-
-        // Now register a 4th validator
+        
+        // Test that no validator can exit (they are in active set, must resign first)
+        for (uint i = 0; i < 3; i++) {
+            vm.prank(validatorAddrs[i]);
+            vm.expectRevert("Cannot exit: validator is in active set, resign first and wait until next epoch");
+            Staking(STAKING).exitValidator();
+        }
+        
+        // Add one more validator
+        _setupValidatorPass(VALIDATOR4);
+        vm.roll(block.number + TEST_EPOCH);
         _setupValidatorPass(VALIDATOR4);
         vm.prank(VALIDATOR4);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
@@ -518,12 +534,19 @@ contract StakingTest is Test {
         
         vm.deal(VALIDATOR1, MIN_STAKE * 2);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
         
         // Register 2 more validators to meet minimum
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR3);
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
@@ -564,21 +587,19 @@ contract StakingTest is Test {
 
     function test_RevertWhen_PartialWithdrawalBelowMinimum() public {
         // Register multiple validators first to avoid minimum validator constraint
-        _setupValidatorPass(VALIDATOR1);
-        _setupValidatorPass(VALIDATOR2);
-        _setupValidatorPass(VALIDATOR3);
-        _setupValidatorPass(VALIDATOR4);
+        address[4] memory validators = [VALIDATOR1, VALIDATOR2, VALIDATOR3, VALIDATOR4];
         
         vm.deal(VALIDATOR1, MIN_STAKE + 1000);
         
-        vm.prank(VALIDATOR1);
-        Staking(STAKING).registerValidator{value: MIN_STAKE + 1000}(COMMISSION_RATE);
-        vm.prank(VALIDATOR2);
-        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR3);
-        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
-        vm.prank(VALIDATOR4);
-        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        for (uint i = 0; i < validators.length; i++) {
+            _setupValidatorPass(validators[i]);
+            vm.roll(block.number + TEST_EPOCH);
+            _setupValidatorPass(validators[i]);
+            
+            uint256 stake = (i == 0) ? MIN_STAKE + 1000 : MIN_STAKE;
+            vm.prank(validators[i]);
+            Staking(STAKING).registerValidator{value: stake}(COMMISSION_RATE);
+        }
         
         // Try to withdraw amount that would leave stake below minimum
         vm.prank(VALIDATOR1);
@@ -619,6 +640,10 @@ contract StakingTest is Test {
             // Give VALIDATOR1 extra stake so we can decrease it
             uint256 stakeAmount = (i == 0) ? MIN_STAKE + 200 ether : MIN_STAKE;
             vm.deal(validatorAddrs[i], stakeAmount);
+            
+            vm.roll(block.number + TEST_EPOCH);
+            _setupValidatorPass(validatorAddrs[i]);
+            
             vm.startPrank(validatorAddrs[i]);
             Staking(STAKING).registerValidator{value: stakeAmount}(COMMISSION_RATE);
             vm.stopPrank();
@@ -710,12 +735,18 @@ contract StakingTest is Test {
         vm.deal(VALIDATOR2, MIN_STAKE * 2);
         vm.deal(VALIDATOR3, MIN_STAKE * 3);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR3);
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE * 3}(COMMISSION_RATE);
         
@@ -733,9 +764,13 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR1);
         _setupValidatorPass(VALIDATOR2);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
@@ -760,6 +795,8 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR3);
         
         for (uint i = 0; i < 3; i++) {
+            vm.roll(block.number + TEST_EPOCH);
+            _setupValidatorPass(validatorAddrs[i]);
             vm.prank(validatorAddrs[i]);
             Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         }
@@ -776,6 +813,8 @@ contract StakingTest is Test {
         }
         
         // Add one more validator
+        _setupValidatorPass(VALIDATOR4);
+        vm.roll(block.number + TEST_EPOCH);
         _setupValidatorPass(VALIDATOR4);
         vm.prank(VALIDATOR4);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
@@ -811,12 +850,23 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR3);
         _setupValidatorPass(VALIDATOR4);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR3);
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR4);
         vm.prank(VALIDATOR4);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
@@ -888,12 +938,23 @@ contract StakingTest is Test {
         vm.deal(VALIDATOR4, MIN_STAKE);
         
         // Register validators
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR3);
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR4);
         vm.prank(VALIDATOR4);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
@@ -1108,10 +1169,14 @@ contract StakingTest is Test {
     function test_RevertWhen_UnjailNotJailed() public {
         // Register a validator
         _setupValidatorPass(VALIDATOR1);
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Test unjailing a non-jailed validator (should revert)
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.expectRevert("Validator not jailed");
         Staking(STAKING).unjailValidator(VALIDATOR1);
         vm.stopPrank();
@@ -1259,6 +1324,10 @@ contract StakingTest is Test {
         
         // Register exactly 3 validators (minimum)
         for (uint i = 0; i < validators.length; i++) {
+            // Advance epoch
+            vm.roll(block.number + TEST_EPOCH);
+            _setupValidatorPass(validators[i]);
+            
             // Register validator using existing pass status from setUp
             vm.startPrank(validators[i]);
             Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
@@ -1309,6 +1378,12 @@ contract StakingTest is Test {
         for (uint i = 0; i < validatorAddrs.length; i++) {
             _setupValidatorPass(validatorAddrs[i]);
             vm.deal(validatorAddrs[i], MIN_STAKE);
+            
+            // Advance epoch to allow registration
+            vm.roll(block.number + TEST_EPOCH);
+            // Refresh proposal pass status
+            _setupValidatorPass(validatorAddrs[i]);
+            
             vm.startPrank(validatorAddrs[i]);
             Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
             vm.stopPrank();
@@ -1720,10 +1795,14 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR1);
         _setupValidatorPass(VALIDATOR2);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.startPrank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.stopPrank();
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.startPrank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         vm.stopPrank();
@@ -1803,15 +1882,23 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR4);
         
         // Register validators
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR3);
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR4);
         vm.prank(VALIDATOR4);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
@@ -1858,13 +1945,19 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR1);
         _setupValidatorPass(VALIDATOR2);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
         // Register a third validator to avoid "must keep at least one validator" error
+        _setupValidatorPass(VALIDATOR3);
+        vm.roll(block.number + TEST_EPOCH);
         _setupValidatorPass(VALIDATOR3);
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
@@ -1902,12 +1995,18 @@ contract StakingTest is Test {
         _setupValidatorPass(VALIDATOR2);
         _setupValidatorPass(VALIDATOR3);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR3);
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         
@@ -1967,12 +2066,23 @@ contract StakingTest is Test {
         vm.deal(VALIDATOR3, MIN_STAKE * 3);
         vm.deal(VALIDATOR4, MIN_STAKE * 5);
         
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
         vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE * 3}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR3);
         vm.prank(VALIDATOR3);
         Staking(STAKING).registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
+        
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR4);
         vm.prank(VALIDATOR4);
         Staking(STAKING).registerValidator{value: MIN_STAKE * 4}(COMMISSION_RATE);
         
@@ -2218,25 +2328,25 @@ contract StakingTest is Test {
     }
 
     function testGetTopValidators_ExactlyMaxValidators() public {
-        // Use existing validator addresses
-        address[] memory validators = new address[](6);
-        validators[0] = VALIDATOR1;
-        validators[1] = VALIDATOR2;
-        validators[2] = VALIDATOR3;
-        validators[3] = VALIDATOR4;
-        validators[4] = VALIDATOR5;
-        validators[5] = VALIDATOR6;
+        // Register max validators
+        uint256 maxValidators = Proposal(PROPOSAL).maxValidators();
         
-        // Register validators (already have pass status from setUp)
-        for (uint i = 0; i < validators.length; i++) {
-            vm.deal(validators[i], MIN_STAKE);
-            vm.prank(validators[i]);
+        for (uint i = 0; i < maxValidators; i++) {
+            // Generate deterministic address
+            address val = address(uint160(uint256(keccak256(abi.encodePacked("validator", i)))));
+            vm.deal(val, MIN_STAKE);
+            
+            _setupValidatorPass(val);
+            
+            vm.roll(block.number + TEST_EPOCH);
+            _setupValidatorPass(val);
+            
+            vm.prank(val);
             Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
         }
-
-        // Get top validators - should return all 6
-        address[] memory topValidators = Staking(STAKING).getTopValidators(validators);
-        assertEq(topValidators.length, 6);
+        
+        address[] memory topValidators = Validators(VALIDATORS).getTopValidators();
+        assertEq(topValidators.length, maxValidators);
     }
 
     function testResignValidator_AlreadyJailed() public {

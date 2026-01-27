@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"juchain.org/chain/tools/ci/internal/utils"
 )
 
@@ -149,14 +150,82 @@ func TestB_Governance(t *testing.T) {
 		frKey, frontRunner, _ := ctx.CreateAndFundAccount(utils.ToWei(100005))
 		proposerKey := ctx.GenesisValidators[0]
 		opts, _ := ctx.GetTransactor(proposerKey)
+		opts.Value = nil
 		
-		tx, _ := createProposalWithRetry(opts, frontRunner, true, "G-07")
+		tx, err := createProposalWithRetry(opts, frontRunner, true, "G-07 FrontRun")
+		utils.AssertNoError(t, err, "front-run proposal failed")
 		ctx.WaitMined(tx.Hash())
 		
 		regOpts, _ := ctx.GetTransactor(frKey)
 		regOpts.Value = utils.ToWei(100000)
-		_, err := ctx.Staking.RegisterValidator(regOpts, big.NewInt(1000))
-		if err == nil { t.Fatal("Expected register failure") }
+		
+		_, err = ctx.Staking.RegisterValidator(regOpts, big.NewInt(1000))
+		if err == nil {
+			t.Fatal("Expected register failure (front-running), got success")
+		}
+	})
+
+	// [G-16] Smooth Expansion (Rate Limiting)
+	t.Run("G-16_SmoothExpansion", func(t *testing.T) {
+		// 1. Get current active count
+		currentSet, _ := ctx.Validators.GetActiveValidators(nil)
+		initialCount := len(currentSet)
+		
+		// 2. Register 2 new validators (V1, V2)
+		// We need to fully onboard them (Propose -> Vote -> Register)
+		// Assuming we can do this fast enough within an epoch (or simulated)
+		
+		// V1
+		_, v1Addr, err := ctx.CreateAndFundAccount(utils.ToWei(100005))
+		utils.AssertNoError(t, err, "create v1 failed")
+		err = createAndPassProposal(v1Addr, true, "G-16 V1")
+		utils.AssertNoError(t, err, "v1 proposal failed")
+		
+		// Register V1
+		// We need key for V1? Ah, CreateAndFundAccount returns key.
+		// Wait, CreateAndFundAccount returns (key, addr, err)
+		// But in this helper block I ignored key.
+		// I need to refactor to get key or just re-fund if needed?
+		// Actually, I can just use a helper that returns key.
+		
+		// Let's copy-paste account creation to get key
+		v1Key, _, _ := ctx.CreateAndFundAccount(utils.ToWei(100005)) // Use new account for V1 actually
+		// The previous line was just funding 'v1Addr' but discarding key.
+		// Let's fix this properly.
+		v1Addr = crypto.PubkeyToAddress(v1Key.PublicKey)
+		
+		// Re-do proposal for correct address
+		err = createAndPassProposal(v1Addr, true, "G-16 V1 Real")
+		utils.AssertNoError(t, err, "v1 real proposal failed")
+		
+		v1Opts, _ := ctx.GetTransactor(v1Key)
+		v1Opts.Value = utils.ToWei(100000)
+		tx1, err := ctx.Staking.RegisterValidator(v1Opts, big.NewInt(1000))
+		utils.AssertNoError(t, err, "v1 register failed")
+		ctx.WaitMined(tx1.Hash())
+		
+		// V2 (Should FAIL registration in same epoch)
+		v2Key, v2Addr, _ := ctx.CreateAndFundAccount(utils.ToWei(100005))
+		err = createAndPassProposal(v2Addr, true, "G-16 V2")
+		utils.AssertNoError(t, err, "v2 proposal failed")
+		
+		v2Opts, _ := ctx.GetTransactor(v2Key)
+		v2Opts.Value = utils.ToWei(100000)
+		_, err = ctx.Staking.RegisterValidator(v2Opts, big.NewInt(1000))
+		if err == nil {
+			t.Fatal("Expected v2 register to fail due to epoch limit, but it succeeded")
+		}
+		t.Log("V2 registration correctly blocked in same epoch:", err)
+
+		// 3. Check getTopValidators
+		topValidators, err := ctx.Validators.GetTopValidators(nil)
+		utils.AssertNoError(t, err, "getTopValidators failed")
+		
+		expectedLen := initialCount + 1
+		if len(topValidators) != expectedLen {
+			t.Fatalf("Smooth expansion failed: expected %d validators, got %d", expectedLen, len(topValidators))
+		}
+		t.Logf("Smooth expansion verified: %d -> %d (capped by registration limit)", initialCount, len(topValidators))
 	})
 }
 

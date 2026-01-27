@@ -361,6 +361,11 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
             vm.prank(newValidators[i]);
             Validators(VALIDATORS).createOrEditValidator(payable(newValidators[i]), "", "", "", "", "");
             
+            // Advance epoch to allow registration
+            vm.roll(block.number + 1_000_000);
+            // Refresh proposal
+            _passProposal(newValidators[i], true);
+            
             // Register with minimum stake
             vm.deal(newValidators[i], minStake);
             vm.prank(newValidators[i]);
