@@ -303,6 +303,21 @@ func TestD_StakingManagement(t *testing.T) {
 		}
 		t.Logf("Caught expected error for 21st decrease: %v", err)
 	})
+
+	// [S-21] Initialization Protection
+	t.Run("S-21_DoubleInitialization", func(t *testing.T) {
+		// Attempt to call initialize again on already initialized Staking contract
+		proposerKey := ctx.GenesisValidators[0]
+		opts, _ := ctx.GetTransactor(proposerKey)
+		
+		// Any random addresses
+		dummy := common.HexToAddress("0xDEADBEEF")
+		_, err := ctx.Staking.Initialize(opts, dummy, dummy, dummy)
+		if err == nil {
+			t.Fatal("Should fail double initialization")
+		}
+		t.Logf("Double init correctly blocked: %v", err)
+	})
 }
 
 func createAndRegisterValidator(t *testing.T, name string) (*ecdsa.PrivateKey, common.Address, error) {

@@ -1,104 +1,303 @@
-# JuChain 集成测试大纲 (Integration Test Plan)
+# JuChain Integration Test Plan
 
-本文档规划了 JuChain 系统合约的端到端集成测试路径。为确保测试效率，测试执行顺序至关重要。
+This document outlines the end-to-end integration test paths for JuChain system contracts. To ensure test efficiency, the execution order is crucial.
 
-**执行策略**:
-1.  **参数调整 (Phase 0)**: 首先通过治理提案将系统的时间参数（如解绑期、监禁期）缩短，为后续测试创造条件。
-2.  **核心功能 (Phase 1)**: 在新参数下执行验证者准入、质押、委托等全流程。
-3.  **边界与异常 (Phase 2)**: 穿插进行各种异常场景测试。
-
----
-
-## 0. 系统参数调整与测试 (System Config & Setup) - **PRIORITY 1**
-
-此阶段既是测试“修改参数”功能的正确性，也是为后续测试做准备。
-
-### 0.1 正常流程 (Setup)
-*   **[C-01] 缩短关键周期参数**
-    *   **目标**:
-        *   `unbondingPeriod`: 设为 100 blocks (原 7天) -> 允许测试取款。
-        *   `validatorUnjailPeriod`: 设为 50 blocks (原 1天) -> 允许测试 Unjail。
-        *   `proposalCooldown`: 设为 10 blocks (原 100) -> 允许连续提案。
-        *   `proposalLastingPeriod`: 设为 200 blocks (原 7天) -> 既保证有时间投票，又方便测试过期。
-        *   `withdrawProfitPeriod`: 设为 20 blocks (原 1天) -> 允许快速测试提取收益。
-        *   `commissionUpdateCooldown`: 设为 50 blocks (原 7天) -> 允许测试修改佣金。
-    *   **步骤**:
-        1.  验证者发起 ProposalType=2 的提案 (CID 对应上述参数)。
-        2.  其他验证者投票通过。
-        3.  检查 `Params` 合约中的变量值是否已更新。
-    *   **预期**: 参数更新成功，Event `LogPassProposal` 触发。
+**Execution Strategy**:
+1.  **Parameter Adjustment (Phase 0)**: First, use governance proposals to shorten system time parameters (e.g., unbonding period, jail period) to create suitable conditions for subsequent tests.
+2.  **Core Functionalities (Phase 1)**: Execute the full flow of validator onboarding, staking, and delegation under the new parameters.
+3.  **Boundaries & Exceptions (Phase 2)**: Interleave various exception scenario tests throughout the process.
 
 ---
 
-## 1. 治理与验证者准入 (Governance & Onboarding)
+## 0. System Config & Setup - **PRIORITY 1**
 
-### 1.1 正常流程
-*   **[G-01] 新验证者准入流程**: 提案 -> 投票 -> 注册。
-*   **[G-02] 移除验证者流程**: 提案 -> 投票 -> 移除。
-*   **[G-03] 验证者复活流程 (Re-onboarding)**: 针对已移除地址再次提案准入。
-*   **[G-04] 否决提案流程 (Reject Proposal)**: 投票拒绝后的状态验证。
+This phase both tests the "Update Config" functionality and prepares the environment for subsequent tests.
 
-### 1.2 高级与组合
-*   **[G-13] 连续添加与移除 (Flip-Flop)**: 验证状态切换的干净程度。
-*   **[G-14] 提案与参数修改并行 (Parallel Governance)**: 验证 Nonce 机制确保 ID 唯一。
-*   **[G-15] 动态阈值 (Dynamic Threshold)**: 投票期间验证者集合变更，检查通过阈值是否动态调整。
-*   **[G-17] 提案 ID 冲突 (Nonce Handling)**: 多个验证者针对同一目标发起相同提案，应生成不同 ID。
+### 0.1 Normal Flow (Setup)
+*   **[C-01] Shorten Key Period Parameters**
+    *   **Goal**:
+        *   `unbondingPeriod`: set to 100 blocks (was 7 days) -> allows testing withdrawals.
+        *   `validatorUnjailPeriod`: set to 50 blocks (was 1 day) -> allows testing Unjail.
+        *   `proposalCooldown`: set to 10 blocks (was 100) -> allows back-to-back proposals.
+        *   `proposalLastingPeriod`: set to 200 blocks (was 7 days) -> ensures time for voting while easy to test expiry.
+        *   `withdrawProfitPeriod`: set to 20 blocks (was 1 day) -> allows fast testing of profit withdrawals.
+        *   `commissionUpdateCooldown`: set to 50 blocks (was 7 days) -> allows testing commission updates.
+    *   **Steps**:
+        1.  Validator initiates a ProposalType=2 proposal (CID corresponding to parameters above).
+        2.  Other validators vote to pass.
+        3.  Check if variable values in `Params` contract are updated.
+    *   **Expected**: Parameters updated successfully, Event `LogPassProposal` triggered.
 
----
+### 0.2 Parameter Validation (Boundaries)
+This section covers validation logic for all configuration parameters.
 
-## 2. 质押与验证者管理 (Staking & Management)
+*   **[C-02] General Validation**
+    *   **Invalid Config ID**: Attempt to modify CID=20 (out of range). Expected: Revert "Invalid config ID".
+    *   **Zero Value**: Attempt to set any parameter to 0. Expected: Revert "Config value must be positive".
 
-### 2.1 正常流程
-*   **[S-01] 增加质押 (Add Stake)**
-*   **[S-02] 减少质押 (Decrease Stake)**
-*   **[S-03] 修改信息 (Edit Info)**
-*   **[S-04] 修改佣金 (Update Commission)**
+*   **[C-03] Punishment Threshold Logic Conflicts (CID 1, 2, 3)**
+    *   **Punish >= Remove**: Set `punishThreshold` (CID 1) >= current `removeThreshold`. Expected: Revert "punishThreshold must be < removeThreshold".
+    *   **Remove <= Punish**: Set `removeThreshold` (CID 2) <= current `punishThreshold`. Expected: Revert "removeThreshold must be > punishThreshold".
+    *   **Remove < Decrease**: Set `removeThreshold` (CID 2) < current `decreaseRate`. Expected: Revert "removeThreshold must be >= decreaseRate".
+    *   **Decrease > Remove**: Set `decreaseRate` (CID 3) > current `removeThreshold`. Expected: Revert "decreaseRate must be <= removeThreshold".
 
-### 2.2 高级与组合
-*   **[S-05] 验证者重生流程 (Reincarnation)**: Resign -> Exit -> Propose -> Register。
-*   **[S-17] 频繁质押变更与收益 (Stake Jitter)**: 验证收益在质押变动时的累积。
-*   **[S-18] 混合质押操作 (Mixed Stakes)**: 验证者自质押与委托同时变动时的比例分配。
-*   **[S-16] 零委托收益归属**: 验证者无委托人时，收益全额归属。
+*   **[C-04] Consensus & Safety Parameters (CID 9, 14)**
+    *   **Max Validators Overflow**: Set `maxValidators` (CID 9) > 21 (Hardcoded consensus limit). Expected: Revert "maxValidators exceeds consensus limit".
+    *   **Zero Burn Address**: Set `burnAddress` (CID 14) to 0 address. Expected: Revert "burnAddress must be non-zero".
 
-### 2.3 异常与边界
-*   **[S-15] 提案有效期限制 (7-Day Rule)**: 提案通过超过 7 天后尝试注册应失败。
-*   **[S-19] 质押队列满 (Unbonding Limit)**: 验证者连续减少质押超过 20 次应触发限制。
-*   **[S-20] 退出阻塞期 (DoubleSignWindow)**: 出块后立即申请退出应被拦截。
-*   **[S-14] Jailed 期间约束**: 监禁状态下禁止修改佣金，但允许追加质押。
-
----
-
-## 3. 委托与奖励 (Delegation & Rewards)
-
-### 3.1 正常流程
-*   **[D-01] 全流程委托与赎回**: Delegate -> Claim -> Undelegate -> Withdraw。
-*   **[D-02] 验证者提取佣金**: 周期性提取。
-
-### 3.2 组合场景
-*   **[D-04] 多用户委托隔离**: A 和 B 委托同一验证者，收益互不干扰。
-*   **[D-15] 身份升级**: 委托人申请并成为验证者。
-*   **[D-17] 角色降级**: 验证者退出后继续作为委托人。
+*   **[C-05] Economic Model Parameters (CID 12, 13, 17, 18)**
+    *   **Reward > Slash**: Set `doubleSignRewardAmount` (CID 13) > current `doubleSignSlashAmount`. Expected: Revert "doubleSignRewardAmount must be <= doubleSignSlashAmount".
+    *   **Slash < Reward**: Set `doubleSignSlashAmount` (CID 12) < current `doubleSignRewardAmount`. Expected: Revert "doubleSignSlashAmount must be >= doubleSignRewardAmount".
+    *   **Invalid Base Ratio**: Set `baseRewardRatio` (CID 17) > 10000 (100%). Expected: Revert "baseRewardRatio must be <= 10000".
+    *   **Invalid Max Commission**: Set `maxCommissionRate` (CID 18) > 10000 (100%). Expected: Revert "maxCommissionRate must be <= 10000".
 
 ---
 
-## 4. 惩罚与退出 (Punishment & Exit)
+## 1. Governance & Onboarding
 
-### 4.1 正常流程
-*   **[P-07] 双签证据提交 (Submit Evidence)**: 构造 RLP 证据触发 Slash。
-*   **[P-08] 提取手续费收益**: `withdrawProfits` 逻辑。
+*   **Prerequisite**: Use new parameters set in [C-01].
 
-### 4.2 组合与健壮性
-*   **[V-01] 收益分配回退 (Re-distribution)**: 验证者在 Epoch 中被 Jailed，其出块收益应分给其他活跃者。
-*   **[P-23] 惩罚计数 Epoch 递减**: 验证计数器随时间自动清理。
-*   **[P-24] 待处理队列自动执行**: 验证 `executePending` 在下一区块成功执行。
+### 1.1 Normal Flow
+*   **[G-01] New Validator Onboarding Flow**
+    *   **Steps**: Existing validator initiates proposal (Add Validator) -> Vote passes (Agree > 50%) -> Candidate calls `registerValidator`.
+    *   **Expected**: Candidate successfully registered, status becomes `Active`, `getHighestValidators` includes this address.
+*   **[G-02] Remove Validator Flow**
+    *   **Steps**: Initiate proposal (Remove Validator) -> Vote passes.
+    *   **Expected**: Target validator `pass` status becomes false, marked as `Unpassed`. If in `currentValidatorSet`, they will be removed at next Epoch.
+*   **[G-03] Validator Re-onboarding Flow**
+    *   **Scenario**: For validators already removed (or slashed).
+    *   **Steps**: Initiate proposal (Add Validator, target is old address) -> Vote passes -> Target calls `unjailValidator` or `registerValidator`.
+    *   **Expected**: `pass` status reset to true, validator re-enters Active status.
+*   **[G-04] Reject Proposal Flow**
+    *   **Steps**: Initiate proposal -> Over 50% validators vote `false` (Reject).
+    *   **Expected**: Proposal state ends, Event `LogRejectProposal` triggered, target state unchanged.
 
-### 4.3 异常边界
-*   **[V-02] 描述信息超长**: 验证 `validateDescription` 的长度校验。
-*   **[V-04] 非指定地址提取收益**: 安全拦截。
-*   **[P-22] 退出后的双签**: 验证已退出验证者不再接受双签惩罚。
+### 1.2 Combined Scenarios
+*   **[G-13] Flip-Flop (Add & Remove)**
+    *   **Steps**: Add V -> Vote passes -> Register -> Remove V -> Vote passes -> Add V -> Vote passes -> Revive.
+    *   **Expected**: State switches correctly every time, no residue from previous rounds.
+*   **[G-14] Parallel Governance**
+    *   **Steps**: Initiate Add Validator proposal -> Initiate Config Update proposal -> Vote Config -> Vote Validator.
+    *   **Expected**: Both proposals work independently without interference. Verify Nonce ensures unique IDs.
+*   **[G-15] Dynamic Threshold**
+    *   **Scenario**: Proposal needs 3 votes (out of 4).
+    *   **Steps**: Proposal created -> 2 people vote -> V4 removed (Total becomes 3, threshold becomes 2) -> Check proposal state.
+    *   **Expected**: The next `voteProposal` (or `results` query) should recognize the new threshold.
+
+### 1.3 Security & Rate Limiting - **NEW**
+*   **[G-16] Smooth Expansion**
+    *   **Scenario**: Verify that at most 1 active validator can be added per Epoch.
+    *   **Steps**:
+        1.  Register validator A.
+        2.  Register validator B.
+        3.  Query `getTopValidators`.
+    *   **Expected**: List length relative to `currentActiveSet` increases by at most 1.
+
+### 1.4 Exceptions & Boundaries
+*   **[G-05] Proposal Cooldown**
+    *   **Steps**: Same validator initiates proposals within 10 blocks (new param).
+    *   **Expected**: Revert "Proposal creation too frequent".
+*   **[G-06] Duplicate Proposal**
+    *   **Steps**:
+        1. Initiate proposal A (Add V1).
+        2. Before A ends, initiate proposal B (Add V1).
+    *   **Expected**: Revert "Proposal already exists".
+*   **[G-07] Front-running Register**
+    *   **Steps**: Proposal votes = 50% (not reached >50% threshold), candidate attempts `registerValidator`.
+    *   **Expected**: Revert "Must pass proposal first".
+*   **[G-08] Invalid Voting Behavior**
+    *   **Expired**: Vote on proposal exceeding `proposalLastingPeriod`. Expected: Revert "Proposal expired".
+    *   **Double Vote**: Vote twice on same ID. Expected: Revert "You can't vote for a proposal twice".
+    *   **Non-Existent**: Vote on random ID. Expected: Revert "Proposal does not exist".
+*   **[G-09] Description Too Long**
+    *   **Steps**: `createProposal` with `details` exceeding 3000 bytes.
+    *   **Expected**: Revert "Details too long".
+*   **[G-10] Duplicate Add of Existing Validator**
+    *   **Steps**: Initiate Add proposal for validator already in `highestValidatorsSet` with `pass=true`.
+    *   **Expected**: Revert "Validator is already in top validator set".
+*   **[G-11] Ghost Removal**
+    *   **Steps**: Initiate Remove proposal for random address -> Vote passes.
+    *   **Expected**: Flow succeeds, Event `LogPassProposal` triggered, but no impact on on-chain validator set (No-op).
+*   **[G-12] Last Man Standing**
+    *   **Scenario**: Only 1 validator left in network.
+    *   **Steps**: Initiate Remove self proposal -> Passes.
+    *   **Expected**: Proposal passes, but actual removal skipped due to protection, validator remains in set.
 
 ---
 
-**注意**:
-*   所有测试执行前，请确保 `tools/ci/config.yaml` 配置正确。
-*   关键异常路径必须覆盖 `Revert` 信息断言。
+## 2. Staking & Management
+
+### 2.1 Normal Flow
+*   **[S-01] Add Stake**
+    *   **Steps**: Validator calls `addValidatorStake`.
+    *   **Expected**: `selfStake` increases.
+*   **[S-02] Decrease Stake**
+    *   **Steps**: Validator calls `decreaseValidatorStake`.
+    *   **Expected**: `selfStake` decreases, amount moved to `unbondingDelegations`.
+*   **[S-03] Edit Info**
+    *   **Steps**: Validator calls `createOrEditValidator`.
+    *   **Expected**: Info updated successfully.
+*   **[S-04] Update Commission**
+    *   **Steps**: Validator calls `updateCommissionRate`.
+    *   **Expected**: Rate updated.
+
+### 2.2 Combined Scenarios
+*   **[S-05] Reincarnation Flow**
+    *   **Steps**: `resign` -> `exit` -> Proposal(Add) -> `register`.
+    *   **Expected**: Successfully "revived", state fully reset.
+*   **[S-17] Stake Jitter**
+    *   **Steps**: Add Stake -> Wait -> Decrease Stake -> Wait -> Add Stake.
+    *   **Expected**: `accumulatedRewards` settled and accumulated before each change.
+*   **[S-18] Mixed Stakes**
+    *   **Steps**: V self-stakes -> D delegates to V -> V decreases stake -> D increases delegation.
+    *   **Expected**: `totalStaked` remains consistent, distribution ratio dynamically adjusts.
+
+### 2.3 Exceptions & Boundaries
+*   **[S-06] Stake Below Minimum**
+    *   **Steps**: `msg.value < minValidatorStake` during registration.
+    *   **Expected**: Revert "Insufficient self-stake".
+*   **[S-07] Partial Withdraw Underflow**
+    *   **Steps**: `decreaseValidatorStake` such that remaining `selfStake` < `minValidatorStake`.
+    *   **Expected**: Revert "Remaining stake below minimum, withdraw all stake instead".
+*   **[S-08] Decrease Stake to Zero**
+    *   **Steps**: `decreaseValidatorStake` with amount equal to current `selfStake`.
+    *   **Expected**: Revert "Remaining stake below minimum" (suggest using Exit).
+*   **[S-09] Frequent Commission Update**
+    *   **Steps**: Update commission again during `commissionUpdateCooldown`.
+    *   **Expected**: Revert "Commission update too frequent".
+*   **[S-10] Non-Validator Operations**
+    *   **Steps**: Unregistered address calls `addValidatorStake` or `updateCommissionRate`.
+    *   **Expected**: Revert "Validator not registered".
+*   **[S-11] Duplicate Registration**
+    *   **Steps**: Registered validator calls `registerValidator` again.
+    *   **Expected**: Revert "Already registered".
+*   **[S-12] Zombie Register**
+    *   **Steps**: Previously slashed/removed address (pass=false) attempts `registerValidator`.
+    *   **Expected**: Revert "Must pass proposal first".
+*   **[S-13] Zombie Action**
+    *   **Steps**: Immediately call `addValidatorStake` after `exitValidator`.
+    *   **Expected**: Revert "Validator not registered".
+*   **[S-14] Jailed Constraints**
+    *   **Steps**:
+        1. Simulate Jail.
+        2. `createOrEditValidator` (Success).
+        3. `addValidatorStake` (Success).
+        4. `updateCommissionRate` (Fail, Revert "Validator is jailed").
+
+---
+
+## 3. Delegation & Rewards
+
+### 3.1 Normal Flow
+*   **[D-01] Full Delegation & Withdrawal**
+    *   **Steps**: `delegate` -> `claimRewards` -> `undelegate` -> `withdrawUnbonded`.
+    *   **Expected**: Rewards received, principal successfully withdrawn.
+*   **[D-02] Validator Claims Commission**
+    *   **Steps**: Wait `withdrawProfitPeriod` -> `claimValidatorRewards`.
+    *   **Expected**: Successful claim.
+
+### 3.2 Combined Scenarios
+*   **[D-03] Compound Delegation**
+    *   **Steps**: `delegate` -> Wait -> `delegate`.
+    *   **Expected**: Previous rewards auto-claimed on second delegation.
+*   **[D-04] Multi-Delegator**
+    *   **Steps**: A and B both delegate to V.
+    *   **Expected**: V's `totalDelegated` correct, rewards isolated between A and B.
+*   **[D-05] Multi-Validator**
+    *   **Steps**: A delegates to V1 and V2 separately.
+    *   **Expected**: Two independent delegation relationships.
+*   **[D-15] Role Upgrade**
+    *   **Steps**: A delegates to B -> A initiates proposal to register as validator -> Register.
+    *   **Expected**: Success. A holds dual roles.
+*   **[D-16] Circular Delegation**
+    *   **Steps**: V1 delegates to V2, V2 delegates to V1.
+    *   **Expected**: Success.
+*   **[D-17] Role Downgrade**
+    *   **Steps**: V1 exits -> V1 delegates to V2.
+    *   **Expected**: Success.
+
+### 3.3 Exceptions & Boundaries
+*   **[D-06] Early Withdrawal**
+    *   **Steps**: `withdrawUnbonded` immediately after `undelegate`.
+    *   **Expected**: Withdraw amount 0 or Revert.
+*   **[D-07] Self-Delegation**
+    *   **Steps**: Validator calls `delegate` to self.
+    *   **Expected**: Revert "Cannot delegate to yourself".
+*   **[D-08] Zero Delegation**
+    *   **Steps**: `msg.value = 0` for `delegate`.
+    *   **Expected**: Revert "Insufficient delegation amount".
+*   **[D-09] Delegate to Non-Existent**
+    *   **Steps**: `delegate` to random address.
+    *   **Expected**: Revert "Validator not registered".
+*   **[D-10] Over-Undelegate**
+    *   **Steps**: Staked 10 ETH, attempt `undelegate` 11 ETH.
+    *   **Expected**: Revert "Insufficient delegation".
+*   **[D-11] Zero Undelegate**
+    *   **Steps**: `undelegate(0)`.
+    *   **Expected**: Revert "Amount must be positive".
+*   **[D-12] Delegate to Jailed**
+    *   **Steps**: Call `delegate` on jailed validator.
+    *   **Expected**: Revert "Validator is jailed".
+*   **[D-13] Undelegate from Jailed**
+    *   **Steps**: Call `undelegate` from jailed validator.
+    *   **Expected**: Success (Escape path).
+*   **[D-14] Unbonding Queue Full**
+    *   **Steps**: Call `undelegate` 21 times (assuming MAX=20).
+    *   **Expected**: Revert "Too many unbonding entries".
+
+---
+
+## 4. Punishment & Exit
+
+### 4.1 Normal Flow
+*   **[P-01] Resign -> Unjail Path**
+    *   **Steps**: `resign` -> `unjail` -> `register`/`active`.
+    *   **Expected**: Completion of loop.
+*   **[P-02] Thorough Exit**
+    *   **Steps**: `resign` -> Wait -> `exit`.
+    *   **Expected**: Validator fully removed, Stake cleared.
+*   **[P-07] Submit Evidence**
+    *   **Steps**: Construct and submit double-sign evidence.
+    *   **Expected**: Slash + Jail.
+*   **[P-08] Withdraw Profits**
+    *   **Steps**: Call `withdrawProfits`.
+    *   **Expected**: Success.
+
+### 4.2 Combined Scenarios
+*   **[P-18] Quick Re-entry**
+    *   **Steps**: `exit` -> Proposal(Add) -> `register`.
+    *   **Expected**: Success.
+*   **[P-19] Role Change**
+    *   **Steps**: `exit` -> delegate to others.
+    *   **Expected**: Success.
+*   **[P-20] Redemption Path**
+    *   **Steps**: Slash/Jail -> Proposal(Add) -> `unjail`.
+    *   **Expected**: Success.
+*   **[P-21] Slash during Resign**
+    *   **Steps**: Submit double-sign after `resign`.
+    *   **Expected**: Successful Slash.
+*   **[P-22] Slash after Exit**
+    *   **Steps**: Submit double-sign after `exit`.
+    *   **Expected**: Revert "Validator not exist".
+
+### 4.3 Exceptions & Boundaries
+*   **[P-03] Forced Exit during Activity**
+    *   **Expected**: Revert "Cannot exit: validator is in active set...".
+*   **[P-04] Last Man Standing**
+    *   **Expected**: Revert "Cannot remove: must keep at least one...".
+*   **[P-05] Non-Validator Exit**
+    *   **Expected**: Revert "Validator not registered".
+*   **[P-06] Double Resign**
+    *   **Expected**: Revert "Validator already resigned or jailed".
+*   **[P-09] Miner Only Punish**
+    *   **Expected**: Revert "Miner only".
+*   **[P-10~P-14] Evidence Exceptions**
+    *   **Expected**: Revert (Expired, Future, Malformed, Non-Validator, Duplicate).
+*   **[P-15~P-17] Withdrawal Exceptions**
+    *   **Expected**: Revert (Frequency, Zero profit, Non-Fee address).
+
+---
+
+**Notes**:
+*   Ensure `tools/ci/config.yaml` is correctly configured before execution.
+*   Tests execute in order; prerequisite failure halts subsequent tests.
