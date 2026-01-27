@@ -165,6 +165,24 @@ func TestB_Governance(t *testing.T) {
 		}
 	})
 
+	// [V-02] Description Boundary Validation
+	t.Run("V-02_DescriptionBoundary", func(t *testing.T) {
+		proposerKey := ctx.GenesisValidators[0]
+		opts, _ := ctx.GetTransactor(proposerKey)
+		
+		valAddr := common.HexToAddress(ctx.Config.Validators[0].Address)
+		
+		// Moniker > 70 bytes
+		longMoniker := ""
+		for i := 0; i < 71; i++ { longMoniker += "a" }
+		
+		_, err := ctx.Validators.CreateOrEditValidator(opts, valAddr, longMoniker, "", "", "", "")
+		if err == nil {
+			t.Fatal("Should fail with moniker > 70 bytes")
+		}
+		t.Logf("Caught expected error: %v", err)
+	})
+
 	// [G-16] Smooth Expansion (Rate Limiting)
 	t.Run("G-16_SmoothExpansion", func(t *testing.T) {
 		// 1. Get current active count

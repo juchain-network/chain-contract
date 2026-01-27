@@ -282,6 +282,27 @@ func TestD_StakingManagement(t *testing.T) {
 		utils.AssertNoError(t, err, "Should allow editing info while jailed")
 		ctx.WaitMined(txEdit.Hash())
 	})
+
+	// [S-19] Unbonding Limit
+	t.Run("S-19_UnbondingLimit", func(t *testing.T) {
+		// Validator can also fill their own unbonding queue by decreasing stake multiple times
+		opts, _ := ctx.GetTransactor(valKey)
+		
+		// Fill 20 slots
+		for i := 0; i < 20; i++ {
+			// Decrease 1 wei or small amount
+			tx, err := ctx.Staking.DecreaseValidatorStake(opts, big.NewInt(1))
+			utils.AssertNoError(t, err, "Decrease failed within limit")
+			ctx.WaitMined(tx.Hash())
+		}
+		
+		// 21st slot should fail
+		_, err := ctx.Staking.DecreaseValidatorStake(opts, big.NewInt(1))
+		if err == nil {
+			t.Fatal("Should fail exceeding max unbonding entries")
+		}
+		t.Logf("Caught expected error for 21st decrease: %v", err)
+	})
 }
 
 func createAndRegisterValidator(t *testing.T, name string) (*ecdsa.PrivateKey, common.Address, error) {

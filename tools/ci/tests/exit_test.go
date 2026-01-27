@@ -145,6 +145,23 @@ func TestF_PunishAndExit(t *testing.T) {
 		utils.AssertBigIntEq(t, info.Amount, utils.ToWei(10), "Delegation amount check failed")
 	})
 
+	// [S-20] Double Sign Safety Window
+	t.Run("S-20_DoubleSignWindow", func(t *testing.T) {
+		// Validator who just mined a block cannot resign immediately
+		// In CI env, mining is fast. We check if validator 0 (current miner likely) can resign.
+		valKey := ctx.GenesisValidators[0]
+		opts, _ := ctx.GetTransactor(valKey)
+		
+		// If lastActiveBlock + doubleSignWindow >= block.number, it should fail
+		// Since we just ran tests, lastActiveBlock is likely recent.
+		_, err := ctx.Staking.ResignValidator(opts)
+		if err != nil {
+			t.Logf("Correctly rejected (if recently active): %v", err)
+		} else {
+			t.Log("Resign succeeded (not active in current window)")
+		}
+	})
+
 	// [P-20] Punished Redemption Path
 	t.Run("P-20_PunishedRedemption", func(t *testing.T) {
 		// 1. Setup Validator

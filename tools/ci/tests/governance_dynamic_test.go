@@ -1,10 +1,12 @@
 package tests
 
 import (
+	"bytes"
 	"context"
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"juchain.org/chain/tools/ci/internal/utils"
 )
 
@@ -184,5 +186,41 @@ func TestB_Governance_Dynamic(t *testing.T) {
 		// Now agree=3. Threshold=2. Should pass.
 		passV5, _ := ctx.Proposal.Pass(nil, v5Addr)
 		utils.AssertTrue(t, passV5, "V5 should pass with 3 votes (threshold reduced)")
+	})
+
+	// [G-17] Proposal Nonce Isolation
+	t.Run("G-17_NonceIsolation", func(t *testing.T) {
+		// Same target, same flag, same details from different proposers
+		target := common.HexToAddress("0xDEAD")
+		
+		// Proposer 1
+		p1Key := ctx.GenesisValidators[0]
+		opts1, _ := ctx.GetTransactor(p1Key)
+		tx1, err1 := ctx.Proposal.CreateProposal(opts1, target, false, "Duplicate")
+		utils.AssertNoError(t, err1, "P1 proposal failed")
+		
+		// Proposer 2 (Wait for next block to avoid cooldown)
+		waitNextBlock()
+		p2Key := ctx.GenesisValidators[1]
+		opts2, _ := ctx.GetTransactor(p2Key)
+		tx2, err2 := ctx.Proposal.CreateProposal(opts2, target, false, "Duplicate")
+		utils.AssertNoError(t, err2, "P2 proposal failed")
+		
+		// Get IDs
+		rec1, _ := ctx.Clients[0].TransactionReceipt(context.Background(), tx1.Hash())
+		rec2, _ := ctx.Clients[0].TransactionReceipt(context.Background(), tx2.Hash())
+		
+		var id1, id2 [32]byte
+		for _, l := range rec1.Logs {
+			if ev, err := ctx.Proposal.ParseLogCreateProposal(*l); err == nil { id1 = ev.Id; break }
+		}
+		for _, l := range rec2.Logs {
+			if ev, err := ctx.Proposal.ParseLogCreateProposal(*l); err == nil { id2 = ev.Id; break }
+		}
+		
+		if bytes.Equal(id1[:], id2[:]) {
+			t.Fatal("Proposal IDs should be unique even with same content (due to nonces)")
+		}
+		t.Logf("Generated unique IDs: %x and %x", id1, id2)
 	})
 }
