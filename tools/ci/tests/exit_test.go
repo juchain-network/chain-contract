@@ -90,4 +90,67 @@ func TestF_PunishAndExit(t *testing.T) {
 		_, err = ctx.Punish.Punish(opts, target)
 		utils.AssertTrue(t, err != nil, "Expected error 'Miner only' for Punish call from user")
 	})
+
+	// [P-05] Non-validator Exit
+	t.Run("P-05_NonValidatorExit", func(t *testing.T) {
+		key, _, _ := ctx.CreateAndFundAccount(utils.ToWei(10))
+		opts, _ := ctx.GetTransactor(key)
+		
+		_, err := ctx.Staking.ExitValidator(opts)
+		if err == nil {
+			t.Fatal("Non-validator should not be able to exit")
+		}
+	})
+
+	// [P-06] Double Resign
+	t.Run("P-06_DoubleResign", func(t *testing.T) {
+		key, _, err := createAndRegisterValidator(t, "P-06 Double")
+		if err != nil { return }
+		opts, _ := ctx.GetTransactor(key)
+		
+		// 1. Resign
+		tx, _ := ctx.Staking.ResignValidator(opts)
+		ctx.WaitMined(tx.Hash())
+		
+		// 2. Resign Again
+		_, err = ctx.Staking.ResignValidator(opts)
+		if err == nil {
+			t.Fatal("Double resign should fail")
+		}
+	})
+
+	// [P-19] Exit -> Role Change (Delegate)
+	t.Run("P-19_RoleChange", func(t *testing.T) {
+		// 1. Setup Validator
+		key, addr, err := createAndRegisterValidator(t, "P-19 RoleChange")
+		if err != nil { return }
+		opts, _ := ctx.GetTransactor(key)
+		
+		// 2. Resign & Wait & Exit
+		ctx.Staking.ResignValidator(opts)
+		// Wait Unjail Period (50 blocks)
+		waitBlocks(t, 55)
+		txE, _ := ctx.Staking.ExitValidator(opts)
+		ctx.WaitMined(txE.Hash())
+		
+		// 3. Delegate to another validator
+		targetVal := common.HexToAddress(ctx.Config.Validators[0].Address)
+		opts.Value = utils.ToWei(10)
+		txD, err := ctx.Staking.Delegate(opts, targetVal)
+		utils.AssertNoError(t, err, "Delegation after exit failed")
+		ctx.WaitMined(txD.Hash())
+		
+		// Verify
+		info, _ := ctx.Staking.GetDelegationInfo(nil, addr, targetVal)
+		utils.AssertBigIntEq(t, info.Amount, utils.ToWei(10), "Delegation amount check failed")
+	})
+
+	// [P-04] Last Man Standing (Removal Protection)
+	t.Run("P-04_LastManStanding", func(t *testing.T) {
+		// We cannot easily reduce validator set to 1 in this shared env without breaking others.
+		// However, we can check if `removeValidator` reverts if count is 1.
+		// Since we have ~3 validators, this is hard to trigger naturally.
+		// We would need to mock or use a separate test suite with 1 validator.
+		t.Skip("Skipping P-04 as it requires reducing validator set to 1")
+	})
 }

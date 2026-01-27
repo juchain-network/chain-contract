@@ -193,6 +193,220 @@ func TestE_Delegation(t *testing.T) {
 		isVal, _ := ctx.Validators.IsValidatorExist(nil, userAddr)
 		utils.AssertTrue(t, isVal, "should be validator")
 	})
+
+	// [D-05] Multi-Validator Delegation
+	t.Run("D-05_MultiValidatorDelegation", func(t *testing.T) {
+		// Use Genesis Val 0 and 1
+		val1 := common.HexToAddress(ctx.Config.Validators[0].Address)
+		val2 := common.HexToAddress(ctx.Config.Validators[1].Address)
+		
+		userKey, userAddr, _ := ctx.CreateAndFundAccount(utils.ToWei(100))
+		opts, _ := ctx.GetTransactor(userKey)
+		
+		// Delegate to V1
+		opts.Value = utils.ToWei(10)
+		tx1, _ := ctx.Staking.Delegate(opts, val1)
+		ctx.WaitMined(tx1.Hash())
+		
+		// Delegate to V2
+		opts.Value = utils.ToWei(10)
+		tx2, _ := ctx.Staking.Delegate(opts, val2)
+		ctx.WaitMined(tx2.Hash())
+		
+		info1, _ := ctx.Staking.GetDelegationInfo(nil, userAddr, val1)
+		info2, _ := ctx.Staking.GetDelegationInfo(nil, userAddr, val2)
+		
+		utils.AssertBigIntEq(t, info1.Amount, utils.ToWei(10), "V1 delegation failed")
+		utils.AssertBigIntEq(t, info2.Amount, utils.ToWei(10), "V2 delegation failed")
+	})
+
+	// [D-16] Circular Delegation
+	t.Run("D-16_CircularDelegation", func(t *testing.T) {
+		// V0 delegates to V1, V1 delegates to V0
+		v0Key := ctx.GenesisValidators[0]
+		v0Addr := common.HexToAddress(ctx.Config.Validators[0].Address)
+		v1Key := ctx.GenesisValidators[1]
+		v1Addr := common.HexToAddress(ctx.Config.Validators[1].Address)
+		
+		// V0 -> V1
+		opts0, _ := ctx.GetTransactor(v0Key)
+		opts0.Value = utils.ToWei(10)
+		tx0, err := ctx.Staking.Delegate(opts0, v1Addr)
+		utils.AssertNoError(t, err, "V0->V1 failed")
+		ctx.WaitMined(tx0.Hash())
+		
+		// V1 -> V0
+		opts1, _ := ctx.GetTransactor(v1Key)
+		opts1.Value = utils.ToWei(10)
+		tx1, err := ctx.Staking.Delegate(opts1, v0Addr)
+		utils.AssertNoError(t, err, "V1->V0 failed")
+		ctx.WaitMined(tx1.Hash())
+		
+		info0, _ := ctx.Staking.GetDelegationInfo(nil, v0Addr, v1Addr)
+		info1, _ := ctx.Staking.GetDelegationInfo(nil, v1Addr, v0Addr)
+		utils.AssertBigIntEq(t, info0.Amount, utils.ToWei(10), "V0->V1 check failed")
+		utils.AssertBigIntEq(t, info1.Amount, utils.ToWei(10), "V1->V0 check failed")
+	})
+
+	// [D-17] Role Downgrade (Validator -> Delegator)
+	t.Run("D-17_RoleDowngrade", func(t *testing.T) {
+		// Create new validator first to avoid messing up genesis set too much
+		key, addr, err := createAndRegisterValidator(t, "D-17 Downgrade")
+		if err != nil {
+			t.Logf("Skipping D-17 due to creation failure: %v", err)
+			return
+		}
+		
+		opts, _ := ctx.GetTransactor(key)
+		
+		// Resign
+		txR, _ := ctx.Staking.ResignValidator(opts)
+		ctx.WaitMined(txR.Hash())
+		
+		// Exit (Wait unjail period)
+		// UnjailPeriod is 50 blocks (from Phase 0)
+		t.Log("Waiting for unjail period (50 blocks)...")
+		waitBlocks(t, 55)
+		
+		// Need to call ExitValidator
+		txE, err := ctx.Staking.ExitValidator(opts)
+		utils.AssertNoError(t, err, "Exit failed")
+		ctx.WaitMined(txE.Hash())
+		
+		// Now delegate to another validator
+		targetVal := common.HexToAddress(ctx.Config.Validators[0].Address)
+		opts.Value = utils.ToWei(10)
+		txD, err := ctx.Staking.Delegate(opts, targetVal)
+		utils.AssertNoError(t, err, "Delegation after exit failed")
+		ctx.WaitMined(txD.Hash())
+		
+		info, _ := ctx.Staking.GetDelegationInfo(nil, addr, targetVal)
+		utils.AssertBigIntEq(t, info.Amount, utils.ToWei(10), "Delegation amount check failed")
+	})
+
+	// [D-06] Early Withdraw (Unbonding not ready)
+	t.Run("D-06_EarlyWithdraw", func(t *testing.T) {
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(100))
+		opts, _ := ctx.GetTransactor(userKey)
+		
+		// Delegate & Undelegate
+		opts.Value = utils.ToWei(10)
+		ctx.Staking.Delegate(opts, valAddr)
+		opts.Value = nil
+		ctx.Staking.Undelegate(opts, valAddr, utils.ToWei(5))
+		
+		// Try Withdraw immediately (should fail or do nothing if checking logic)
+		// Staking.sol withdrawUnbonded checks timestamp/block.
+		// If using `require`, it reverts.
+		_, err := ctx.Staking.WithdrawUnbonded(opts, valAddr, big.NewInt(10))
+		if err == nil {
+			t.Fatal("Early withdraw should fail")
+		}
+	})
+
+	// [D-07] Self Delegation
+	t.Run("D-07_SelfDelegation", func(t *testing.T) {
+		// Validator tries to delegate to self using delegate()
+		// (addValidatorStake is the correct way, delegate() should fail)
+		opts, _ := ctx.GetTransactor(valKey)
+		opts.Value = utils.ToWei(10)
+		_, err := ctx.Staking.Delegate(opts, valAddr)
+		if err == nil {
+			t.Fatal("Self-delegation via delegate() should fail")
+		}
+	})
+
+	// [D-09] Delegate to Non-Existent
+	t.Run("D-09_DelegateToNonExistent", func(t *testing.T) {
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(100))
+		opts, _ := ctx.GetTransactor(userKey)
+		
+		randomAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+		opts.Value = utils.ToWei(10)
+		_, err := ctx.Staking.Delegate(opts, randomAddr)
+		if err == nil {
+			t.Fatal("Should fail delegating to non-existent validator")
+		}
+	})
+
+	// [D-11] Zero Undelegate
+	t.Run("D-11_ZeroUndelegate", func(t *testing.T) {
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(100))
+		opts, _ := ctx.GetTransactor(userKey)
+		opts.Value = utils.ToWei(10)
+		ctx.Staking.Delegate(opts, valAddr)
+		
+		opts.Value = nil
+		_, err := ctx.Staking.Undelegate(opts, valAddr, big.NewInt(0))
+		if err == nil {
+			t.Fatal("Should fail zero undelegation")
+		}
+	})
+
+	// [D-12] Delegate to Jailed
+	t.Run("D-12_DelegateToJailed", func(t *testing.T) {
+		// Need a jailed validator. We can reuse one from D-17 or create new.
+		// Creating new is safer.
+		key, addr, err := createAndRegisterValidator(t, "D-12 Jailed")
+		if err != nil { return }
+		
+		vOpts, _ := ctx.GetTransactor(key)
+		ctx.Staking.ResignValidator(vOpts) // Jails the validator
+		
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(50))
+		opts, _ := ctx.GetTransactor(userKey)
+		opts.Value = utils.ToWei(10)
+		
+		_, err = ctx.Staking.Delegate(opts, addr)
+		if err == nil {
+			t.Fatal("Should fail delegating to jailed validator")
+		}
+	})
+
+	// [D-13] Undelegate from Jailed (Allowed)
+	t.Run("D-13_UndelegateFromJailed", func(t *testing.T) {
+		// 1. Setup Validator & Delegator
+		key, addr, err := createAndRegisterValidator(t, "D-13 Jailed")
+		if err != nil { return }
+		
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(50))
+		opts, _ := ctx.GetTransactor(userKey)
+		opts.Value = utils.ToWei(10)
+		ctx.Staking.Delegate(opts, addr)
+		
+		// 2. Jail Validator
+		vOpts, _ := ctx.GetTransactor(key)
+		ctx.Staking.ResignValidator(vOpts)
+		
+		// 3. Undelegate
+		opts.Value = nil
+		tx, err := ctx.Staking.Undelegate(opts, addr, utils.ToWei(10))
+		utils.AssertNoError(t, err, "Should allow undelegation from jailed validator")
+		ctx.WaitMined(tx.Hash())
+	})
+	
+	// [D-14] Max Unbonding Entries
+	t.Run("D-14_MaxUnbonding", func(t *testing.T) {
+		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(100))
+		opts, _ := ctx.GetTransactor(userKey)
+		opts.Value = utils.ToWei(25) // Enough for 21 * 1 ETH
+		ctx.Staking.Delegate(opts, valAddr)
+		
+		// Max is 20. Try 21 times.
+		opts.Value = nil
+		for i := 0; i < 20; i++ {
+			tx, err := ctx.Staking.Undelegate(opts, valAddr, utils.ToWei(1))
+			utils.AssertNoError(t, err, "Undelegate within limit failed")
+			ctx.WaitMined(tx.Hash())
+		}
+		
+		// 21st time
+		_, err := ctx.Staking.Undelegate(opts, valAddr, utils.ToWei(1))
+		if err == nil {
+			t.Fatal("Should fail exceeding max unbonding entries")
+		}
+		t.Logf("Caught expected error: %v", err)
+	})
 }
 
 // Helper to wait for N blocks
