@@ -303,7 +303,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Set updated flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.UpdateValidators)] = true;
         
-        address[] memory expected = this.getTopValidators();
+        address[] memory expected = staking.getTopValidators(highestValidatorsSet);
         require(expected.length > 0, "Validator set empty!");
         uint256 maxValidators = proposal.maxValidators();
         if (maxValidators > CONSENSUS_MAX_VALIDATORS) {
@@ -594,27 +594,14 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     /**
      * @dev Get top validators (unified interface for consensus)
      * @notice Calls Staking.getTopValidators() with highestValidatorsSet for sorting by stake
-     * @notice Implements smooth expansion: limits growth to at most 1 new validator per epoch
-     * @return Top validators list, sorted by stake and rate-limited
+     * @return Top validators list, sorted by stake in POSA
      */
     function getTopValidators() public view returns (address[] memory) {
         // Get highest validators set
         address[] memory highestValidators = highestValidatorsSet;
         
         // Call Staking contract to sort by stake
-        address[] memory topValidators = staking.getTopValidators(highestValidators);
-
-        // Apply smooth expansion: limit growth to +1 per epoch
-        uint256 lenCurrent = currentValidatorSet.length;
-        if (topValidators.length > lenCurrent + 1) {
-            address[] memory limitedSet = new address[](lenCurrent + 1);
-            for (uint256 i = 0; i < lenCurrent + 1; i++) {
-                limitedSet[i] = topValidators[i];
-            }
-            return limitedSet;
-        }
-        
-        return topValidators;
+        return staking.getTopValidators(highestValidators);
     }
 
     /**
