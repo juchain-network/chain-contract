@@ -171,9 +171,9 @@ echo "Generating test_config.yaml..."
 cat > "$DATA_DIR/test_config.yaml" <<EOF
 rpcs:
   - "http://localhost:8545"
-  - "http://localhost:8546"
   - "http://localhost:8547"
-  - "http://localhost:8548"
+  - "http://localhost:8549"
+  - "http://localhost:8551"
 
 funder:
   address: "$FUNDER_ADDR"

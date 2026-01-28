@@ -2,9 +2,9 @@
 set -e
 
 # Initialize genesis if not already done
-if [ ! -d "/data/geth" ] && [ ! -d "/data/chaindata" ]; then
+if [ ! -d "/data/geth/chaindata" ]; then
     echo "Initializing genesis..."
-    juchain init /genesis.json --datadir /data
+    juchain --datadir /data init /genesis.json 
 fi
 
 # Import validator key if present

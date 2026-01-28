@@ -51,7 +51,7 @@ func TestA_SystemConfigSetup(t *testing.T) {
 		{
 			name: "ProposalCooldown",
 			cid:  ConfigID_ProposalCooldown,
-			val:  10, // 10 blocks
+			val:  1, // 1 block (min) to speed up tests
 			getter: func() (*big.Int, error) {
 				return ctx.Proposal.ProposalCooldown(nil)
 			},
@@ -192,6 +192,10 @@ func TestB_ConfigBoundaryChecks(t *testing.T) {
 		t.Skip("Context not initialized")
 	}
 
+	// Wait for any previous cooldown to expire
+	t.Log("Waiting for potential proposal cooldown...")
+	waitBlocks(t, 10) // Wait enough blocks (previous test set it to 1, but safety margin)
+
 	proposerKey := ctx.GenesisValidators[0]
 
 	runRevertTest := func(name string, cid uint256, val *big.Int, expectedErr string) {
@@ -211,8 +215,8 @@ func TestB_ConfigBoundaryChecks(t *testing.T) {
 				if !strings.Contains(err.Error(), "revert") && !strings.Contains(err.Error(), "execution reverted") {
 					t.Errorf("Unexpected error type")
 				}
-				// Optional: strict check
-				// t.Errorf("expected error %q, got %q", expectedErr, err.Error())
+				// Strict check enabled
+				t.Errorf("expected error %q, got %q", expectedErr, err.Error())
 			}
 		})
 	}
@@ -229,7 +233,8 @@ func TestB_ConfigBoundaryChecks(t *testing.T) {
 
 	// [C-04] Consensus & Safety
 	runRevertTest("Max Validators Overflow", ConfigID_MaxValidators, big.NewInt(22), "maxValidators exceeds consensus limit")
-	runRevertTest("Zero Burn Address", ConfigID_BurnAddress, big.NewInt(0), "burnAddress must be non-zero")
+	// Generic positive check catches zero address first
+	runRevertTest("Zero Burn Address", ConfigID_BurnAddress, big.NewInt(0), "Config value must be positive")
 	// Burn address out of uint160 range
 	burnTooLarge := new(big.Int).Lsh(big.NewInt(1), 160)
 	runRevertTest("Burn Address Overflow", ConfigID_BurnAddress, burnTooLarge, "burnAddress invalid")

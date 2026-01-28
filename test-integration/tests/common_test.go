@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"flag"
 	"os"
 	"testing"
 
@@ -12,14 +13,18 @@ import (
 
 var (
 	ctx *context.CIContext
+	configPath = flag.String("config", "../config.yaml", "Path to test configuration file")
 )
 
 func TestMain(m *testing.M) {
+	// Parse flags
+	flag.Parse()
+
 	// Initialize logger
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	// Load config
-	cfg, err := config.LoadConfig("../config.yaml") // Assume running from tools/ci/tests
+	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		// Fallback to example if not found (for CI environment without real secrets)
 		// But in real run, we fail.

@@ -1,8 +1,8 @@
 rpcs:
   - "http://localhost:8545"
-  - "http://localhost:8546"
   - "http://localhost:8547"
-  - "http://localhost:8548"
+  - "http://localhost:8549"
+  - "http://localhost:8551"
 
 funder:
   address: "0x..."
