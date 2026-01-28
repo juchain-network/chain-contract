@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -161,11 +162,13 @@ func TestE_Delegation(t *testing.T) {
 		optsB, _ := ctx.GetTransactor(keyB)
 		
 		optsA.Value = utils.ToWei(10)
-		txA, _ := ctx.Staking.Delegate(optsA, valAddr)
+		txA, err := ctx.Staking.Delegate(optsA, valAddr)
+		utils.AssertNoError(t, err, "User A delegate failed")
 		ctx.WaitMined(txA.Hash())
 		
 		optsB.Value = utils.ToWei(20)
-		txB, _ := ctx.Staking.Delegate(optsB, valAddr)
+		txB, err := ctx.Staking.Delegate(optsB, valAddr)
+		utils.AssertNoError(t, err, "User B delegate failed")
 		ctx.WaitMined(txB.Hash())
 		
 		waitBlocks(t, 2)
@@ -224,7 +227,8 @@ func TestE_Delegation(t *testing.T) {
 
 		opts, _ := ctx.GetTransactor(userKey)
 		opts.Value = utils.ToWei(10)
-		tx, _ := ctx.Staking.Delegate(opts, valAddr)
+		tx, err := ctx.Staking.Delegate(opts, valAddr)
+		utils.AssertNoError(t, err, "delegate failed")
 		ctx.WaitMined(tx.Hash())
 		
 		opts.Value = nil
@@ -242,7 +246,8 @@ func TestE_Delegation(t *testing.T) {
 
 		opts, _ := ctx.GetTransactor(userKey)
 		opts.Value = utils.ToWei(10)
-		tx, _ := ctx.Staking.Delegate(opts, targetVal)
+		tx, err := ctx.Staking.Delegate(opts, targetVal)
+		utils.AssertNoError(t, err, "delegate failed")
 		ctx.WaitMined(tx.Hash())
 		
 		err = passProposalFor(t, userAddr, "D-15 Propose")
@@ -271,12 +276,14 @@ func TestE_Delegation(t *testing.T) {
 		
 		// Delegate to V1
 		opts.Value = utils.ToWei(10)
-		tx1, _ := ctx.Staking.Delegate(opts, val1)
+		tx1, err := ctx.Staking.Delegate(opts, val1)
+		utils.AssertNoError(t, err, "delegate to V1 failed")
 		ctx.WaitMined(tx1.Hash())
 		
 		// Delegate to V2
 		opts.Value = utils.ToWei(10)
-		tx2, _ := ctx.Staking.Delegate(opts, val2)
+		tx2, err := ctx.Staking.Delegate(opts, val2)
+		utils.AssertNoError(t, err, "delegate to V2 failed")
 		ctx.WaitMined(tx2.Hash())
 		
 		info1, _ := ctx.Staking.GetDelegationInfo(nil, userAddr, val1)
@@ -569,22 +576,39 @@ func passProposalFor(t *testing.T, target common.Address, name string) error {
 		opts, _ := ctx.GetTransactor(proposerKey)
 		opts.Value = nil
 		tx, err = ctx.Proposal.CreateProposal(opts, target, true, name)
-		if err == nil { break }
-		time.Sleep(2 * time.Second)
+		if err == nil {
+			break
+		}
+		// Only retry on cooldown
+		if strings.Contains(err.Error(), "Proposal creation too frequent") {
+			t.Log("passProposalFor hit cooldown, waiting 2s...")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		// Other errors are fatal for this function
+		return fmt.Errorf("passProposalFor failed to create: %w", err)
 	}
 	ctx.WaitMined(tx.Hash())
 
-	receipt, _ := ctx.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
+	receipt, err := ctx.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
+	if err != nil { return err }
+	
 	var propID [32]byte
+	found := false
 	for _, l := range receipt.Logs {
 		ev, err := ctx.Proposal.ParseLogCreateProposal(*l)
-		if err == nil { propID = ev.Id; break }
+		if err == nil { propID = ev.Id; found = true; break }
 	}
+	if !found { return fmt.Errorf("passProposalFor: LogCreateProposal not found in receipt") }
 
 	for _, vk := range ctx.GenesisValidators {
 		vo, _ := ctx.GetTransactor(vk)
-		ctx.Proposal.VoteProposal(vo, propID, true)
+		_, err := ctx.Proposal.VoteProposal(vo, propID, true)
+		if err != nil {
+			t.Logf("passProposalFor: voter error (ignoring): %v", err)
+		}
 	}
-	time.Sleep(2 * time.Second)
+	// Small wait for state processing
+	time.Sleep(1 * time.Second)
 	return nil
 }

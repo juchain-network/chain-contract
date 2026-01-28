@@ -44,17 +44,37 @@ func TestF_PunishAndExit(t *testing.T) {
 	// [P-18] Quick Re-entry (Resign -> Exit -> Propose -> Register)
 	// This tests if state is cleared correctly.
 	t.Run("P-18_QuickReEntry", func(t *testing.T) {
-		_, valAddr, err := createAndRegisterValidator(t, "ReEntry Validator")
+		valKey, valAddr, err := createAndRegisterValidator(t, "ReEntry Validator")
 		utils.AssertNoError(t, err, "failed setup")
+		opts, _ := ctx.GetTransactor(valKey)
 		
-		t.Logf("Simulating removal of %s...", valAddr.Hex())
+		t.Logf("Exiting validator %s to allow re-proposal...", valAddr.Hex())
 		
+		// 1. Resign & Exit
+		txR, _ := ctx.Staking.ResignValidator(opts)
+		ctx.WaitMined(txR.Hash())
+		// Wait for unjail period (50 blocks)
+		waitBlocks(t, 55)
+		txE, err := ctx.Staking.ExitValidator(opts)
+		utils.AssertNoError(t, err, "Exit failed")
+		ctx.WaitMined(txE.Hash())
+
+		// Verify pass is now false
+		p, _ := ctx.Proposal.Pass(nil, valAddr)
+		utils.AssertTrue(t, !p, "pass should be false after exit")
+
 		// 2. Re-propose
 		err = passProposalFor(t, valAddr, "ReEntry Proposal")
 		utils.AssertNoError(t, err, "re-proposal failed")
 		
 		pass, _ := ctx.Proposal.Pass(nil, valAddr)
 		utils.AssertTrue(t, pass, "should be passed again")
+
+		// 3. Register again
+		opts.Value = utils.ToWei(100000)
+		txReg, err := ctx.Staking.RegisterValidator(opts, big.NewInt(1000))
+		utils.AssertNoError(t, err, "second register failed")
+		ctx.WaitMined(txReg.Hash())
 	})
 
 	// [P-08/P-15] Fee Profits Withdrawal
