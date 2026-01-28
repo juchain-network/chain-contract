@@ -2,10 +2,10 @@
 pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
-import {Punish} from "../../contracts/Punish.sol";
-import {Validators} from "../../contracts/Validators.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
-import {Staking} from "../../contracts/Staking.sol";
+import {Punish} from "../contracts/Punish.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 // Supplement missing Punish contract test cases
 contract PunishMissingFoundryTest is BaseSetup {

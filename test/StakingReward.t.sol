@@ -2,7 +2,7 @@
 pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
-import {Staking} from "../../contracts/Staking.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 contract StakingRewardTest is BaseSetup {
     address v1; 

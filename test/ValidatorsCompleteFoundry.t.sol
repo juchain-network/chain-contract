@@ -2,9 +2,9 @@
 pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
-import {Validators} from "../../contracts/Validators.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
-import {Staking} from "../../contracts/Staking.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 // Complete validator tests, corresponding to all functions in test/validators.js
 contract ValidatorsCompleteFoundryTest is BaseSetup {

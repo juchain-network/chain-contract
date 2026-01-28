@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import {Script, console} from "lib/forge-std/src/Script.sol";
-import {Staking} from "../../contracts/Staking.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 /**
  * @title ValidatorStakeScript

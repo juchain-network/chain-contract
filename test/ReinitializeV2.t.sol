@@ -2,10 +2,10 @@
 pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
-import {Staking} from "../../contracts/Staking.sol";
-import {Validators} from "../../contracts/Validators.sol";
-import {Punish} from "../../contracts/Punish.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Punish} from "../contracts/Punish.sol";
 
 contract ReinitializeV2Test is BaseSetup {
     address miner;

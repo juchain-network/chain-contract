@@ -2,10 +2,10 @@
 pragma solidity ^0.8.29;
 
 import {Script, console} from "forge-std/Script.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
-import {Punish} from "../../contracts/Punish.sol";
-import {Staking} from "../../contracts/Staking.sol";
-import {Validators} from "../../contracts/Validators.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Punish} from "../contracts/Punish.sol";
+import {Staking} from "../contracts/Staking.sol";
+import {Validators} from "../contracts/Validators.sol";
 
 contract DeploymentScript is Script {
     // Configuration

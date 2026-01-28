@@ -3,10 +3,10 @@
 pragma solidity ^0.8.29;
 
 import {Test} from "lib/forge-std/src/Test.sol";
-import {Validators} from "../../contracts/Validators.sol";
-import {Punish} from "../../contracts/Punish.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
-import {Staking} from "../../contracts/Staking.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Punish} from "../contracts/Punish.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 abstract contract BaseSetup is Test {
     address constant VALIDATORS = 0x000000000000000000000000000000000000F010;

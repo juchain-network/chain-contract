@@ -2,8 +2,8 @@
 pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
-import {Validators} from "../../contracts/Validators.sol";
-import {Staking} from "../../contracts/Staking.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 contract ValidatorsAdditionalTest is BaseSetup {
     address v1; address v2; address v3;

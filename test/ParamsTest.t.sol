@@ -2,7 +2,7 @@
 pragma solidity ^0.8.29;
 
 import {Test} from "forge-std/Test.sol";
-import {Params} from "../../contracts/Params.sol";
+import {Params} from "../contracts/Params.sol";
 
 contract TestableParams is Params {
     // Helper functions for testing modifiers - not auto-run tests

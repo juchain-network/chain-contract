@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  node0:
+    image: juchain-node:latest
+    container_name: juchain-node0
+    ports:
+      - "8545:8545"
+      - "8546:8546" # WS
+    volumes:
+      - ../data/node0:/data
+      - ../data/genesis.json:/genesis.json
+    networks:
+      - juchain-net
+
+  node1:
+    image: juchain-node:latest
+    container_name: juchain-node1
+    ports:
+      - "8547:8545"
+      - "8548:8546" # WS
+    volumes:
+      - ../data/node1:/data
+      - ../data/genesis.json:/genesis.json
+    networks:
+      - juchain-net
+
+  node2:
+    image: juchain-node:latest
+    container_name: juchain-node2
+    ports:
+      - "8549:8545"
+      - "8550:8546" # WS
+    volumes:
+      - ../data/node2:/data
+      - ../data/genesis.json:/genesis.json
+    networks:
+      - juchain-net
+
+  node3:
+    image: juchain-node:latest
+    container_name: juchain-node3
+    ports:
+      - "8551:8545"
+      - "8552:8546" # WS
+    volumes:
+      - ../data/node3:/data
+      - ../data/genesis.json:/genesis.json
+    networks:
+      - juchain-net
+
+networks:
+  juchain-net:
+    driver: bridge

@@ -2,10 +2,10 @@
 pragma solidity ^0.8.29;
 
 import {Test} from "forge-std/Test.sol";
-import {Staking} from "../../contracts/Staking.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
-import {Validators} from "../../contracts/Validators.sol";
-import {Punish} from "../../contracts/Punish.sol";
+import {Staking} from "../contracts/Staking.sol";
+import {Proposal} from "../contracts/Proposal.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Punish} from "../contracts/Punish.sol";
 
 contract StakingTest is Test {
     // System contract addresses (fixed addresses for testing)

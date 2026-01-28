@@ -2,7 +2,7 @@
 pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
+import {Proposal} from "../contracts/Proposal.sol";
 
 // Supplement missing Proposal test cases
 contract ProposalMissingFoundryTest is BaseSetup {

@@ -3,9 +3,9 @@ pragma solidity ^0.8.29;
 
 import {Test} from "forge-std/Test.sol";
 import {BaseSetup} from "./BaseSetup.t.sol";
-import {Punish} from "../../contracts/Punish.sol";
-import {Staking} from "../../contracts/Staking.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
+import {Punish} from "../contracts/Punish.sol";
+import {Staking} from "../contracts/Staking.sol";
+import {Proposal} from "../contracts/Proposal.sol";
 
 contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
     uint256 private constant SIGNER_KEY = 0xA11CE;

@@ -2,9 +2,9 @@
 pragma solidity ^0.8.29;
 
 import {BaseSetup} from "../test/BaseSetup.t.sol";
-import {Staking} from "../../contracts/Staking.sol";
-import {Validators} from "../../contracts/Validators.sol";
-import {Proposal} from "../../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
+import {Validators} from "../contracts/Validators.sol";
+import {Proposal} from "../contracts/Proposal.sol";
 
 // Staking system operation script
 contract StakingOperationsScript is BaseSetup {
