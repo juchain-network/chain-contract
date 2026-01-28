@@ -32,9 +32,6 @@ help:
 	@echo "  $(GREEN)coverage$(NC)            - Generate test coverage report"
 	@echo "  $(GREEN)coverage-html$(NC)       - Generate HTML test coverage report"
 	@echo "  $(GREEN)gas-test$(NC)            - Run gas optimization tests with report"
-	@echo "  $(GREEN)test-by-forge$(NC)        - Run PoSA integration tests using forge"
-	@echo "  $(GREEN)test-by-shell$(NC)        - Run shell-based test scenarios"
-	@echo "  $(GREEN)test-all$(NC)             - Run all tests (forge + shell)"
 	@echo ""
 	@echo "$(YELLOW)Development Utilities:$(NC)"
 	@echo "  $(GREEN)update$(NC)              - Update dependencies"
@@ -191,47 +188,6 @@ anvil-status:
 anvil-clean:
 	@echo "$(YELLOW)Cleaning Anvil logs and temporary files...$(NC)"
 	@./anvil-setup.sh --clean
-
-# =========================
-# PoSA Integration Tests
-# =========================
-
-test-all: test-by-forge test-by-shell
-	@echo "$(GREEN)✅ All tests completed successfully!$(NC)"
-
-# Run all tests in one comprehensive task
-# This task includes:  setup, anvil start/stop for each test
-test-by-forge:
-	@echo "$(YELLOW)Starting comprehensive PoSA test suite...$(NC)"
-	# Step 1: Set up test environment with mock contracts
-	@make clean
-	@make build
-	@make load-env
-	
-	# Run all test scripts in script/integration/test directory
-	@for script_file in $$(find script/integration/test -name "*.s.sol"); do \
-		TEST_NAME=$$(basename $$script_file .s.sol); \
-		CONTRACT_NAME=$$TEST_NAME; \
-		echo "\n$(YELLOW)Running $$TEST_NAME tests...$(NC)"; \
-		make anvil-start; \
-		forge script $$script_file:$$CONTRACT_NAME --rpc-url http://localhost:8545 --broadcast --skip-simulation -vvv; \
-		make anvil-stop; \
-		make anvil-clean; \
-done
-	
-	@echo "\n$(GREEN)✅ All tests completed successfully!$(NC)"
-
-test-by-shell:
-	@echo "$(YELLOW)Running all test scenarios...$(NC)"
-	@make clean
-	@make anvil-start
-	@for scenario in script/ci/*-test.sh; do \
-		echo "\n$(YELLOW)=== Running: $$scenario ===$(NC)"; \
-		bash $$scenario; \
-		echo "$(YELLOW)=== Completed: $$scenario ===$(NC)"; \
-	done
-	@make anvil-stop
-	@make anvil-clean
 
 # Get system configuration parameters
 get-system-params:
