@@ -76,7 +76,8 @@ func NewCIContext(cfg *config.Config) (*CIContext, error) {
 	if err != nil { return nil, err }
 	prop, err := contracts.NewProposal(ProposalAddr, primaryClient)
 	if err != nil { return nil, err }
-	stk, err := contracts.NewStaking(StakingAddr, primaryClient)
+
+stk, err := contracts.NewStaking(StakingAddr, primaryClient)
 	if err != nil { return nil, err }
 
 	funderKey, err := crypto.HexToECDSA(cfg.Funder.PrivateKey)
@@ -135,6 +136,7 @@ func (c *CIContext) autoInitialize() error {
 
 		// 1. Initialize Proposal
 		opts, _ := c.GetTransactor(c.GenesisValidators[0])
+		opts.GasLimit = 1000000
 		fmt.Printf("  > Initializing Proposal...\n")
 		tx, err := c.Proposal.Initialize(opts, valAddrs, ValidatorsAddr, big.NewInt(20))
 		if err == nil {
@@ -143,6 +145,7 @@ func (c *CIContext) autoInitialize() error {
 
 		// 2. Initialize Staking with Validators
 		opts, _ = c.GetTransactor(c.GenesisValidators[1])
+		opts.GasLimit = 2000000
 		fmt.Printf("  > Initializing Staking with Validators...\n")
 		tx, err = c.Staking.InitializeWithValidators(opts, ValidatorsAddr, ProposalAddr, PunishAddr, valAddrs, big.NewInt(1000))
 		if err == nil {
@@ -151,6 +154,7 @@ func (c *CIContext) autoInitialize() error {
 
 		// 3. Initialize Validators
 		opts, _ = c.GetTransactor(c.GenesisValidators[2])
+		opts.GasLimit = 1000000
 		fmt.Printf("  > Initializing Validators...\n")
 		tx, err = c.Validators.Initialize(opts, valAddrs, ProposalAddr, PunishAddr, StakingAddr)
 		if err == nil {
@@ -195,7 +199,7 @@ c.mu.Lock()
 	}
 	
 	opts.Nonce = big.NewInt(int64(maxNonce))
-	opts.GasLimit = 20000000 
+	// REMOVED hardcoded default GasLimit to allow simulation/dry-run for negative tests
 	opts.GasPrice = big.NewInt(1000000000) 
 	return opts, nil
 }
@@ -210,6 +214,7 @@ func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, co
 	opts, err := c.GetTransactor(c.FunderKey)
 	if err != nil { return nil, common.Address{}, err }
 
+	// For simple transfers, 21000 is enough
 	tx := types.NewTransaction(opts.Nonce.Uint64(), addr, amount, 21000, opts.GasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(c.ChainID), c.FunderKey)
 	if err != nil { return nil, common.Address{}, err }
@@ -223,8 +228,6 @@ func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, co
 	if err := c.WaitMined(signedTx.Hash()); err != nil {
         return nil, common.Address{}, fmt.Errorf("funding tx failed: %w", err)
     }
-
-	time.Sleep(2 * time.Second)
 
 	return key, addr, nil
 }
@@ -295,6 +298,9 @@ func (c *CIContext) EnsureConfig(cid int64, targetVal *big.Int, currentVal *big.
 		opts, errG := c.GetTransactor(proposerKey)
 		if errG != nil { continue }
 		
+		// For complex system calls, use a safe GasLimit
+		opts.GasLimit = 1000000
+
 		tx, errCall := c.Proposal.CreateUpdateConfigProposal(opts, big.NewInt(cid), targetVal)
 		if errCall == nil {
 			err = c.WaitMined(tx.Hash())
@@ -318,6 +324,7 @@ func (c *CIContext) EnsureConfig(cid int64, targetVal *big.Int, currentVal *big.
 				if !exist { continue }
 				
 				vo, _ := c.GetTransactor(vk)
+				vo.GasLimit = 500000
 				txV, errV := c.Proposal.VoteProposal(vo, propID, true)
 				if errV == nil {
 					c.WaitMined(txV.Hash())

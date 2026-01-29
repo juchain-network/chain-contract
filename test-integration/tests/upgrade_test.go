@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"juchain.org/chain/tools/ci/internal/utils"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestZ_UpgradesAndInitGuards(t *testing.T) {
@@ -21,25 +21,44 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 		dummy := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
 		opts, _ := ctx.GetTransactor(ctx.GenesisValidators[0])
 
+		checkReinit := func(name string, call func() (*types.Transaction, error)) {
+			tx, err := call()
+			if err == nil {
+				// If simulation didn't catch it, WaitMined must
+				err = ctx.WaitMined(tx.Hash())
+			}
+			
+			if err == nil {
+				t.Errorf("%s.initialize should have failed", name)
+			} else {
+				t.Logf("%s.initialize failed as expected: %v", name, err)
+			}
+		}
+
 		// Proposal.initialize
-		_, err := ctx.Proposal.Initialize(opts, []common.Address{dummy}, dummy, big.NewInt(1))
-		utils.AssertTrue(t, err != nil, "Proposal.initialize should fail when already initialized")
+		checkReinit("Proposal", func() (*types.Transaction, error) {
+			return ctx.Proposal.Initialize(opts, []common.Address{dummy}, dummy, big.NewInt(1))
+		})
 
 		// Validators.initialize
-		_, err = ctx.Validators.Initialize(opts, []common.Address{dummy}, dummy, dummy, dummy)
-		utils.AssertTrue(t, err != nil, "Validators.initialize should fail when already initialized")
+		checkReinit("Validators", func() (*types.Transaction, error) {
+			return ctx.Validators.Initialize(opts, []common.Address{dummy}, dummy, dummy, dummy)
+		})
 
 		// Punish.initialize
-		_, err = ctx.Punish.Initialize(opts, dummy, dummy, dummy)
-		utils.AssertTrue(t, err != nil, "Punish.initialize should fail when already initialized")
+		checkReinit("Punish", func() (*types.Transaction, error) {
+			return ctx.Punish.Initialize(opts, dummy, dummy, dummy)
+		})
 
 		// Staking.initialize
-		_, err = ctx.Staking.Initialize(opts, dummy, dummy, dummy)
-		utils.AssertTrue(t, err != nil, "Staking.initialize should fail when already initialized")
+		checkReinit("Staking", func() (*types.Transaction, error) {
+			return ctx.Staking.Initialize(opts, dummy, dummy, dummy)
+		})
 
 		// Staking.initializeWithValidators
-		_, err = ctx.Staking.InitializeWithValidators(opts, dummy, dummy, dummy, []common.Address{dummy}, big.NewInt(1))
-		utils.AssertTrue(t, err != nil, "Staking.initializeWithValidators should fail when already initialized")
+		checkReinit("StakingValidators", func() (*types.Transaction, error) {
+			return ctx.Staking.InitializeWithValidators(opts, dummy, dummy, dummy, []common.Address{dummy}, big.NewInt(1))
+		})
 	})
 
 	t.Run("ReinitializeV2", func(t *testing.T) {
@@ -89,7 +108,10 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 		})
 
 		// Second call should fail
-		_, err := ctx.Proposal.ReinitializeV2(opts)
+		tx, err := ctx.Proposal.ReinitializeV2(opts)
+		if err == nil {
+			err = ctx.WaitMined(tx.Hash())
+		}
 		if err == nil {
 			t.Fatal("Proposal reinitializeV2 should fail on second call")
 		}
