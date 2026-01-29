@@ -93,6 +93,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     uint256 public revision;
     uint256 public currentEpochId;
     uint256 public validatorsAddedInEpoch;
+    uint256 public validatorsRemovedInEpoch;
     uint256[50] private __gap;
 
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
@@ -141,10 +142,30 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         if (epochId > currentEpochId) {
             currentEpochId = epochId;
             validatorsAddedInEpoch = 0;
+            validatorsRemovedInEpoch = 0;
         }
 
         require(validatorsAddedInEpoch < 1, "Too many new validators in this epoch");
         validatorsAddedInEpoch++;
+    }
+
+    /**
+     * @dev Internal function to check and mark validator removal
+     * @notice Limits the number of validators that can resign to 1 per epoch
+     */
+    function _checkAndMarkValidatorRemoval() internal {
+        uint256 epoch = proposalContract.epoch();
+        if (epoch == 0) return; // Should not happen after init
+
+        uint256 epochId = block.number / epoch;
+        if (epochId > currentEpochId) {
+            currentEpochId = epochId;
+            validatorsAddedInEpoch = 0;
+            validatorsRemovedInEpoch = 0;
+        }
+
+        require(validatorsRemovedInEpoch < 1, "Too many removals in this epoch");
+        validatorsRemovedInEpoch++;
     }
 
     /**
@@ -352,6 +373,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @notice After being excluded, validator can call emergencyExit() to withdraw all stake
      */
     function resignValidator() external onlyNotEpoch onlyValidValidator(msg.sender) nonReentrant {
+        _checkAndMarkValidatorRemoval();
         ValidatorStake storage stake = validatorStakes[msg.sender];
         uint256 lastBlock = lastActiveBlock[msg.sender];
         if (lastBlock != 0) {
@@ -858,7 +880,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         uint256 candidateCount = 0;
 
         // Cache the minimum validator stake outside the loop
-        uint256 minValidatorStake = proposalContract.minValidatorStake();
+        // uint256 minValidatorStake = proposalContract.minValidatorStake();
 
         // Collect validators and their total stakes for sorting
         for (uint256 i = 0; i < validators.length; i++) {

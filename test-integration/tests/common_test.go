@@ -1,19 +1,30 @@
 package tests
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"flag"
+	"fmt"
+	"math/big"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	
 	"juchain.org/chain/tools/ci/internal/config"
-	"juchain.org/chain/tools/ci/internal/context"
+	testctx "juchain.org/chain/tools/ci/internal/context"
+	"juchain.org/chain/tools/ci/internal/utils"
 )
 
 var (
-	ctx *context.CIContext
+	ctx *testctx.CIContext
 	configPath = flag.String("config", "../config.yaml", "Path to test configuration file")
+	proposerCounter int
 )
 
 func TestMain(m *testing.M) {
@@ -26,14 +37,12 @@ func TestMain(m *testing.M) {
 	// Load config
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
-		// Fallback to example if not found (for CI environment without real secrets)
-		// But in real run, we fail.
 		log.Error("Failed to load config", "err", err)
 		os.Exit(1)
 	}
 
 	// Init context
-	c, err := context.NewCIContext(cfg)
+	c, err := testctx.NewCIContext(cfg)
 	if err != nil {
 		log.Error("Failed to init context", "err", err)
 		os.Exit(1)
@@ -41,4 +50,294 @@ func TestMain(m *testing.M) {
 	ctx = c
 
 	os.Exit(m.Run())
+}
+
+// Helpers
+
+func waitBlocks(t *testing.T, n int) {
+	if n <= 0 { return }
+	start, _ := ctx.Clients[0].BlockNumber(context.Background())
+	target := start + uint64(n)
+	for {
+		current, _ := ctx.Clients[0].BlockNumber(context.Background())
+		if current >= target { break }
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func getPropID(tx *types.Transaction) [32]byte {
+	var receipt *types.Receipt
+	var err error
+	for i := 0; i < 10; i++ {
+		receipt, err = ctx.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
+		if err == nil && receipt != nil { break }
+		time.Sleep(1 * time.Second)
+	}
+	if receipt == nil { return [32]byte{} }
+	
+	for _, l := range receipt.Logs {
+		if ev, err := ctx.Proposal.ParseLogCreateProposal(*l); err == nil { return ev.Id }
+		if ev, err := ctx.Proposal.ParseLogCreateConfigProposal(*l); err == nil { return ev.Id }
+	}
+	return [32]byte{}
+}
+
+func robustVote(t *testing.T, voterKey *ecdsa.PrivateKey, propID [32]byte, auth bool) {
+	var err error
+	voterAddr := crypto.PubkeyToAddress(voterKey.PublicKey)
+	for retry := 0; retry < 10; retry++ {
+		// Check if still a validator
+		isVal, _ := ctx.Validators.IsValidatorExist(nil, voterAddr)
+		if !isVal { return }
+
+		opts, errG := ctx.GetTransactor(voterKey)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		
+		var txVote *types.Transaction
+		txVote, err = ctx.Proposal.VoteProposal(opts, propID, auth)
+		if err == nil { 
+			if errW := ctx.WaitMined(txVote.Hash()); errW == nil {
+				return
+			} else {
+				if strings.Contains(errW.Error(), "Epoch block forbidden") {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				if t != nil { t.Logf("vote tx failed: %v", errW) }
+				return
+			}
+		}
+		if strings.Contains(err.Error(), "Epoch block forbidden") {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if strings.Contains(err.Error(), "Proposal already passed") {
+			return
+		}
+		break
+	}
+}
+
+func passProposalFor(t *testing.T, target common.Address, name string) error {
+	var tx *types.Transaction
+	var err error
+	for retry := 0; retry < 15; retry++ {
+		proposerIndex := proposerCounter % len(ctx.GenesisValidators)
+		proposerCounter++
+		proposerKey := ctx.GenesisValidators[proposerIndex]
+		
+		// Ensure proposer is active and not jailed
+		proposerAddr := crypto.PubkeyToAddress(proposerKey.PublicKey)
+		exist, _ := ctx.Validators.IsValidatorExist(nil, proposerAddr)
+		if !exist { continue }
+		info, _ := ctx.Staking.GetValidatorInfo(nil, proposerAddr)
+		if info.IsJailed { continue }
+
+		opts, errG := ctx.GetTransactor(proposerKey)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		
+		tx, err = ctx.Proposal.CreateProposal(opts, target, true, name)
+		if err == nil { break }
+		if strings.Contains(err.Error(), "Proposal creation too frequent") || strings.Contains(err.Error(), "nonce too low") {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		return err
+	}
+	if err := ctx.WaitMined(tx.Hash()); err != nil { return err }
+	propID := getPropID(tx)
+	if propID == ([32]byte{}) { return fmt.Errorf("could not find proposal ID in logs for tx %s", tx.Hash().Hex()) }
+
+	for _, voterKey := range ctx.GenesisValidators {
+		voterAddr := crypto.PubkeyToAddress(voterKey.PublicKey)
+		exist, _ := ctx.Validators.IsValidatorExist(nil, voterAddr)
+		if !exist { continue }
+		info, _ := ctx.Staking.GetValidatorInfo(nil, voterAddr)
+		if info.IsJailed { continue }
+		
+		robustVote(t, voterKey, propID, true)
+	}
+	return nil
+}
+
+func createAndRegisterValidator(t *testing.T, name string) (*ecdsa.PrivateKey, common.Address, error) {
+	key, addr, err := ctx.CreateAndFundAccount(utils.ToWei(500005))
+	if err != nil { return nil, addr, err }
+	
+	err = passProposalFor(t, addr, name)
+	if err != nil { return nil, addr, err }
+	
+	var txReg *types.Transaction
+	for retry := 0; retry < 10; retry++ {
+		opts, errG := ctx.GetTransactor(key)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		opts.Value = utils.ToWei(100000)
+		
+		txReg, err = ctx.Staking.RegisterValidator(opts, big.NewInt(1000))
+		if err == nil { 
+			if errW := ctx.WaitMined(txReg.Hash()); errW == nil {
+				break
+			} else {
+				if strings.Contains(errW.Error(), "Epoch block forbidden") || strings.Contains(errW.Error(), "Too many new validators") {
+					time.Sleep(2 * time.Second)
+					continue
+				}
+				return nil, addr, errW
+			}
+		}
+		if strings.Contains(err.Error(), "Epoch block forbidden") || strings.Contains(err.Error(), "Too many new validators") {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
+	}
+	if err != nil { return nil, addr, err }
+	return key, addr, nil
+}
+
+// Robust Staking Helpers
+
+func robustDelegate(t *testing.T, key *ecdsa.PrivateKey, val common.Address, amount *big.Int) {
+	for retry := 0; retry < 10; retry++ {
+		opts, errG := ctx.GetTransactor(key)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		opts.Value = amount
+		tx, err := ctx.Staking.Delegate(opts, val)
+		if err == nil {
+			if errW := ctx.WaitMined(tx.Hash()); errW == nil {
+				return
+			} else {
+				if strings.Contains(errW.Error(), "Epoch block forbidden") {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				if t != nil { t.Fatalf("delegate tx failed: %v", errW) } else { return }
+			}
+		}
+		if strings.Contains(err.Error(), "Epoch block forbidden") {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if t != nil { t.Fatalf("delegate call failed: %v", err) } else { return }
+	}
+}
+
+func robustUndelegate(t *testing.T, key *ecdsa.PrivateKey, val common.Address, amount *big.Int) {
+	for retry := 0; retry < 10; retry++ {
+		opts, errG := ctx.GetTransactor(key)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		tx, err := ctx.Staking.Undelegate(opts, val, amount)
+		if err == nil {
+			if errW := ctx.WaitMined(tx.Hash()); errW == nil {
+				return
+			} else {
+				if strings.Contains(errW.Error(), "Epoch block forbidden") {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				if t != nil { t.Fatalf("undelegate tx failed: %v", errW) } else { return }
+			}
+		}
+		if strings.Contains(err.Error(), "Epoch block forbidden") {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if t != nil { t.Fatalf("undelegate call failed: %v", err) } else { return }
+	}
+}
+
+func robustClaimRewards(t *testing.T, key *ecdsa.PrivateKey, val common.Address) {
+	for retry := 0; retry < 10; retry++ {
+		opts, errG := ctx.GetTransactor(key)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		tx, err := ctx.Staking.ClaimRewards(opts, val)
+		if err == nil {
+			if errW := ctx.WaitMined(tx.Hash()); errW == nil {
+				return
+			} else {
+				if strings.Contains(errW.Error(), "Epoch block forbidden") {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				if t != nil { t.Fatalf("claimRewards tx failed: %v", errW) } else { return }
+			}
+		}
+		if strings.Contains(err.Error(), "Epoch block forbidden") {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if t != nil { t.Fatalf("claimRewards call failed: %v", err) } else { return }
+	}
+}
+
+func robustWithdrawUnbonded(t *testing.T, key *ecdsa.PrivateKey, val common.Address, maxEntries int64) {
+	for retry := 0; retry < 10; retry++ {
+		opts, errG := ctx.GetTransactor(key)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		tx, err := ctx.Staking.WithdrawUnbonded(opts, val, big.NewInt(maxEntries))
+		if err == nil {
+			if errW := ctx.WaitMined(tx.Hash()); errW == nil {
+				return
+			} else {
+				if strings.Contains(errW.Error(), "Epoch block forbidden") {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				if t != nil { t.Fatalf("withdrawUnbonded tx failed: %v", errW) } else { return }
+			}
+		}
+		if strings.Contains(err.Error(), "Epoch block forbidden") {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if t != nil { t.Fatalf("withdrawUnbonded call failed: %v", err) } else { return }
+	}
+}
+
+func robustExitValidator(t *testing.T, key *ecdsa.PrivateKey) {
+	for retry := 0; retry < 10; retry++ {
+		opts, errG := ctx.GetTransactor(key)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		tx, err := ctx.Staking.ExitValidator(opts)
+		if err == nil {
+			if errW := ctx.WaitMined(tx.Hash()); errW == nil {
+				return
+			} else {
+				if strings.Contains(errW.Error(), "Epoch block forbidden") {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				if t != nil { t.Fatalf("exitValidator tx failed: %v", errW) } else { return }
+			}
+		}
+		if strings.Contains(err.Error(), "Epoch block forbidden") {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if t != nil { t.Fatalf("exitValidator call failed: %v", err) } else { return }
+	}
+}
+
+func robustClaimValidatorRewards(t *testing.T, key *ecdsa.PrivateKey) {
+	for retry := 0; retry < 10; retry++ {
+		opts, errG := ctx.GetTransactor(key)
+		if errG != nil { time.Sleep(1 * time.Second); continue }
+		tx, err := ctx.Staking.ClaimValidatorRewards(opts)
+		if err == nil {
+			if errW := ctx.WaitMined(tx.Hash()); errW == nil {
+				return
+			} else {
+				if strings.Contains(errW.Error(), "Epoch block forbidden") {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				if t != nil { t.Fatalf("claimValidatorRewards tx failed: %v", errW) } else { return }
+			}
+		}
+		if strings.Contains(err.Error(), "Epoch block forbidden") {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if t != nil { t.Fatalf("claimValidatorRewards call failed: %v", err) } else { return }
+	}
 }

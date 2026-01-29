@@ -41,6 +41,7 @@ init:
 run:
 	@echo "🚀 Starting network cluster..."
 	@cd $(DOCKER_DIR) && $(DOCKER_COMPOSE) up -d
+	@sleep 5
 
 # Wait for Node Readiness
 ready:
@@ -49,41 +50,39 @@ ready:
 # Helper to reset environment
 reset: clean init run ready
 
+# Punish tests are split with resets to avoid chain stall
+test-punish:
+	@echo "🧪 Running Punishment Test Group..."
+	@$(MAKE) reset && go test ./tests/... -v -run "TestF1_ExitFlow" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestF2_QuickReEntry" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestF3_WithdrawProfits" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestF4_MiscExit" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestF5_RoleChange" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestF6_DoubleSignWindow" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestF7_PunishedRedemption" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestG_DoubleSign" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestG_PunishPaths" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+
 # Individual Test Groups
 test-config: reset
-	@echo "🧪 Running Config Tests..."
-	@go test ./tests/... -v -run "TestA_.*|TestB_Config.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml
-	@$(MAKE) stop
+	@go test ./tests/... -v -run "TestA_SystemConfigSetup|TestB_ConfigBoundaryChecks" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
 test-governance: reset
-	@echo "🧪 Running Governance Tests..."
-	@go test ./tests/... -v -run "TestB_Governance.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml
-	@$(MAKE) stop
+	@go test ./tests/... -v -run "TestB_Governance.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
 test-staking: reset
-	@echo "🧪 Running Staking Tests..."
-	@go test ./tests/... -v -run "TestC_Staking.*|TestD_Staking.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml
-	@$(MAKE) stop
+	@go test ./tests/... -v -run "TestC_Staking.*|TestD_Staking.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
 test-delegation: reset
-	@echo "🧪 Running Delegation Tests..."
-	@go test ./tests/... -v -run "TestE_Delegation.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml
-	@$(MAKE) stop
-
-test-punish: reset
-	@echo "🧪 Running Punishment Tests..."
-	@go test ./tests/... -v -run "TestF_Punish.*|TestG_.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml
-	@$(MAKE) stop
+	@go test ./tests/... -v -run "TestE_Delegation.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
 test-rewards: reset
-	@echo "🧪 Running Rewards & Robustness Tests..."
-	@go test ./tests/... -v -run "TestH_.*|TestI_.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml
-	@$(MAKE) stop
+	@go test ./tests/... -v -run "TestH_Robustness" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestI_ConsensusRewards|TestI_PublicQueryCoverage|TestI_ValidatorExtras" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
 test-epoch: reset
-	@echo "🧪 Running Epoch & Upgrade Tests..."
-	@go test ./tests/... -v -run "TestY_.*|TestZ_.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml
-	@$(MAKE) stop
+	@go test ./tests/... -v -run "TestY_UpdateActiveValidatorSet" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestZ_LastManStanding|TestZ_UpgradesAndInitGuards" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
 # Run ALL Groups
 test-all: test-config test-governance test-staking test-delegation test-punish test-rewards test-epoch
@@ -94,12 +93,10 @@ test: ready
 	@go test ./tests/... -v -config $(PWD)/$(DATA_DIR)/test_config.yaml
 
 # View Logs
-# Usage: make logs
-# Usage: make logs NODE=node0
 logs:
 	@cd $(DOCKER_DIR) && $(DOCKER_COMPOSE) logs -f $(NODE)
 
-# Stop Network (Keep Data)
+# Stop Network
 stop:
 	@echo "🛑 Stopping network..."
 	@cd $(DOCKER_DIR) && $(DOCKER_COMPOSE) down
@@ -107,8 +104,10 @@ stop:
 # Clean Everything
 clean: stop
 	@echo "🧹 Cleaning data directory..."
-	@sudo rm -rf $(DATA_DIR)
+	@if [ -d "$(DATA_DIR)" ]; then \
+		docker run --rm -v $(PWD):/work alpine sh -c "rm -rf /work/$(DATA_DIR)/*"; \
+	fi
 	@echo "✅ Clean complete."
 
-# CI / All-in-one flow
+# CI
 ci: image test-all

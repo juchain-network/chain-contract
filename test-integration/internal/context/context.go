@@ -5,9 +5,11 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -19,7 +21,7 @@ import (
 	"juchain.org/chain/tools/ci/internal/config"
 )
 
-// Addresses of system contracts (Hardcoded for now, or load from somewhere)
+// Addresses of system contracts
 var (
 	ValidatorsAddr = common.HexToAddress("0x000000000000000000000000000000000000f010")
 	PunishAddr     = common.HexToAddress("0x000000000000000000000000000000000000F011")
@@ -32,7 +34,7 @@ type CIContext struct {
 	Clients []*ethclient.Client
 	ChainID *big.Int
 
-	// System Contracts (bound to the first client)
+	// System Contracts
 	Validators *contracts.Validators
 	Punish     *contracts.Punish
 	Proposal   *contracts.Proposal
@@ -41,7 +43,11 @@ type CIContext struct {
 	// Accounts
 	FunderKey         *ecdsa.PrivateKey
 	GenesisValidators []*ecdsa.PrivateKey
+	
 	mu                sync.Mutex
+	nonces            map[common.Address]uint64
+	clientIndex       int
+	proposerIndex     int
 }
 
 func NewCIContext(cfg *config.Config) (*CIContext, error) {
@@ -58,14 +64,12 @@ func NewCIContext(cfg *config.Config) (*CIContext, error) {
 		clients = append(clients, client)
 	}
 
-	// Use the first client for general queries
 	primaryClient := clients[0]
 	chainID, err := primaryClient.ChainID(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain id: %w", err)
 	}
 
-	// Init contracts
 	val, err := contracts.NewValidators(ValidatorsAddr, primaryClient)
 	if err != nil { return nil, err }
 	pun, err := contracts.NewPunish(PunishAddr, primaryClient)
@@ -75,13 +79,11 @@ func NewCIContext(cfg *config.Config) (*CIContext, error) {
 	stk, err := contracts.NewStaking(StakingAddr, primaryClient)
 	if err != nil { return nil, err }
 
-	// Parse funder key
 	funderKey, err := crypto.HexToECDSA(cfg.Funder.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("invalid funder private key: %w", err)
 	}
 
-	// Parse genesis validators keys
 	var genesisValidators []*ecdsa.PrivateKey
 	for i, v := range cfg.Validators {
 		key, err := crypto.HexToECDSA(v.PrivateKey)
@@ -91,7 +93,7 @@ func NewCIContext(cfg *config.Config) (*CIContext, error) {
 		genesisValidators = append(genesisValidators, key)
 	}
 
-	return &CIContext{
+	c := &CIContext{
 		Config:            cfg,
 		Clients:           clients,
 		ChainID:           chainID,
@@ -101,22 +103,103 @@ func NewCIContext(cfg *config.Config) (*CIContext, error) {
 		Staking:           stk,
 		FunderKey:         funderKey,
 		GenesisValidators: genesisValidators,
-	}, nil
+		nonces:            make(map[common.Address]uint64),
+	}
+
+	// Auto-Initialize if needed
+	err = c.autoInitialize()
+	if err != nil {
+		fmt.Printf("⚠️ autoInitialize failed: %v\n", err)
+	}
+
+	return c, nil
 }
 
-// GetTransactor returns a bind.TransactOpts for the given private key
+func (c *CIContext) autoInitialize() error {
+	// Robust check: if MinValidatorStake is default (100k JU), we need setup.
+	minStake, err := c.Proposal.MinValidatorStake(nil)
+	if err == nil && minStake.Cmp(big.NewInt(1000000000000000000)) == 0 {
+		fmt.Printf("✅ System already configured (MinValidatorStake = 1 JU).\n")
+		return nil
+	}
+
+	fmt.Printf("🔧 System unconfigured (MinValidatorStake = %v), performing auto-initialization...\n", minStake)
+	
+	// Check if we need to call initialize() at all
+	initialized, _ := c.Proposal.Initialized(nil)
+	if !initialized {
+		var valAddrs []common.Address
+		for _, vk := range c.GenesisValidators {
+			valAddrs = append(valAddrs, crypto.PubkeyToAddress(vk.PublicKey))
+		}
+
+		// 1. Initialize Proposal
+		opts, _ := c.GetTransactor(c.GenesisValidators[0])
+		fmt.Printf("  > Initializing Proposal...\n")
+		tx, err := c.Proposal.Initialize(opts, valAddrs, ValidatorsAddr, big.NewInt(20))
+		if err == nil {
+			c.WaitMined(tx.Hash())
+		}
+
+		// 2. Initialize Staking with Validators
+		opts, _ = c.GetTransactor(c.GenesisValidators[1])
+		fmt.Printf("  > Initializing Staking with Validators...\n")
+		tx, err = c.Staking.InitializeWithValidators(opts, ValidatorsAddr, ProposalAddr, PunishAddr, valAddrs, big.NewInt(1000))
+		if err == nil {
+			c.WaitMined(tx.Hash())
+		}
+
+		// 3. Initialize Validators
+		opts, _ = c.GetTransactor(c.GenesisValidators[2])
+		fmt.Printf("  > Initializing Validators...\n")
+		tx, err = c.Validators.Initialize(opts, valAddrs, ProposalAddr, PunishAddr, StakingAddr)
+		if err == nil {
+			c.WaitMined(tx.Hash())
+		}
+	}
+
+	// 4. Always ensure test-friendly parameters if they are not set
+	fmt.Printf("  > Configuring system parameters...\n")
+	_ = c.EnsureConfig(19, big.NewInt(1), nil)                   // ProposalCooldown
+	_ = c.EnsureConfig(8, big.NewInt(1000000000000000000), nil)  // MinValidatorStake
+	_ = c.EnsureConfig(10, big.NewInt(1000000000000000000), nil) // MinDelegation
+	
+	fmt.Printf("✅ Auto-initialization complete.\n")
+	return nil
+}
+
 func (c *CIContext) GetTransactor(key *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
+	if key == nil { return nil, fmt.Errorf("nil private key") }
+	
+c.mu.Lock()
+	defer c.mu.Unlock()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	
+	var maxNonce uint64
+	for _, client := range c.Clients {
+		n, err := client.PendingNonceAt(context.Background(), addr)
+		if err == nil && n > maxNonce {
+			maxNonce = n
+		}
+	}
+
+	if cached, ok := c.nonces[addr]; ok && cached >= maxNonce {
+		maxNonce = cached
+	}
+	c.nonces[addr] = maxNonce + 1
+
 	opts, err := bind.NewKeyedTransactorWithChainID(key, c.ChainID)
 	if err != nil {
 		return nil, err
 	}
 	
-	// Simply allow gas estimation to handle it, or set a high limit
-	// opts.GasLimit = 5000000 
+	opts.Nonce = big.NewInt(int64(maxNonce))
+	opts.GasLimit = 20000000 
+	opts.GasPrice = big.NewInt(1000000000) 
 	return opts, nil
 }
 
-// CreateAccount generates a new random account and funds it
 func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, common.Address, error) {
 	key, err := crypto.GenerateKey()
 	if err != nil {
@@ -124,64 +207,32 @@ func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, co
 	}
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	// Fund it
-	funderOpts, err := c.GetTransactor(c.FunderKey)
-	if err != nil {
-		return nil, common.Address{}, err
-	}
-	// Important: We need to manage nonce manually if concurrent requests happen, 
-	// but for simplicity here we rely on pending state or simple blocking.
-	// For robustness in CI, we should probably lock the funder.
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	opts, err := c.GetTransactor(c.FunderKey)
+	if err != nil { return nil, common.Address{}, err }
 
-	nonce, err := c.Clients[0].PendingNonceAt(context.Background(), crypto.PubkeyToAddress(c.FunderKey.PublicKey))
-	if err != nil {
-		return nil, common.Address{}, err
-	}
-	funderOpts.Nonce = big.NewInt(int64(nonce))
-	funderOpts.Value = amount
-
-	// Just a simple transfer? TransactOpts is usually for contract calls.
-	// For simple transfer, we use raw types.Transaction, but to keep it simple, 
-	// let's assume we might have a helper or just use one of the clients.
-	// ACTUALLY: bind.TransactOpts doesn't expose a "SendTransaction" method for ETH transfers.
-	// We have to use the client.
-	
-	// Let's implement transfer using ethclient
-	// Gas Limit 21000
-	gasLimit := uint64(21000)
-	gasPrice, err := c.Clients[0].SuggestGasPrice(context.Background())
-	if err != nil {
-		return nil, common.Address{}, err
-	}
-
-	tx := types.NewTransaction(nonce, addr, amount, gasLimit, gasPrice, nil)
-	
+	tx := types.NewTransaction(opts.Nonce.Uint64(), addr, amount, 21000, opts.GasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(c.ChainID), c.FunderKey)
-	if err != nil {
-		return nil, common.Address{}, err
-	}
+	if err != nil { return nil, common.Address{}, err }
 
-	err = c.Clients[0].SendTransaction(context.Background(), signedTx)
-	if err != nil {
-		return nil, common.Address{}, err
+	for _, client := range c.Clients {
+		_ = client.SendTransaction(context.Background(), signedTx)
 	}
 
 	log.Info("Funded account", "address", addr.Hex(), "tx", signedTx.Hash().Hex())
 	
-	// Wait for receipt?
-	// In a real CI, we might want to wait.
 	if err := c.WaitMined(signedTx.Hash()); err != nil {
         return nil, common.Address{}, fmt.Errorf("funding tx failed: %w", err)
     }
 
+	time.Sleep(2 * time.Second)
+
 	return key, addr, nil
 }
 
-// WaitMined waits for a tx to be mined
 func (c *CIContext) WaitMined(txHash common.Hash) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	if txHash == (common.Hash{}) { return nil }
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	
 	queryTicker := time.NewTicker(1 * time.Second)
@@ -192,13 +243,94 @@ func (c *CIContext) WaitMined(txHash common.Hash) error {
 		case <-ctx.Done():
 			return fmt.Errorf("timeout waiting for tx %s", txHash.Hex())
 		case <-queryTicker.C:
-			receipt, err := c.Clients[0].TransactionReceipt(context.Background(), txHash)
-			if err == nil && receipt != nil {
-				if receipt.Status == 1 {
-					return nil
+			fmt.Print(".")
+			
+			for i, client := range c.Clients {
+				receipt, err := client.TransactionReceipt(context.Background(), txHash)
+				if err == nil && receipt != nil {
+					fmt.Println()
+					if receipt.Status == 1 {
+						return nil
+					}
+					// Revert reason
+					tx, _, err := client.TransactionByHash(context.Background(), txHash)
+					if err == nil {
+						from, _ := types.Sender(types.LatestSignerForChainID(c.ChainID), tx)
+						msg := ethereum.CallMsg{
+							From:     from,
+							To:       tx.To(),
+							Gas:      tx.Gas(),
+							GasPrice: tx.GasPrice(),
+							Value:    tx.Value(),
+							Data:     tx.Data(),
+						}
+						_, errCall := client.CallContract(context.Background(), msg, receipt.BlockNumber)
+						if errCall != nil {
+							return fmt.Errorf("transaction %s failed on node %d: %v", txHash.Hex(), i, errCall)
+						}
+					}
+					return fmt.Errorf("transaction %s failed on node %d (status 0)", txHash.Hex(), i)
 				}
-				return fmt.Errorf("transaction failed (status 0)")
 			}
 		}
 	}
+}
+
+func (c *CIContext) EnsureConfig(cid int64, targetVal *big.Int, currentVal *big.Int) error {
+	if currentVal != nil && currentVal.Cmp(targetVal) == 0 {
+		return nil
+	}
+	
+	log.Info("Updating config", "cid", cid, "target", targetVal, "current", currentVal)
+	
+	if len(c.GenesisValidators) == 0 { return fmt.Errorf("no genesis validators") }
+	
+	var err error
+	for i := 0; i < len(c.GenesisValidators); i++ {
+		c.mu.Lock()
+		proposerKey := c.GenesisValidators[c.proposerIndex % len(c.GenesisValidators)]
+		c.proposerIndex++
+		c.mu.Unlock()
+
+		opts, errG := c.GetTransactor(proposerKey)
+		if errG != nil { continue }
+		
+		tx, errCall := c.Proposal.CreateUpdateConfigProposal(opts, big.NewInt(cid), targetVal)
+		if errCall == nil {
+			err = c.WaitMined(tx.Hash())
+			if err != nil { return err }
+			
+			receipt, _ := c.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
+			var propID [32]byte
+			found := false
+			for _, l := range receipt.Logs {
+				if ev, err := c.Proposal.ParseLogCreateConfigProposal(*l); err == nil {
+					propID = ev.Id
+					found = true
+					break
+				}
+			}
+			if !found { return fmt.Errorf("proposal log not found for tx %s", tx.Hash().Hex()) }
+
+			for _, vk := range c.GenesisValidators {
+				voterAddr := crypto.PubkeyToAddress(vk.PublicKey)
+				exist, _ := c.Validators.IsValidatorExist(nil, voterAddr)
+				if !exist { continue }
+				
+				vo, _ := c.GetTransactor(vk)
+				txV, errV := c.Proposal.VoteProposal(vo, propID, true)
+				if errV == nil {
+					c.WaitMined(txV.Hash())
+				}
+			}
+			return nil
+		}
+		
+		err = errCall
+		if strings.Contains(err.Error(), "Proposal creation too frequent") {
+			continue 
+		}
+		return fmt.Errorf("createUpdateConfigProposal failed: %w", err)
+	}
+	return fmt.Errorf("all proposers in cooldown: %w", err)
 }

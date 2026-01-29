@@ -13,7 +13,7 @@ try {
     const sysContracts = JSON.parse(fs.readFileSync(sysContractsPath, 'utf8'));
     const alloc = { ...sysContracts };
 
-    const balance = "1000000000000000000000000"; // 1M tokens in wei (if 18 decimals) or just a large number
+    const balance = "1000000000000000000000000000"; // 1B tokens
 
     // Add Funder
     alloc[funderAddr] = { balance: balance };
