@@ -210,3 +210,18 @@ load-env:
 	else \
 		echo "$(YELLOW)Warning: .env file not found. Using default values.$(NC)"; \
 	fi
+
+# =========================
+# CI / Integration Tests
+# =========================
+
+# Run full CI suite (Docker build + Integration Tests)
+ci:
+	@echo "$(YELLOW)Running Integration CI...$(NC)"
+	@$(MAKE) -C test-integration ci
+
+# Run CI with logging to file
+ci-log:
+	@echo "$(YELLOW)Running Integration CI with logging...$(NC)"
+	@mkdir -p logs
+	@$(MAKE) ci 2>&1 | tee logs/ci_$$(date +%Y%m%d_%H%M%S).log
