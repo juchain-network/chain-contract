@@ -1910,12 +1910,15 @@ contract StakingTest is Test {
         _updateActiveValidatorSet();
         
         // Validators must resign first before exiting
+        vm.roll(block.number + TEST_EPOCH);
         vm.prank(VALIDATOR4);
         Staking(STAKING).resignValidator();
         
+        vm.roll(block.number + TEST_EPOCH);
         vm.prank(VALIDATOR1);
         Staking(STAKING).resignValidator();
         
+        vm.roll(block.number + TEST_EPOCH);
         vm.prank(VALIDATOR2);
         Staking(STAKING).resignValidator();
         
@@ -1966,9 +1969,11 @@ contract StakingTest is Test {
         _updateActiveValidatorSet();
         
         // Validators must resign first to be removed from highestValidatorsSet
+        vm.roll(block.number + TEST_EPOCH);
         vm.prank(VALIDATOR1);
         Staking(STAKING).resignValidator();
         
+        vm.roll(block.number + TEST_EPOCH);
         vm.prank(VALIDATOR2);
         Staking(STAKING).resignValidator();
         
@@ -2019,9 +2024,11 @@ contract StakingTest is Test {
         
         // Validators must resign to be removed from highestValidatorsSet
         // Don't resign all 3 - keep one active to avoid "must keep at least one validator" error
+        vm.roll(block.number + TEST_EPOCH);
         vm.prank(VALIDATOR1);
         Staking(STAKING).resignValidator();
         
+        vm.roll(block.number + TEST_EPOCH);
         vm.prank(VALIDATOR2);
         Staking(STAKING).resignValidator();
         
