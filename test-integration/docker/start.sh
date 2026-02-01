@@ -7,48 +7,73 @@ if [ ! -d "/data/geth/chaindata" ]; then
     juchain --datadir /data init /genesis.json 
 fi
 
-# Import validator key if present
-if [ -f "/data/validator.key" ]; then
-    echo "Importing validator key..."
-    # Import and capture the address
-    # We use a temporary password file for non-interactive import
-    echo "" > /tmp/password
-    juchain account import --datadir /data --password /tmp/password /data/validator.key
+SYNC_NODE="${SYNC_NODE:-false}"
+
+if [ "$SYNC_NODE" = "true" ]; then
+    echo "Starting SYNC NODE (Non-Validator)..."
+    RPC_URL="http://127.0.0.1:8545"
+    
+    juchain \
+        --config /data/config.toml \
+        --networkid 666666 \
+        --nodekey /data/nodekey \
+        --http \
+        --http.api "eth,net,web3,debug,admin,personal,miner,txpool" \
+        --http.corsdomain "*" \
+        --http.vhosts "*" \
+        --http.addr "0.0.0.0" \
+        --ws \
+        --ws.api "eth,net,web3,debug,admin,personal,miner,txpool" \
+        --ws.origins "*" \
+        --ws.addr "0.0.0.0" \
+        --nat extip:$(hostname -i) &
+        
+    NODE_PID=$!
+    
+    # Wait for RPC and Peers logic is shared below, but miner start is skipped
+else
+    # VALIDATOR NODE LOGIC
+
+    # Import validator key if present
+    if [ -f "/data/validator.key" ]; then
+        echo "Importing validator key..."
+        echo "" > /tmp/password
+        juchain account import --datadir /data --password /tmp/password /data/validator.key
+    fi
+
+    # Get address
+    VAL_ADDR=${VAL_ADDR:-$(juchain account list --datadir /data | head -n 1 | cut -d '{' -f 2 | cut -d '}' -f 1)}
+
+    echo "Starting VALIDATOR node: $VAL_ADDR"
+
+    MIN_PEERS="${MIN_PEERS:-3}"
+    MINER_START_DELAY="${MINER_START_DELAY:-0}"
+    RPC_URL="http://127.0.0.1:8545"
+
+    juchain \
+        --config /data/config.toml \
+        --networkid 666666 \
+        --nodekey /data/nodekey \
+        --http \
+        --http.api "eth,net,web3,debug,admin,personal,miner,txpool" \
+        --http.corsdomain "*" \
+        --http.vhosts "*" \
+        --http.addr "0.0.0.0" \
+        --ws \
+        --ws.api "eth,net,web3,debug,admin,personal,miner,txpool" \
+        --ws.origins "*" \
+        --ws.addr "0.0.0.0" \
+        --miner.etherbase "$VAL_ADDR" \
+        --miner.gasprice 0 \
+        --unlock "$VAL_ADDR" \
+        --password /tmp/password \
+        --allow-insecure-unlock \
+        --nat extip:$(hostname -i) &
+
+    NODE_PID=$!
 fi
 
-# Get address (assuming only one account imported)
-# Or we can rely on --miner.etherbase if we passed the address in ENV
-VAL_ADDR=${VAL_ADDR:-$(juchain account list --datadir /data | head -n 1 | cut -d '{' -f 2 | cut -d '}' -f 1)}
-
-echo "Starting node with validator: $VAL_ADDR"
-
-# Construct bootnodes flag if static-nodes.json is not working or as backup
-# But static-nodes.json in /data/geth/ (or /data/) usually works.
-
-# Start juchain without mining, then enable mining after peers connect.
-MIN_PEERS="${MIN_PEERS:-3}"
-MINER_START_DELAY="${MINER_START_DELAY:-0}"
-RPC_URL="http://127.0.0.1:8545"
-
-juchain \
-    --config /data/config.toml \
-    --networkid 666666 \
-    --nodekey /data/nodekey \
-    --http \
-    --http.api "eth,net,web3,debug,admin,personal,miner,txpool" \
-    --http.corsdomain "*" \
-    --http.vhosts "*" \
-    --ws \
-    --ws.api "eth,net,web3,debug,admin,personal,miner,txpool" \
-    --ws.origins "*" \
-    --miner.etherbase "$VAL_ADDR" \
-    --miner.gasprice 0 \
-    --unlock "$VAL_ADDR" \
-    --password /tmp/password \
-    --allow-insecure-unlock \
-    --nat extip:$(hostname -i) &
-
-NODE_PID=$!
+# Shared Wait Logic
 
 wait_for_rpc() {
     for i in $(seq 1 120); do
@@ -68,6 +93,7 @@ wait_for_rpc() {
 }
 
 wait_for_peers() {
+    MIN_PEERS="${MIN_PEERS:-3}"
     for i in $(seq 1 300); do
         RESP=$(curl -s -X POST -H "Content-Type: application/json" \
             --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' \
@@ -87,8 +113,6 @@ wait_for_peers() {
         fi
         sleep 1
     done
-    # We return success even if peer count not reached to allow miner to start anyway
-    # This prevents the container from exiting
     echo "⚠️ Peer count not reached ($MIN_PEERS), continuing anyway..."
     return 0
 }
@@ -105,12 +129,16 @@ if ! wait_for_peers; then
     exit 1
 fi
 
-if [ "$MINER_START_DELAY" -gt 0 ]; then
-    sleep "$MINER_START_DELAY"
+if [ "$SYNC_NODE" != "true" ]; then
+    if [ "$MINER_START_DELAY" -gt 0 ]; then
+        sleep "$MINER_START_DELAY"
+    fi
+
+    echo "Starting miner..."
+    curl -s -X POST -H "Content-Type: application/json" \
+        --data '{"jsonrpc":"2.0","method":"miner_start","params":[],"id":1}' \
+        "$RPC_URL" >/dev/null 2>&1 || true
 fi
 
-curl -s -X POST -H "Content-Type: application/json" \
-    --data '{"jsonrpc":"2.0","method":"miner_start","params":[],"id":1}' \
-    "$RPC_URL" >/dev/null 2>&1 || true
-
+echo "Node is ready."
 wait "$NODE_PID"

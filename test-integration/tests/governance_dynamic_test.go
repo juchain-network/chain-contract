@@ -406,14 +406,20 @@ func TestB_Governance_DynamicThreshold(t *testing.T) {
 	pass, _ := ctx.Proposal.Pass(nil, v5Addr)
 	utils.AssertTrue(t, !pass, "Should not pass with threshold-1 votes")
 
-	// 3. Remove one active validator to reduce voting count by 1 (dynamic threshold).
+	// 3. Remove one active validator to reduce voting count (dynamic threshold).
 	p0Key := getNextProposer(&pIndex)
 	if p0Key == nil {
 		t.Fatalf("no active proposer available")
 	}
 	p0Opts, _ := ctx.GetTransactor(p0Key)
-	removeTarget := common.HexToAddress(ctx.Config.Validators[3].Address)
-	txR, err := ctx.Proposal.CreateProposal(p0Opts, removeTarget, false, "G-15 Remove V3")
+
+	// Dynamically pick the last validator in config to remove
+	// Ensure we don't pick one we've already used for voting if possible, 
+	// though votes from removed validators are discarded anyway.
+	lastValIndex := len(ctx.Config.Validators) - 1
+	removeTarget := common.HexToAddress(ctx.Config.Validators[lastValIndex].Address)
+	
+	txR, err := ctx.Proposal.CreateProposal(p0Opts, removeTarget, false, fmt.Sprintf("G-15 Remove V%d", lastValIndex))
 	utils.AssertNoError(t, err, "create remove validator proposal failed")
 	broadcastTx(txR)
 	if err := ctx.WaitMined(txR.Hash()); err != nil {
@@ -464,13 +470,28 @@ func TestB_Governance_DynamicThreshold(t *testing.T) {
 
 	// 4. Check if already passed (due to threshold reduction)
 	passV5, _ := ctx.Proposal.Pass(nil, v5Addr)
-	if passV5 {
-		t.Log("V5 passed automatically after threshold reduction")
+	
+	// Calculate new threshold
+	newThreshold := int(votingCountAfter/2 + 1)
+	t.Logf("Votes cast: %d, New threshold: %d", votesToCast, newThreshold)
+
+	if votesToCast >= newThreshold {
+		// Case: 4 validators -> 3 validators (Threshold 3 -> 2). Votes 2. 2 >= 2. Pass.
+		if !passV5 {
+			// Wait a bit more for state to settle if needed
+			waitBlocks(t, 2)
+			passV5, _ = ctx.Proposal.Pass(nil, v5Addr)
+		}
+		utils.AssertTrue(t, passV5, "V5 should pass automatically after threshold reduction")
 		return
 	}
 
-	// Wait a bit for state to settle
-	waitBlocks(t, 2)
+	// Case: 3 validators -> 2 validators (Threshold 2 -> 2). Votes 1. 1 < 2. Not Pass.
+	if passV5 {
+		t.Fatalf("V5 passed unexpectedly: votes(%d) < threshold(%d)", votesToCast, newThreshold)
+	}
+	
+	t.Log("Threshold did not drop enough to auto-pass (expected for 3 validators). Casting final vote...")
 
 	// Otherwise, trigger check by another vote
 	var finalVoter *ecdsa.PrivateKey

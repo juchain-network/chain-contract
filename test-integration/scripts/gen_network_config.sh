@@ -49,33 +49,35 @@ IFS=',' read -r FUNDER_ADDR FUNDER_PRIV FUNDER_PUB <<< $(generate_key)
 FUNDER_ADDR=$(echo "$FUNDER_ADDR" | tr -d '[:space:]')
 echo "Funder: $FUNDER_ADDR"
 
-# Validators (4 nodes)
+# Validators (3 nodes) + Sync Node (1 node) = 4 nodes total
 VAL_ADDRS=()
 VAL_PRIVS=()
 ENODES=()
 
+# We generate for 0..3 (4 nodes). 0-2 are validators, 3 is sync.
 for i in {0..3}; do
-    IFS=',' read -r ADDR PRIV PUB <<< $(generate_key)
-    # Trim
-    ADDR=$(echo "$ADDR" | tr -d '[:space:]')
-    VAL_ADDRS+=($ADDR)
-    VAL_PRIVS+=($PRIV)
-    echo "Validator $i: $ADDR"
-    
     # Create node directory
     mkdir -p "$DATA_DIR/node$i/keystore"
-    mkdir -p "$DATA_DIR/node$i/geth" # standard data dir structure
+    mkdir -p "$DATA_DIR/node$i/geth" 
     
     # Node P2P Key
     IFS=',' read -r NODE_ADDR NODE_PRIV NODE_PUB <<< $(generate_key)
     echo "$NODE_PRIV" > "$DATA_DIR/node$i/nodekey"
     
-    # Construct Enode URL (assuming container names node0, node1...)
-    # Port 30303 default
+    # Construct Enode URL
     ENODES+=("enode://$NODE_PUB@node$i:30303")
     
-    # Save validator key
-    echo "$PRIV" > "$DATA_DIR/node$i/validator.key"
+    if [ $i -lt 3 ]; then
+        # Validator keys for 0-2
+        IFS=',' read -r ADDR PRIV PUB <<< $(generate_key)
+        ADDR=$(echo "$ADDR" | tr -d '[:space:]')
+        VAL_ADDRS+=($ADDR)
+        VAL_PRIVS+=($PRIV)
+        echo "Validator $i: $ADDR"
+        echo "$PRIV" > "$DATA_DIR/node$i/validator.key"
+    else
+        echo "Node $i: Sync Node (No validator key)"
+    fi
 done
 
 # Generate config.toml for each node
@@ -84,7 +86,8 @@ echo "Generating config.toml for nodes..."
 # Prepare StaticNodes string: ["enode://...", "enode://..."]
 STATIC_NODES_TOML="["
 for i in {0..3}; do
-    if [ $i -ne 0 ]; then STATIC_NODES_TOML+=", "; fi
+    if [ $i -ne 0 ]; then STATIC_NODES_TOML+=', ';
+    fi
     STATIC_NODES_TOML+="\"${ENODES[$i]}\""
 done
 STATIC_NODES_TOML+="]"
@@ -134,19 +137,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Construct ExtraData (Vanity 32 bytes + Validators addresses + 0 suffix?)
-# Standard Clique/PoA ExtraData: 32 bytes vanity + N * 20 bytes validators + 65 bytes signature (empty in genesis)
-# The provided genesis extraData was:
-# 0x00...00 (32 bytes)
-# 7099...c8 (Validator address)
-# cb50...1c (65 bytes signature / seal ? No, in genesis it is usually just validator list)
-# Wait, let's look at the original genesis extraData again.
-# "0x00...00" (32 bytes 64 chars)
-# "7099...c8" (Address 20 bytes 40 chars)
-# "cb50...1c" (Seems like 65 bytes 130 chars) -> Total 234 chars hex?
-# Let's count original: 32 bytes (64) + 20 bytes (40) + 65 bytes (130) = 234 chars + '0x' = 236 chars.
-# Yes. So we need to construct: 32 bytes zeros + All Validator Addresses concatenated + 65 bytes zeros.
-
 VANITY="0000000000000000000000000000000000000000000000000000000000000000"
 VALIDATORS_HEX=""
 for addr in "${VAL_ADDRS[@]}"; do
@@ -158,11 +148,8 @@ SUFFIX="000000000000000000000000000000000000000000000000000000000000000000000000
 EXTRA_DATA="0x${VANITY}${VALIDATORS_HEX}${SUFFIX}"
 
 # Replace placeholders
-# Use a temp file for alloc to avoid escaping issues in sed
 echo "$ALLOC_JSON" > "$DATA_DIR/alloc.json"
 
-# We use python or node or jq to do the replacement to avoid sed issues with newlines in json
-# Using --slurpfile to avoid large command line arguments for alloc
 jq --slurpfile allocList "$DATA_DIR/alloc.json" --arg extra "$EXTRA_DATA" \
    '.alloc = $allocList[0] | .extraData = $extra' "$TEMPLATE_GENESIS" > "$DATA_DIR/genesis.json"
 
@@ -170,10 +157,7 @@ jq --slurpfile allocList "$DATA_DIR/alloc.json" --arg extra "$EXTRA_DATA" \
 echo "Generating test_config.yaml..."
 cat > "$DATA_DIR/test_config.yaml" <<EOF
 rpcs:
-  - "http://localhost:8545"
-  - "http://localhost:8547"
-  - "http://localhost:8549"
-  - "http://localhost:8551"
+  - "http://localhost:18545"
 
 funder:
   address: "$FUNDER_ADDR"
@@ -182,7 +166,7 @@ funder:
 validators:
 EOF
 
-for i in {0..3}; do
+for i in {0..2}; do
 cat >> "$DATA_DIR/test_config.yaml" <<EOF
   - address: "${VAL_ADDRS[$i]}"
     private_key: "${VAL_PRIVS[$i]}"

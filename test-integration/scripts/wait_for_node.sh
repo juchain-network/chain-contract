@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Default to localhost:8545 if not set
-RPC_URL="${1:-http://localhost:8545}"
+# Default to localhost:18545 if not set (Sync Node)
+RPC_URL="${1:-http://localhost:18545}"
 RETRIES="${RETRIES:-300}"
 INCREMENTS_REQUIRED="${INCREMENTS_REQUIRED:-3}"
 MIN_BLOCK="${MIN_BLOCK:-}"

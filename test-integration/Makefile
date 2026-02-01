@@ -41,7 +41,7 @@ init:
 run:
 	@echo "🚀 Starting network cluster..."
 	@cd $(DOCKER_DIR) && $(DOCKER_COMPOSE) up -d
-	@bash $(SCRIPTS_DIR)/wait_for_node.sh http://localhost:8545
+	@bash $(SCRIPTS_DIR)/wait_for_node.sh http://localhost:18545
 
 # Wait for Node Readiness
 ready:
