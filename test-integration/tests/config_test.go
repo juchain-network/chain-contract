@@ -1,11 +1,13 @@
 package tests
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"juchain.org/chain/tools/ci/internal/utils"
 )
 
@@ -55,30 +57,43 @@ func TestA_SystemConfigSetup(t *testing.T) {
 	}
 
 	for _, target := range targets {
-		t.Logf("Ensuring %s is %v...", target.name, target.val)
-		err := ctx.EnsureConfig(target.cid, target.val, nil)
-		utils.AssertNoError(t, err, fmt.Sprintf("failed to ensure %s", target.name))
+		t.Logf("Verifying %s is %v...", target.name, target.val)
+		current, err := ctx.GetConfigValue(target.cid)
+		utils.AssertNoError(t, err, fmt.Sprintf("failed to read %s", target.name))
+		if current.Cmp(target.val) != 0 {
+			t.Fatalf("%s mismatch: expected %v, got %v", target.name, target.val, current)
+		}
 	}
 }
 
 func TestB_ConfigBoundaryChecks(t *testing.T) {
-	if ctx == nil {
+	if ctx == nil || len(ctx.GenesisValidators) == 0 {
 		t.Skip("Context not initialized")
 	}
 
 	// Wait for any previous cooldown to expire
 	t.Log("Waiting for potential proposal cooldown...")
-	waitBlocks(t, 10) // Wait enough blocks (previous test set it to 1, but safety margin)
+	waitBlocks(t, 5)
 
-	proposerKey := ctx.GenesisValidators[0]
-
+	proposerCounter := 0
 	runRevertTest := func(name string, cid uint256, val *big.Int, expectedErr string) {
 		t.Run(name, func(t *testing.T) {
+			// Find an active proposer
+			var proposerKey *ecdsa.PrivateKey
+			for i := 0; i < len(ctx.GenesisValidators); i++ {
+				k := ctx.GenesisValidators[proposerCounter%len(ctx.GenesisValidators)]
+				proposerCounter++
+				addr := crypto.PubkeyToAddress(k.PublicKey)
+				if active, _ := ctx.Validators.IsValidatorActive(nil, addr); active {
+					proposerKey = k
+					break
+				}
+			}
+			if proposerKey == nil {
+				t.Fatal("no active proposers")
+			}
+
 			opts, _ := ctx.GetTransactor(proposerKey)
-			// Using a fresh nonce is handled by GetTransactor if we actually submitted previously.
-			// However, since we expect revert, the nonce might not increment on chain if we simulate?
-			// But CreateUpdateConfigProposal submits a transaction.
-			// Go-ethereum simulation usually detects revert before broadcast.
 			_, err := ctx.Proposal.CreateUpdateConfigProposal(opts, big.NewInt(int64(cid)), val)
 
 			if err == nil {
@@ -86,11 +101,14 @@ func TestB_ConfigBoundaryChecks(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), expectedErr) {
 				t.Logf("Got error: %v", err)
-				if !strings.Contains(err.Error(), "revert") && !strings.Contains(err.Error(), "execution reverted") {
-					t.Errorf("Unexpected error type")
-				}
-				// Strict check enabled
 				t.Errorf("expected error %q, got %q", expectedErr, err.Error())
+			}
+			
+			if proposerCounter % 2 == 0 {
+				t.Log("Clearing cooldowns via epoch wait...")
+				waitForNextEpochBlock(t)
+			} else {
+				waitBlocks(t, 1)
 			}
 		})
 	}

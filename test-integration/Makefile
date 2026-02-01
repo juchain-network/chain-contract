@@ -1,4 +1,4 @@
-.PHONY: all ci clean image init run ready test stop help logs
+.PHONY: all ci clean image init run ready reset test stop help logs test-all test-all-legacy
 
 # Current directory
 PWD := $(shell pwd)
@@ -41,11 +41,11 @@ init:
 run:
 	@echo "🚀 Starting network cluster..."
 	@cd $(DOCKER_DIR) && $(DOCKER_COMPOSE) up -d
-	@sleep 5
+	@bash $(SCRIPTS_DIR)/wait_for_node.sh http://localhost:8545
 
 # Wait for Node Readiness
 ready:
-	@bash $(SCRIPTS_DIR)/wait_for_node.sh
+	@INCREMENTS_REQUIRED=0 bash $(SCRIPTS_DIR)/wait_for_node.sh
 
 # Helper to reset environment
 reset: clean init run ready
@@ -64,28 +64,32 @@ test-punish:
 	@$(MAKE) reset && go test ./tests/... -v -run "TestG_PunishPaths" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
 # Individual Test Groups
-test-config: reset
-	@go test ./tests/... -v -run "TestA_SystemConfigSetup|TestB_ConfigBoundaryChecks" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+test-config:
+	@$(MAKE) reset && go test ./tests/... -v -run "TestA_SystemConfigSetup|TestB_ConfigBoundaryChecks" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
-test-governance: reset
-	@go test ./tests/... -v -run "TestB_Governance.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+test-governance:
+	@$(MAKE) reset && go test ./tests/... -v -run "TestB_Governance.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
-test-staking: reset
-	@go test ./tests/... -v -run "TestC_Staking.*|TestD_Staking.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+test-staking:
+	@$(MAKE) reset && go test ./tests/... -v -run "TestC_Staking.*|TestD_Staking.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
-test-delegation: reset
-	@go test ./tests/... -v -run "TestE_Delegation.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+test-delegation:
+	@$(MAKE) reset && go test ./tests/... -v -run "TestE_Delegation.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
-test-rewards: reset
-	@go test ./tests/... -v -run "TestH_Robustness" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+test-rewards:
+	@$(MAKE) reset && go test ./tests/... -v -run "TestH_Robustness" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 	@$(MAKE) reset && go test ./tests/... -v -run "TestI_ConsensusRewards|TestI_PublicQueryCoverage|TestI_ValidatorExtras" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
-test-epoch: reset
-	@go test ./tests/... -v -run "TestY_UpdateActiveValidatorSet" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+test-epoch:
+	@$(MAKE) reset && go test ./tests/... -v -run "TestY_UpdateActiveValidatorSet" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 	@$(MAKE) reset && go test ./tests/... -v -run "TestZ_LastManStanding|TestZ_UpgradesAndInitGuards" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
-# Run ALL Groups
-test-all: test-config test-governance test-staking test-delegation test-punish test-rewards test-epoch
+# Run ALL tests serially with isolated reset per test
+test-all:
+	@bash $(SCRIPTS_DIR)/run_tests_serial.sh
+
+# Legacy grouped runs
+test-all-legacy: test-config test-governance test-staking test-delegation test-punish test-rewards test-epoch
 
 # Legacy single-pass test (runs everything in one go without reset)
 test: ready
@@ -107,6 +111,9 @@ clean: stop
 	@if [ -d "$(DATA_DIR)" ]; then \
 		docker run --rm -v $(PWD):/work alpine sh -c "rm -rf /work/$(DATA_DIR)/*"; \
 	fi
+	@docker network prune -f
+	@docker image prune -f
+	@docker volume prune -f
 	@echo "✅ Clean complete."
 
 # CI

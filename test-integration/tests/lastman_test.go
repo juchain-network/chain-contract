@@ -56,6 +56,9 @@ func TestZ_LastManStanding(t *testing.T) {
 		if pass {
 			return fmt.Errorf("expected pass=false for removed validator %s", target.Hex())
 		}
+		// Ensure validator set updates after epoch boundary
+		waitForNextEpochBlock(t)
+		waitBlocks(t, 1)
 		return nil
 	}
 
@@ -96,6 +99,8 @@ func TestZ_LastManStanding(t *testing.T) {
 	// Protection: last validator should remain in highest set and pass status unchanged (still true).
 	pass, _ := ctx.Proposal.Pass(nil, last)
 	utils.AssertTrue(t, pass, "last validator should remain passed")
+	waitForNextEpochBlock(t)
+	waitBlocks(t, 1)
 	highest, _ = ctx.Validators.GetHighestValidators(nil)
 	if len(highest) != 1 {
 		t.Fatalf("expected highestValidatorsSet length = 1, got %d", len(highest))

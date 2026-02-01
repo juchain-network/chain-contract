@@ -2,12 +2,9 @@ package tests
 
 import (
 	"math/big"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"juchain.org/chain/tools/ci/internal/utils"
 )
@@ -22,6 +19,7 @@ func TestD_StakingManagement(t *testing.T) {
 
 	// [S-01] Add Stake
 	t.Run("S-01_AddStake", func(t *testing.T) {
+		ctx.WaitIfEpochBlock()
 		initialInfo, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		addAmount := utils.ToWei(1000)
 		opts, _ := ctx.GetTransactor(valKey)
@@ -38,6 +36,7 @@ func TestD_StakingManagement(t *testing.T) {
 
 	// [S-01b] Add Stake Zero
 	t.Run("S-01b_AddStakeZero", func(t *testing.T) {
+		ctx.WaitIfEpochBlock()
 		opts, _ := ctx.GetTransactor(valKey)
 		opts.Value = nil
 		_, err := ctx.Staking.AddValidatorStake(opts)
@@ -46,13 +45,16 @@ func TestD_StakingManagement(t *testing.T) {
 
 	// [S-02] Decrease Stake
 	t.Run("S-02_DecreaseStake", func(t *testing.T) {
+		ctx.WaitIfEpochBlock()
 		decAmount := utils.ToWei(500)
 		opts, _ := ctx.GetTransactor(valKey)
 		opts.Value = nil
+		
 		infoBefore, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		tx, err := ctx.Staking.DecreaseValidatorStake(opts, decAmount)
 		utils.AssertNoError(t, err, "decrease stake failed")
 		ctx.WaitMined(tx.Hash())
+		
 		infoAfter, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		expected := new(big.Int).Sub(infoBefore.SelfStake, decAmount)
 		utils.AssertBigIntEq(t, infoAfter.SelfStake, expected, "stake not decreased correctly")
@@ -60,24 +62,32 @@ func TestD_StakingManagement(t *testing.T) {
 
 	// [S-03] Edit Info
 	t.Run("S-03_EditInfo", func(t *testing.T) {
+		ctx.WaitIfEpochBlock()
 		newFeeAddr := common.HexToAddress("0xFEebFEebFEebFEebFEebFEebFEebFEebFEebFEeb")
 		opts, _ := ctx.GetTransactor(valKey)
 		tx, err := ctx.Validators.CreateOrEditValidator(opts, newFeeAddr, "NewMoniker", "ident", "site", "email", "details")
 		utils.AssertNoError(t, err, "edit validator failed")
 		ctx.WaitMined(tx.Hash())
+		
 		feeAddr, _, _, _, _, _ := ctx.Validators.GetValidatorInfo(nil, valAddr)
 		utils.AssertTrue(t, feeAddr == newFeeAddr, "fee address not updated")
-		tx2, _ := ctx.Validators.CreateOrEditValidator(opts, valAddr, "Genesis", "", "", "", "")
+		
+		// Restore original state
+		ctx.WaitIfEpochBlock()
+		opts2, _ := ctx.GetTransactor(valKey)
+		tx2, _ := ctx.Validators.CreateOrEditValidator(opts2, valAddr, "Genesis", "", "", "", "")
 		ctx.WaitMined(tx2.Hash())
 	})
 
 	// [S-04] Update Commission
 	t.Run("S-04_UpdateCommission", func(t *testing.T) {
+		ctx.WaitIfEpochBlock()
 		newRate := big.NewInt(2000)
 		opts, _ := ctx.GetTransactor(valKey)
 		tx, err := ctx.Staking.UpdateCommissionRate(opts, newRate)
 		utils.AssertNoError(t, err, "update commission failed")
 		ctx.WaitMined(tx.Hash())
+		
 		info, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		utils.AssertBigIntEq(t, info.CommissionRate, newRate, "commission rate not updated")
 	})
@@ -121,36 +131,35 @@ func TestD_StakingManagement(t *testing.T) {
 	// [S-05] Reincarnation
 	t.Run("S-05_Reincarnation", func(t *testing.T) {
 		t.Log("Waiting for fresh epoch...")
-		waitBlocks(t, 25)
+		waitForNextEpochBlock(t)
+		waitBlocks(t, 1)
+
 		key, addr, err := createAndRegisterValidator(t, "S-05 Reinc")
 		if err != nil { t.Skipf("creation failed: %v", err) }
+		
+		ctx.WaitIfEpochBlock()
 		opts, _ := ctx.GetTransactor(key)
-		tx, _ := ctx.Staking.ResignValidator(opts)
+		tx, err := ctx.Staking.ResignValidator(opts)
+		utils.AssertNoError(t, err, "resign failed")
 		ctx.WaitMined(tx.Hash())
 		
 		// Pass reproposal
-		passProposalFor(t, addr, "S-05 Repro")
+		err = passProposalFor(t, addr, "S-05 Repro")
+		utils.AssertNoError(t, err, "reproposal failed")
 		
 		unjailPeriod, _ := ctx.Proposal.ValidatorUnjailPeriod(nil)
-		waitBlocks(t, int(new(big.Int).Add(unjailPeriod, big.NewInt(1)).Int64()))
+		t.Logf("Waiting %s blocks for unjail period...", unjailPeriod)
+		waitBlocks(t, int(unjailPeriod.Int64())+1)
 
-		var txU *types.Transaction
-		for retry := 0; retry < 5; retry++ {
-			txU, err = ctx.Staking.UnjailValidator(opts, addr)
-			if err == nil { break }
-			if strings.Contains(err.Error(), "Epoch block forbidden") {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			break
-		}
-		if err == nil {
-			ctx.WaitMined(txU.Hash())
-			t.Log("Waiting for epoch transition to activate...")
-			waitBlocks(t, 25)
-			active, _ := ctx.Validators.IsValidatorActive(nil, addr)
-			utils.AssertTrue(t, active, "should be active")
-		}
+		ctx.WaitIfEpochBlock()
+		robustUnjailValidator(t, key, addr)
+		
+		t.Log("Waiting for epoch transition to activate...")
+		waitForNextEpochBlock(t)
+		waitBlocks(t, 2)
+		
+		active, _ := ctx.Validators.IsValidatorActive(nil, addr)
+		utils.AssertTrue(t, active, "should be active after reincarnation")
 	})
 
 	t.Run("S-06_StakeBelowMin", func(t *testing.T) {

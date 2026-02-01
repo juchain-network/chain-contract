@@ -27,7 +27,7 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 				// If simulation didn't catch it, WaitMined must
 				err = ctx.WaitMined(tx.Hash())
 			}
-			
+
 			if err == nil {
 				t.Errorf("%s.initialize should have failed", name)
 			} else {
@@ -62,9 +62,6 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 	})
 
 	t.Run("ReinitializeV2", func(t *testing.T) {
-		minerKey, _ := minerKeyOrSkip(t)
-		opts, _ := ctx.GetTransactor(minerKey)
-
 		reinit := func(name string, call func() error) {
 			if err := call(); err != nil {
 				if strings.Contains(err.Error(), "Miner only") {
@@ -79,6 +76,8 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 		}
 
 		reinit("Proposal", func() error {
+			minerKey, _ := minerKeyOrSkip(t)
+			opts, _ := ctx.GetTransactor(minerKey)
 			tx, err := ctx.Proposal.ReinitializeV2(opts)
 			if err != nil {
 				return err
@@ -86,6 +85,8 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 			return ctx.WaitMined(tx.Hash())
 		})
 		reinit("Validators", func() error {
+			minerKey, _ := minerKeyOrSkip(t)
+			opts, _ := ctx.GetTransactor(minerKey)
 			tx, err := ctx.Validators.ReinitializeV2(opts)
 			if err != nil {
 				return err
@@ -93,6 +94,8 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 			return ctx.WaitMined(tx.Hash())
 		})
 		reinit("Staking", func() error {
+			minerKey, _ := minerKeyOrSkip(t)
+			opts, _ := ctx.GetTransactor(minerKey)
 			tx, err := ctx.Staking.ReinitializeV2(opts)
 			if err != nil {
 				return err
@@ -100,6 +103,8 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 			return ctx.WaitMined(tx.Hash())
 		})
 		reinit("Punish", func() error {
+			minerKey, _ := minerKeyOrSkip(t)
+			opts, _ := ctx.GetTransactor(minerKey)
 			tx, err := ctx.Punish.ReinitializeV2(opts)
 			if err != nil {
 				return err
@@ -108,6 +113,8 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 		})
 
 		// Second call should fail
+		minerKey, _ := minerKeyOrSkip(t)
+		opts, _ := ctx.GetTransactor(minerKey)
 		tx, err := ctx.Proposal.ReinitializeV2(opts)
 		if err == nil {
 			err = ctx.WaitMined(tx.Hash())

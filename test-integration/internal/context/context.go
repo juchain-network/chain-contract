@@ -9,16 +9,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
-	
-	"juchain.org/chain/tools/contracts"
+
 	"juchain.org/chain/tools/ci/internal/config"
+	"juchain.org/chain/tools/contracts"
 )
 
 // Addresses of system contracts
@@ -37,17 +36,16 @@ type CIContext struct {
 	// System Contracts
 	Validators *contracts.Validators
 	Punish     *contracts.Punish
-	Proposal   *contracts.Proposal
-	Staking    *contracts.Staking
-
-	// Accounts
+	Proposal          *contracts.Proposal
+	Staking           *contracts.Staking
+	ProposalAddr      common.Address
 	FunderKey         *ecdsa.PrivateKey
 	GenesisValidators []*ecdsa.PrivateKey
-	
-	mu                sync.Mutex
-	nonces            map[common.Address]uint64
-	clientIndex       int
-	proposerIndex     int
+
+	mu            sync.Mutex
+	nonces        map[common.Address]uint64
+	clientIndex   int
+	proposerIndex int
 }
 
 func NewCIContext(cfg *config.Config) (*CIContext, error) {
@@ -71,14 +69,22 @@ func NewCIContext(cfg *config.Config) (*CIContext, error) {
 	}
 
 	val, err := contracts.NewValidators(ValidatorsAddr, primaryClient)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	pun, err := contracts.NewPunish(PunishAddr, primaryClient)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	prop, err := contracts.NewProposal(ProposalAddr, primaryClient)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
-stk, err := contracts.NewStaking(StakingAddr, primaryClient)
-	if err != nil { return nil, err }
+	stk, err := contracts.NewStaking(StakingAddr, primaryClient)
+	if err != nil {
+		return nil, err
+	}
 
 	funderKey, err := crypto.HexToECDSA(cfg.Funder.PrivateKey)
 	if err != nil {
@@ -102,9 +108,14 @@ stk, err := contracts.NewStaking(StakingAddr, primaryClient)
 		Punish:            pun,
 		Proposal:          prop,
 		Staking:           stk,
+		ProposalAddr:      ProposalAddr,
 		FunderKey:         funderKey,
 		GenesisValidators: genesisValidators,
 		nonces:            make(map[common.Address]uint64),
+	}
+
+	if err := c.WaitForBlockProgress(1, 180*time.Second); err != nil {
+		return nil, fmt.Errorf("chain not producing blocks: %w", err)
 	}
 
 	// Auto-Initialize if needed
@@ -116,19 +127,92 @@ stk, err := contracts.NewStaking(StakingAddr, primaryClient)
 	return c, nil
 }
 
+func (c *CIContext) WaitForBlockProgress(minIncrements int, timeout time.Duration) error {
+	if minIncrements <= 0 {
+		return nil
+	}
+	start := time.Now()
+	var last uint64
+	increments := 0
+
+	for time.Since(start) < timeout {
+		cur, err := c.Clients[0].BlockNumber(context.Background())
+		if err == nil {
+			if last != 0 && cur > last {
+				increments++
+				if increments >= minIncrements {
+					return nil
+				}
+			}
+			last = cur
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return fmt.Errorf("block height did not progress (min increments=%d)", minIncrements)
+}
+
+func (c *CIContext) GetConfigValue(cid int64) (*big.Int, error) {
+	switch cid {
+	case 0:
+		return c.Proposal.ProposalLastingPeriod(nil)
+	case 1:
+		return c.Proposal.PunishThreshold(nil)
+	case 2:
+		return c.Proposal.RemoveThreshold(nil)
+	case 3:
+		return c.Proposal.DecreaseRate(nil)
+	case 4:
+		return c.Proposal.WithdrawProfitPeriod(nil)
+	case 5:
+		return c.Proposal.BlockReward(nil)
+	case 6:
+		return c.Proposal.UnbondingPeriod(nil)
+	case 7:
+		return c.Proposal.ValidatorUnjailPeriod(nil)
+	case 8:
+		return c.Proposal.MinValidatorStake(nil)
+	case 9:
+		return c.Proposal.MaxValidators(nil)
+	case 10:
+		return c.Proposal.MinDelegation(nil)
+	case 11:
+		return c.Proposal.MinUndelegation(nil)
+	case 12:
+		return c.Proposal.DoubleSignSlashAmount(nil)
+	case 13:
+		return c.Proposal.DoubleSignRewardAmount(nil)
+	case 14:
+		addr, err := c.Proposal.BurnAddress(nil)
+		if err != nil {
+			return nil, err
+		}
+		return new(big.Int).SetBytes(addr.Bytes()), nil
+	case 15:
+		return c.Proposal.DoubleSignWindow(nil)
+	case 16:
+		return c.Proposal.CommissionUpdateCooldown(nil)
+	case 17:
+		return c.Proposal.BaseRewardRatio(nil)
+	case 18:
+		return c.Proposal.MaxCommissionRate(nil)
+	case 19:
+		return c.Proposal.ProposalCooldown(nil)
+	default:
+		return nil, fmt.Errorf("unknown config id %d", cid)
+	}
+}
+
 func (c *CIContext) autoInitialize() error {
 	// Robust check: if MinValidatorStake is default (100k JU), we need setup.
 	minStake, err := c.Proposal.MinValidatorStake(nil)
 	if err == nil && minStake.Cmp(big.NewInt(1000000000000000000)) == 0 {
 		fmt.Printf("✅ System already configured (MinValidatorStake = 1 JU).\n")
-		return nil
 	}
 
-	fmt.Printf("🔧 System unconfigured (MinValidatorStake = %v), performing auto-initialization...\n", minStake)
-	
 	// Check if we need to call initialize() at all
 	initialized, _ := c.Proposal.Initialized(nil)
 	if !initialized {
+		fmt.Printf("🔧 System unconfigured, performing auto-initialization...\n")
 		var valAddrs []common.Address
 		for _, vk := range c.GenesisValidators {
 			valAddrs = append(valAddrs, crypto.PubkeyToAddress(vk.PublicKey))
@@ -138,7 +222,7 @@ func (c *CIContext) autoInitialize() error {
 		opts, _ := c.GetTransactor(c.GenesisValidators[0])
 		opts.GasLimit = 1000000
 		fmt.Printf("  > Initializing Proposal...\n")
-		tx, err := c.Proposal.Initialize(opts, valAddrs, ValidatorsAddr, big.NewInt(20))
+		tx, err := c.Proposal.Initialize(opts, valAddrs, ValidatorsAddr, big.NewInt(100))
 		if err == nil {
 			c.WaitMined(tx.Hash())
 		}
@@ -164,44 +248,112 @@ func (c *CIContext) autoInitialize() error {
 
 	// 4. Always ensure test-friendly parameters if they are not set
 	fmt.Printf("  > Configuring system parameters...\n")
-	_ = c.EnsureConfig(19, big.NewInt(1), nil)                   // ProposalCooldown
-	_ = c.EnsureConfig(8, big.NewInt(1000000000000000000), nil)  // MinValidatorStake
-	_ = c.EnsureConfig(10, big.NewInt(1000000000000000000), nil) // MinDelegation
 	
+	// Fetch current values to skip if already set
+	pCool, _ := c.GetConfigValue(19)
+	_ = c.EnsureConfig(19, big.NewInt(1), pCool)
+
+	unbond, _ := c.GetConfigValue(6)
+	_ = c.EnsureConfig(6, big.NewInt(100), unbond)
+
+	unjail, _ := c.GetConfigValue(7)
+	_ = c.EnsureConfig(7, big.NewInt(50), unjail)
+
+	withdraw, _ := c.GetConfigValue(4)
+	_ = c.EnsureConfig(4, big.NewInt(20), withdraw)
+
+	minStakeVal, _ := c.GetConfigValue(8)
+	_ = c.EnsureConfig(8, big.NewInt(1000000000000000000), minStakeVal)
+
+	minDel, _ := c.GetConfigValue(10)
+	_ = c.EnsureConfig(10, big.NewInt(1000000000000000000), minDel)
+
+	commCool, _ := c.GetConfigValue(16)
+	_ = c.EnsureConfig(16, big.NewInt(50), commCool)
+
+	propLast, _ := c.GetConfigValue(0)
+	_ = c.EnsureConfig(0, big.NewInt(200), propLast)
+
 	fmt.Printf("✅ Auto-initialization complete.\n")
 	return nil
 }
 
 func (c *CIContext) GetTransactor(key *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
-	if key == nil { return nil, fmt.Errorf("nil private key") }
-	
-c.mu.Lock()
-	defer c.mu.Unlock()
+	return c.GetTransactorEx(key, false)
+}
+
+func (c *CIContext) GetTransactorEx(key *ecdsa.PrivateKey, forceRefresh bool) (*bind.TransactOpts, error) {
+	if key == nil {
+		return nil, fmt.Errorf("nil private key")
+	}
+
+	// Wait if we are at an epoch block to avoid "Epoch block forbidden" errors
+	c.WaitIfEpochBlock()
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
-	
-	var maxNonce uint64
-	for _, client := range c.Clients {
-		n, err := client.PendingNonceAt(context.Background(), addr)
-		if err == nil && n > maxNonce {
-			maxNonce = n
-		}
+
+	c.mu.Lock()
+	_, known := c.nonces[addr]
+	c.mu.Unlock()
+
+	if !known || forceRefresh {
+		c.RefreshNonce(addr)
 	}
 
-	if cached, ok := c.nonces[addr]; ok && cached >= maxNonce {
-		maxNonce = cached
-	}
-	c.nonces[addr] = maxNonce + 1
+	c.mu.Lock()
+	nonce := c.nonces[addr]
+	c.nonces[addr]++
+	c.mu.Unlock()
 
 	opts, err := bind.NewKeyedTransactorWithChainID(key, c.ChainID)
 	if err != nil {
 		return nil, err
 	}
-	
-	opts.Nonce = big.NewInt(int64(maxNonce))
-	// REMOVED hardcoded default GasLimit to allow simulation/dry-run for negative tests
-	opts.GasPrice = big.NewInt(1000000000) 
+
+	opts.Nonce = big.NewInt(int64(nonce))
+	gasPrice, err := c.Clients[0].SuggestGasPrice(context.Background())
+	if err != nil {
+		gasPrice = big.NewInt(2000000000) // Fallback to 2 Gwei
+	}
+
+	opts.GasPrice = gasPrice
+	opts.GasLimit = 0 // Allow estimation
+
 	return opts, nil
+}
+
+func (c *CIContext) RefreshNonce(addr common.Address) {
+	if addr == (common.Address{}) {
+		return
+	}
+	var maxNonce uint64
+	for i, client := range c.Clients {
+		n, err := client.PendingNonceAt(context.Background(), addr)
+		if err == nil {
+			if n > maxNonce {
+				maxNonce = n
+			}
+		} else {
+			log.Warn("Failed to get pending nonce from client", "node", i, "addr", addr.Hex(), "err", err)
+		}
+	}
+	c.mu.Lock()
+	c.nonces[addr] = maxNonce
+	c.mu.Unlock()
+	fmt.Printf("DEBUG: Refreshed nonce for %s to %d\n", addr.Hex(), maxNonce)
+}
+
+func (c *CIContext) SyncNonces() {
+	c.mu.Lock()
+	addrs := make([]common.Address, 0, len(c.nonces))
+	for addr := range c.nonces {
+		addrs = append(addrs, addr)
+	}
+	c.mu.Unlock()
+
+	for _, addr := range addrs {
+		c.RefreshNonce(addr)
+	}
 }
 
 func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, common.Address, error) {
@@ -211,68 +363,80 @@ func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, co
 	}
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	opts, err := c.GetTransactor(c.FunderKey)
-	if err != nil { return nil, common.Address{}, err }
+	opts, err := c.GetTransactorEx(c.FunderKey, true)
+	if err != nil {
+		return nil, common.Address{}, err
+	}
+
+	fmt.Printf("DEBUG: Funding account %s from %s using nonce %d\n", addr.Hex(), crypto.PubkeyToAddress(c.FunderKey.PublicKey).Hex(), opts.Nonce.Uint64())
 
 	// For simple transfers, 21000 is enough
 	tx := types.NewTransaction(opts.Nonce.Uint64(), addr, amount, 21000, opts.GasPrice, nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(c.ChainID), c.FunderKey)
-	if err != nil { return nil, common.Address{}, err }
+	if err != nil {
+		return nil, common.Address{}, err
+	}
 
-	for _, client := range c.Clients {
-		_ = client.SendTransaction(context.Background(), signedTx)
+	// Only send to the first client to avoid pool conflicts/confusion
+	err = c.Clients[0].SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		return nil, common.Address{}, fmt.Errorf("failed to send funding tx: %w", err)
 	}
 
 	log.Info("Funded account", "address", addr.Hex(), "tx", signedTx.Hash().Hex())
-	
+
 	if err := c.WaitMined(signedTx.Hash()); err != nil {
-        return nil, common.Address{}, fmt.Errorf("funding tx failed: %w", err)
-    }
+		return nil, common.Address{}, fmt.Errorf("funding tx failed: %w", err)
+	}
 
 	return key, addr, nil
 }
 
 func (c *CIContext) WaitMined(txHash common.Hash) error {
-	if txHash == (common.Hash{}) { return nil }
-	
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	if txHash == (common.Hash{}) {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
-	
-	queryTicker := time.NewTicker(1 * time.Second)
-	defer queryTicker.Stop()
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	startTime := time.Now()
+	loggedPool := false
 
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for tx %s", txHash.Hex())
-		case <-queryTicker.C:
-			fmt.Print(".")
-			
-			for i, client := range c.Clients {
-				receipt, err := client.TransactionReceipt(context.Background(), txHash)
-				if err == nil && receipt != nil {
-					fmt.Println()
-					if receipt.Status == 1 {
-						return nil
-					}
-					// Revert reason
-					tx, _, err := client.TransactionByHash(context.Background(), txHash)
-					if err == nil {
-						from, _ := types.Sender(types.LatestSignerForChainID(c.ChainID), tx)
-						msg := ethereum.CallMsg{
-							From:     from,
-							To:       tx.To(),
-							Gas:      tx.Gas(),
-							GasPrice: tx.GasPrice(),
-							Value:    tx.Value(),
-							Data:     tx.Data(),
-						}
-						_, errCall := client.CallContract(context.Background(), msg, receipt.BlockNumber)
-						if errCall != nil {
-							return fmt.Errorf("transaction %s failed on node %d: %v", txHash.Hex(), i, errCall)
-						}
-					}
-					return fmt.Errorf("transaction %s failed on node %d (status 0)", txHash.Hex(), i)
+			return fmt.Errorf("timeout waiting for tx %s after %v", txHash.Hex(), time.Since(startTime))
+		case <-ticker.C:
+			fmt.Print(".") // Keep-alive output
+			receipt, err := c.Clients[0].TransactionReceipt(context.Background(), txHash)
+			if err == nil {
+				if receipt.Status == 0 {
+					return fmt.Errorf("transaction %s reverted", txHash.Hex())
+				}
+				return nil
+			}
+
+			if time.Since(startTime) > 60*time.Second && !loggedPool {
+				loggedPool = true
+				var result interface{}
+				err := c.Clients[0].Client().Call(&result, "txpool_content")
+				if err == nil {
+					log.Info("TX Pool Content on timeout", "content", result)
+				}
+				
+				var sync interface{}
+				err = c.Clients[0].Client().Call(&sync, "eth_syncing")
+				if err == nil {
+					log.Info("Sync status on timeout", "status", sync)
+				}
+
+				header, err := c.Clients[0].HeaderByNumber(context.Background(), nil)
+				if err == nil {
+					log.Info("Current block on timeout", "number", header.Number.String(), "hash", header.Hash().Hex())
 				}
 			}
 		}
@@ -283,61 +447,128 @@ func (c *CIContext) EnsureConfig(cid int64, targetVal *big.Int, currentVal *big.
 	if currentVal != nil && currentVal.Cmp(targetVal) == 0 {
 		return nil
 	}
-	
-	log.Info("Updating config", "cid", cid, "target", targetVal, "current", currentVal)
-	
-	if len(c.GenesisValidators) == 0 { return fmt.Errorf("no genesis validators") }
-	
-	var err error
+
+	// Double check fresh value from contract
+	freshVal, err := c.GetConfigValue(cid)
+	if err == nil && freshVal.Cmp(targetVal) == 0 {
+		return nil
+	}
+
+	log.Info("Updating config", "cid", cid, "target", targetVal, "current", freshVal)
+
+	if len(c.GenesisValidators) == 0 {
+		return fmt.Errorf("no genesis validators")
+	}
+
+	var lastErr error
 	for i := 0; i < len(c.GenesisValidators); i++ {
 		c.mu.Lock()
-		proposerKey := c.GenesisValidators[c.proposerIndex % len(c.GenesisValidators)]
+		proposerKey := c.GenesisValidators[c.proposerIndex%len(c.GenesisValidators)]
 		c.proposerIndex++
 		c.mu.Unlock()
 
+		proposerAddr := crypto.PubkeyToAddress(proposerKey.PublicKey)
+		actve, _ := c.Validators.IsValidatorActive(nil, proposerAddr)
+		if !actve {
+			continue
+		}
+		info, _ := c.Staking.GetValidatorInfo(nil, proposerAddr)
+		if info.IsJailed {
+			continue
+		}
+
 		opts, errG := c.GetTransactor(proposerKey)
-		if errG != nil { continue }
-		
-		// For complex system calls, use a safe GasLimit
+		if errG != nil {
+			lastErr = errG
+			continue
+		}
+
 		opts.GasLimit = 1000000
-
 		tx, errCall := c.Proposal.CreateUpdateConfigProposal(opts, big.NewInt(cid), targetVal)
-		if errCall == nil {
-			err = c.WaitMined(tx.Hash())
-			if err != nil { return err }
-			
-			receipt, _ := c.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
-			var propID [32]byte
-			found := false
-			for _, l := range receipt.Logs {
-				if ev, err := c.Proposal.ParseLogCreateConfigProposal(*l); err == nil {
-					propID = ev.Id
-					found = true
-					break
-				}
+		if errCall != nil {
+			lastErr = errCall
+			if strings.Contains(errCall.Error(), "Proposal creation too frequent") || strings.Contains(errCall.Error(), "Epoch block forbidden") {
+				continue
 			}
-			if !found { return fmt.Errorf("proposal log not found for tx %s", tx.Hash().Hex()) }
+			return fmt.Errorf("createUpdateConfigProposal failed: %w", errCall)
+		}
 
-			for _, vk := range c.GenesisValidators {
-				voterAddr := crypto.PubkeyToAddress(vk.PublicKey)
-				exist, _ := c.Validators.IsValidatorExist(nil, voterAddr)
-				if !exist { continue }
-				
+		err = c.WaitMined(tx.Hash())
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		receipt, _ := c.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
+		var propID [32]byte
+		found := false
+		for _, l := range receipt.Logs {
+			if ev, errP := c.Proposal.ParseLogCreateConfigProposal(*l); errP == nil {
+				propID = ev.Id
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("proposal log not found for tx %s", tx.Hash().Hex())
+		}
+
+		for _, vk := range c.GenesisValidators {
+			voterAddr := crypto.PubkeyToAddress(vk.PublicKey)
+			actve, _ := c.Validators.IsValidatorActive(nil, voterAddr)
+			if !actve {
+				continue
+			}
+			info, _ := c.Staking.GetValidatorInfo(nil, voterAddr)
+			if info.IsJailed {
+				continue
+			}
+
+			for retry := 0; retry < 3; retry++ {
 				vo, _ := c.GetTransactor(vk)
 				vo.GasLimit = 500000
 				txV, errV := c.Proposal.VoteProposal(vo, propID, true)
 				if errV == nil {
-					c.WaitMined(txV.Hash())
+					errW := c.WaitMined(txV.Hash())
+					if errW == nil {
+						break
+					}
+					if strings.Contains(errW.Error(), "Epoch block forbidden") {
+						continue
+					}
+					return errW
 				}
+				if strings.Contains(errV.Error(), "Epoch block forbidden") {
+					continue
+				}
+				if strings.Contains(errV.Error(), "You can't vote for a proposal twice") {
+					break
+				}
+				return errV
 			}
-			return nil
 		}
-		
-		err = errCall
-		if strings.Contains(err.Error(), "Proposal creation too frequent") {
-			continue 
-		}
-		return fmt.Errorf("createUpdateConfigProposal failed: %w", err)
+		return nil
 	}
-	return fmt.Errorf("all proposers in cooldown: %w", err)
+	return fmt.Errorf("failed to ensure config %d: %v", cid, lastErr)
+}
+
+func (c *CIContext) WaitIfEpochBlock() {
+	epochVal, err := c.Validators.Epoch(nil)
+	epoch := uint64(100) // Default
+	if err == nil && epochVal.Uint64() > 0 {
+		epoch = epochVal.Uint64()
+	}
+
+	for {
+		height, err := c.Clients[0].BlockNumber(context.Background())
+		if err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		if height%epoch != 0 {
+			return
+		}
+		fmt.Printf("⏳ At epoch block %d, waiting for next block...\n", height)
+		time.Sleep(1 * time.Second)
+	}
 }

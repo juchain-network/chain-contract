@@ -132,12 +132,21 @@ func TestB_Governance_Extended(t *testing.T) {
 		
 		// 4. Vote for both (Sequentially per account to avoid nonce race)
 		for i, vk := range ctx.GenesisValidators {
-			vo, _ := ctx.GetTransactor(vk)
-			txV1, err1 := ctx.Proposal.VoteProposal(vo, id1, true)
-			if err1 == nil { ctx.WaitMined(txV1.Hash()) } else { t.Logf("Vote1 val %d failed: %v", i, err1) }
+			vo1, _ := ctx.GetTransactor(vk)
+			txV1, err1 := ctx.Proposal.VoteProposal(vo1, id1, true)
+			if err1 == nil {
+				ctx.WaitMined(txV1.Hash())
+			} else {
+				t.Logf("Vote1 val %d failed: %v", i, err1)
+			}
 			
-			txV2, err2 := ctx.Proposal.VoteProposal(vo, id2, true)
-			if err2 == nil { ctx.WaitMined(txV2.Hash()) } else { t.Logf("Vote2 val %d failed: %v", i, err2) }
+			vo2, _ := ctx.GetTransactor(vk)
+			txV2, err2 := ctx.Proposal.VoteProposal(vo2, id2, true)
+			if err2 == nil {
+				ctx.WaitMined(txV2.Hash())
+			} else {
+				t.Logf("Vote2 val %d failed: %v", i, err2)
+			}
 		}
 		
 		// 5. Verify Execution
