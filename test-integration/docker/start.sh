@@ -37,7 +37,7 @@ else
     # Import validator key if present
     if [ -f "/data/validator.key" ]; then
         echo "Importing validator key..."
-        echo "" > /tmp/password
+        echo "123456" > /tmp/password
         juchain account import --datadir /data --password /tmp/password /data/validator.key
     fi
 

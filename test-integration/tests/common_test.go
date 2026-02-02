@@ -61,7 +61,7 @@ func waitBlocks(t *testing.T, n int) {
 	start, _ := ctx.Clients[0].BlockNumber(context.Background())
 	target := start + uint64(n)
 	fmt.Printf("DEBUG: Waiting for %d blocks (from %d to %d)...\n", n, start, target)
-	
+
 	// Send dummy transactions to force block production if needed
 	// (Some PoA networks only seal blocks when there are transactions)
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -72,14 +72,22 @@ func waitBlocks(t *testing.T, n int) {
 		if current >= target {
 			break
 		}
-		
-		// Optional: Send a small transfer from funder to itself to trigger block sealing
-		opts, err := ctx.GetTransactor(ctx.FunderKey)
-		if err == nil {
+
+		// Optional: Send a small transfer from funder to itself to trigger block sealing.
+		// Use pending nonce directly to avoid epoch-block waits.
+		if ctx.FunderKey != nil {
 			addr := crypto.PubkeyToAddress(ctx.FunderKey.PublicKey)
-			tx := types.NewTransaction(opts.Nonce.Uint64(), addr, big.NewInt(0), 21000, opts.GasPrice, nil)
-			signedTx, _ := types.SignTx(tx, types.NewEIP155Signer(ctx.ChainID), ctx.FunderKey)
-			_ = ctx.Clients[0].SendTransaction(context.Background(), signedTx)
+			nonce, err := ctx.Clients[0].PendingNonceAt(context.Background(), addr)
+			if err == nil {
+				gasPrice, err := ctx.Clients[0].SuggestGasPrice(context.Background())
+				if err != nil {
+					gasPrice = big.NewInt(1000000000) // 1 Gwei fallback
+				}
+				tx := types.NewTransaction(nonce, addr, big.NewInt(0), 21000, gasPrice, nil)
+				if signedTx, err := types.SignTx(tx, types.NewEIP155Signer(ctx.ChainID), ctx.FunderKey); err == nil {
+					_ = ctx.Clients[0].SendTransaction(context.Background(), signedTx)
+				}
+			}
 		}
 
 		select {
@@ -258,14 +266,16 @@ func createAndRegisterValidator(t *testing.T, name string) (*ecdsa.PrivateKey, c
 				break
 			} else {
 				if strings.Contains(errW.Error(), "Epoch block forbidden") || strings.Contains(errW.Error(), "Too many new validators") {
-					time.Sleep(2 * time.Second)
+					waitForNextEpochBlock(t)
+					waitBlocks(t, 1)
 					continue
 				}
 				return nil, addr, errW
 			}
 		}
 		if strings.Contains(err.Error(), "Epoch block forbidden") || strings.Contains(err.Error(), "Too many new validators") {
-			time.Sleep(2 * time.Second)
+			waitForNextEpochBlock(t)
+			waitBlocks(t, 1)
 			continue
 		}
 		break
@@ -279,6 +289,7 @@ func createAndRegisterValidator(t *testing.T, name string) (*ecdsa.PrivateKey, c
 // Robust Staking Helpers
 
 func robustDelegate(t *testing.T, key *ecdsa.PrivateKey, val common.Address, amount *big.Int) {
+	var lastErr error
 	for retry := 0; retry < 10; retry++ {
 		opts, errG := ctx.GetTransactor(key)
 		if errG != nil {
@@ -295,11 +306,9 @@ func robustDelegate(t *testing.T, key *ecdsa.PrivateKey, val common.Address, amo
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				if t != nil {
-					t.Fatalf("delegate tx failed: %v", errW)
-				} else {
-					return
-				}
+				lastErr = errW
+				time.Sleep(1 * time.Second)
+				continue
 			}
 		}
 		if strings.Contains(err.Error(), "Epoch block forbidden") {
@@ -312,9 +321,13 @@ func robustDelegate(t *testing.T, key *ecdsa.PrivateKey, val common.Address, amo
 			return
 		}
 	}
+	if t != nil && lastErr != nil {
+		t.Fatalf("delegate tx failed: %v", lastErr)
+	}
 }
 
 func robustUndelegate(t *testing.T, key *ecdsa.PrivateKey, val common.Address, amount *big.Int) {
+	var lastErr error
 	for retry := 0; retry < 10; retry++ {
 		opts, errG := ctx.GetTransactor(key)
 		if errG != nil {
@@ -330,11 +343,9 @@ func robustUndelegate(t *testing.T, key *ecdsa.PrivateKey, val common.Address, a
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				if t != nil {
-					t.Fatalf("undelegate tx failed: %v", errW)
-				} else {
-					return
-				}
+				lastErr = errW
+				time.Sleep(1 * time.Second)
+				continue
 			}
 		}
 		if strings.Contains(err.Error(), "Epoch block forbidden") {
@@ -346,6 +357,9 @@ func robustUndelegate(t *testing.T, key *ecdsa.PrivateKey, val common.Address, a
 		} else {
 			return
 		}
+	}
+	if t != nil && lastErr != nil {
+		t.Fatalf("undelegate tx failed: %v", lastErr)
 	}
 }
 

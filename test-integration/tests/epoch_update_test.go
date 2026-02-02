@@ -47,7 +47,7 @@ func TestY_UpdateActiveValidatorSet(t *testing.T) {
 			t.Skip("expected validator set empty")
 		}
 
-		opts, _ := ctx.GetTransactor(minerKey)
+		opts, _ := ctx.GetTransactorNoEpochWait(minerKey, true)
 		tx, err := ctx.Validators.UpdateActiveValidatorSet(opts, expected, epoch)
 		if err != nil {
 			if strings.Contains(err.Error(), "Miner only") || strings.Contains(err.Error(), "forbidden system transaction") {

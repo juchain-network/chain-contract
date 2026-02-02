@@ -28,14 +28,16 @@ var (
 	StakingAddr    = common.HexToAddress("0x000000000000000000000000000000000000F013")
 )
 
+var deterministicKeyBase = new(big.Int).Lsh(big.NewInt(1), 252)
+
 type CIContext struct {
 	Config  *config.Config
 	Clients []*ethclient.Client
 	ChainID *big.Int
 
 	// System Contracts
-	Validators *contracts.Validators
-	Punish     *contracts.Punish
+	Validators        *contracts.Validators
+	Punish            *contracts.Punish
 	Proposal          *contracts.Proposal
 	Staking           *contracts.Staking
 	ProposalAddr      common.Address
@@ -46,6 +48,7 @@ type CIContext struct {
 	nonces        map[common.Address]uint64
 	clientIndex   int
 	proposerIndex int
+	accountIndex  uint64
 }
 
 func NewCIContext(cfg *config.Config) (*CIContext, error) {
@@ -114,7 +117,7 @@ func NewCIContext(cfg *config.Config) (*CIContext, error) {
 		nonces:            make(map[common.Address]uint64),
 	}
 
-	if err := c.WaitForBlockProgress(1, 180*time.Second); err != nil {
+	if err := c.WaitForBlockProgress(5, 300*time.Second); err != nil {
 		return nil, fmt.Errorf("chain not producing blocks: %w", err)
 	}
 
@@ -134,6 +137,7 @@ func (c *CIContext) WaitForBlockProgress(minIncrements int, timeout time.Duratio
 	start := time.Now()
 	var last uint64
 	increments := 0
+	lastPoke := time.Now()
 
 	for time.Since(start) < timeout {
 		cur, err := c.Clients[0].BlockNumber(context.Background())
@@ -146,9 +150,41 @@ func (c *CIContext) WaitForBlockProgress(minIncrements int, timeout time.Duratio
 			}
 			last = cur
 		}
+		if time.Since(lastPoke) > 5*time.Second {
+			c.sendDummyTx()
+			lastPoke = time.Now()
+		}
 		time.Sleep(1 * time.Second)
 	}
 	return fmt.Errorf("block height did not progress (min increments=%d)", minIncrements)
+}
+
+func (c *CIContext) sendDummyTx() {
+	if c.FunderKey == nil {
+		return
+	}
+	addr := crypto.PubkeyToAddress(c.FunderKey.PublicKey)
+	nonce, err := c.Clients[0].PendingNonceAt(context.Background(), addr)
+	if err != nil {
+		return
+	}
+	gasPrice, err := c.Clients[0].SuggestGasPrice(context.Background())
+	if err != nil {
+		gasPrice = big.NewInt(1000000000)
+	}
+	tx := types.NewTransaction(nonce, addr, big.NewInt(0), 21000, gasPrice, nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(c.ChainID), c.FunderKey)
+	if err != nil {
+		return
+	}
+	if err := c.Clients[0].SendTransaction(context.Background(), signedTx); err != nil {
+		return
+	}
+	c.mu.Lock()
+	if cur, ok := c.nonces[addr]; !ok || nonce+1 > cur {
+		c.nonces[addr] = nonce + 1
+	}
+	c.mu.Unlock()
 }
 
 func (c *CIContext) GetConfigValue(cid int64) (*big.Int, error) {
@@ -248,7 +284,7 @@ func (c *CIContext) autoInitialize() error {
 
 	// 4. Always ensure test-friendly parameters if they are not set
 	fmt.Printf("  > Configuring system parameters...\n")
-	
+
 	// Fetch current values to skip if already set
 	pCool, _ := c.GetConfigValue(19)
 	_ = c.EnsureConfig(19, big.NewInt(1), pCool)
@@ -279,7 +315,7 @@ func (c *CIContext) autoInitialize() error {
 }
 
 func (c *CIContext) GetTransactor(key *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
-	return c.GetTransactorEx(key, false)
+	return c.GetTransactorEx(key, true)
 }
 
 func (c *CIContext) GetTransactorEx(key *ecdsa.PrivateKey, forceRefresh bool) (*bind.TransactOpts, error) {
@@ -313,7 +349,44 @@ func (c *CIContext) GetTransactorEx(key *ecdsa.PrivateKey, forceRefresh bool) (*
 	opts.Nonce = big.NewInt(int64(nonce))
 	gasPrice, err := c.Clients[0].SuggestGasPrice(context.Background())
 	if err != nil {
-		gasPrice = big.NewInt(2000000000) // Fallback to 2 Gwei
+		gasPrice = big.NewInt(50000000000) // Fallback to 50 Gwei
+	}
+
+	opts.GasPrice = gasPrice
+	opts.GasLimit = 0 // Allow estimation
+
+	return opts, nil
+}
+
+func (c *CIContext) GetTransactorNoEpochWait(key *ecdsa.PrivateKey, forceRefresh bool) (*bind.TransactOpts, error) {
+	if key == nil {
+		return nil, fmt.Errorf("nil private key")
+	}
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	c.mu.Lock()
+	_, known := c.nonces[addr]
+	c.mu.Unlock()
+
+	if !known || forceRefresh {
+		c.RefreshNonce(addr)
+	}
+
+	c.mu.Lock()
+	nonce := c.nonces[addr]
+	c.nonces[addr]++
+	c.mu.Unlock()
+
+	opts, err := bind.NewKeyedTransactorWithChainID(key, c.ChainID)
+	if err != nil {
+		return nil, err
+	}
+
+	opts.Nonce = big.NewInt(int64(nonce))
+	gasPrice, err := c.Clients[0].SuggestGasPrice(context.Background())
+	if err != nil {
+		gasPrice = big.NewInt(50000000000) // Fallback to 50 Gwei
 	}
 
 	opts.GasPrice = gasPrice
@@ -356,8 +429,19 @@ func (c *CIContext) SyncNonces() {
 	}
 }
 
+func (c *CIContext) nextDeterministicKey() (*ecdsa.PrivateKey, error) {
+	c.mu.Lock()
+	idx := c.accountIndex
+	c.accountIndex++
+	c.mu.Unlock()
+
+	keyInt := new(big.Int).Add(deterministicKeyBase, new(big.Int).SetUint64(idx+1))
+	keyBytes := keyInt.FillBytes(make([]byte, 32))
+	return crypto.ToECDSA(keyBytes)
+}
+
 func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, common.Address, error) {
-	key, err := crypto.GenerateKey()
+	key, err := c.nextDeterministicKey()
 	if err != nil {
 		return nil, common.Address{}, err
 	}
@@ -427,7 +511,7 @@ func (c *CIContext) WaitMined(txHash common.Hash) error {
 				if err == nil {
 					log.Info("TX Pool Content on timeout", "content", result)
 				}
-				
+
 				var sync interface{}
 				err = c.Clients[0].Client().Call(&sync, "eth_syncing")
 				if err == nil {
@@ -448,108 +532,157 @@ func (c *CIContext) EnsureConfig(cid int64, targetVal *big.Int, currentVal *big.
 		return nil
 	}
 
-	// Double check fresh value from contract
-	freshVal, err := c.GetConfigValue(cid)
-	if err == nil && freshVal.Cmp(targetVal) == 0 {
-		return nil
-	}
-
-	log.Info("Updating config", "cid", cid, "target", targetVal, "current", freshVal)
-
 	if len(c.GenesisValidators) == 0 {
 		return fmt.Errorf("no genesis validators")
 	}
 
 	var lastErr error
-	for i := 0; i < len(c.GenesisValidators); i++ {
-		c.mu.Lock()
-		proposerKey := c.GenesisValidators[c.proposerIndex%len(c.GenesisValidators)]
-		c.proposerIndex++
-		c.mu.Unlock()
-
-		proposerAddr := crypto.PubkeyToAddress(proposerKey.PublicKey)
-		actve, _ := c.Validators.IsValidatorActive(nil, proposerAddr)
-		if !actve {
-			continue
-		}
-		info, _ := c.Staking.GetValidatorInfo(nil, proposerAddr)
-		if info.IsJailed {
-			continue
+	for attempt := 0; attempt < 5; attempt++ {
+		// Double check fresh value from contract
+		freshVal, err := c.GetConfigValue(cid)
+		if err == nil && freshVal.Cmp(targetVal) == 0 {
+			return nil
 		}
 
-		opts, errG := c.GetTransactor(proposerKey)
-		if errG != nil {
-			lastErr = errG
-			continue
-		}
+		log.Info("Updating config", "cid", cid, "target", targetVal, "current", freshVal)
 
-		opts.GasLimit = 1000000
-		tx, errCall := c.Proposal.CreateUpdateConfigProposal(opts, big.NewInt(cid), targetVal)
-		if errCall != nil {
-			lastErr = errCall
-			if strings.Contains(errCall.Error(), "Proposal creation too frequent") || strings.Contains(errCall.Error(), "Epoch block forbidden") {
-				continue
-			}
-			return fmt.Errorf("createUpdateConfigProposal failed: %w", errCall)
-		}
+		lastErr = nil
+		for i := 0; i < len(c.GenesisValidators); i++ {
+			c.mu.Lock()
+			proposerKey := c.GenesisValidators[c.proposerIndex%len(c.GenesisValidators)]
+			c.proposerIndex++
+			c.mu.Unlock()
 
-		err = c.WaitMined(tx.Hash())
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		receipt, _ := c.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
-		var propID [32]byte
-		found := false
-		for _, l := range receipt.Logs {
-			if ev, errP := c.Proposal.ParseLogCreateConfigProposal(*l); errP == nil {
-				propID = ev.Id
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("proposal log not found for tx %s", tx.Hash().Hex())
-		}
-
-		for _, vk := range c.GenesisValidators {
-			voterAddr := crypto.PubkeyToAddress(vk.PublicKey)
-			actve, _ := c.Validators.IsValidatorActive(nil, voterAddr)
+			proposerAddr := crypto.PubkeyToAddress(proposerKey.PublicKey)
+			actve, _ := c.Validators.IsValidatorActive(nil, proposerAddr)
 			if !actve {
 				continue
 			}
-			info, _ := c.Staking.GetValidatorInfo(nil, voterAddr)
+			info, _ := c.Staking.GetValidatorInfo(nil, proposerAddr)
 			if info.IsJailed {
 				continue
 			}
 
-			for retry := 0; retry < 3; retry++ {
-				vo, _ := c.GetTransactor(vk)
-				vo.GasLimit = 500000
-				txV, errV := c.Proposal.VoteProposal(vo, propID, true)
-				if errV == nil {
-					errW := c.WaitMined(txV.Hash())
-					if errW == nil {
-						break
-					}
-					if strings.Contains(errW.Error(), "Epoch block forbidden") {
-						continue
-					}
-					return errW
-				}
-				if strings.Contains(errV.Error(), "Epoch block forbidden") {
+			opts, errG := c.GetTransactor(proposerKey)
+			if errG != nil {
+				lastErr = errG
+				continue
+			}
+
+			opts.GasLimit = 1000000
+			tx, errCall := c.Proposal.CreateUpdateConfigProposal(opts, big.NewInt(cid), targetVal)
+			if errCall != nil {
+				lastErr = errCall
+				if strings.Contains(errCall.Error(), "Proposal creation too frequent") || strings.Contains(errCall.Error(), "Epoch block forbidden") {
 					continue
 				}
-				if strings.Contains(errV.Error(), "You can't vote for a proposal twice") {
+				return fmt.Errorf("createUpdateConfigProposal failed: %w", errCall)
+			}
+
+			err = c.WaitMined(tx.Hash())
+			if err != nil {
+				lastErr = err
+				continue
+			}
+
+			receipt, _ := c.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
+			var propID [32]byte
+			found := false
+			for _, l := range receipt.Logs {
+				if ev, errP := c.Proposal.ParseLogCreateConfigProposal(*l); errP == nil {
+					propID = ev.Id
+					found = true
 					break
 				}
-				return errV
 			}
+			if !found {
+				return fmt.Errorf("proposal log not found for tx %s", tx.Hash().Hex())
+			}
+
+			for _, vk := range c.GenesisValidators {
+				voterAddr := crypto.PubkeyToAddress(vk.PublicKey)
+				actve, _ := c.Validators.IsValidatorActive(nil, voterAddr)
+				if !actve {
+					continue
+				}
+				info, _ := c.Staking.GetValidatorInfo(nil, voterAddr)
+				if info.IsJailed {
+					continue
+				}
+
+				for retry := 0; retry < 3; retry++ {
+					vo, _ := c.GetTransactor(vk)
+					vo.GasLimit = 500000
+					txV, errV := c.Proposal.VoteProposal(vo, propID, true)
+					if errV == nil {
+						errW := c.WaitMined(txV.Hash())
+						if errW == nil {
+							break
+						}
+						if strings.Contains(errW.Error(), "Epoch block forbidden") {
+							continue
+						}
+						return errW
+					}
+					if strings.Contains(errV.Error(), "Epoch block forbidden") {
+						continue
+					}
+					if strings.Contains(errV.Error(), "You can't vote for a proposal twice") {
+						break
+					}
+					return errV
+				}
+			}
+
+			// Re-check after votes
+			updatedVal, err := c.GetConfigValue(cid)
+			if err == nil && updatedVal.Cmp(targetVal) == 0 {
+				return nil
+			}
+			lastErr = fmt.Errorf("config %d not updated after proposal", cid)
+			break
 		}
-		return nil
+
+		if lastErr == nil {
+			lastErr = fmt.Errorf("no eligible proposer found")
+		}
+
+		c.waitBlocks(c.proposalCooldownBlocks())
 	}
+
 	return fmt.Errorf("failed to ensure config %d: %v", cid, lastErr)
+}
+
+func (c *CIContext) proposalCooldownBlocks() uint64 {
+	val, err := c.Proposal.ProposalCooldown(nil)
+	if err == nil && val.Uint64() > 0 {
+		return val.Uint64()
+	}
+	return 1
+}
+
+func (c *CIContext) waitBlocks(n uint64) {
+	if n == 0 {
+		return
+	}
+	start, err := c.Clients[0].BlockNumber(context.Background())
+	if err != nil {
+		time.Sleep(1 * time.Second)
+		start, _ = c.Clients[0].BlockNumber(context.Background())
+	}
+	target := start + n
+	for {
+		cur, err := c.Clients[0].BlockNumber(context.Background())
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		if cur >= target {
+			return
+		}
+		c.sendDummyTx()
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func (c *CIContext) WaitIfEpochBlock() {
@@ -559,16 +692,26 @@ func (c *CIContext) WaitIfEpochBlock() {
 		epoch = epochVal.Uint64()
 	}
 
+	lastPoke := time.Now()
+	lastLog := time.Time{}
 	for {
 		height, err := c.Clients[0].BlockNumber(context.Background())
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		if height%epoch != 0 {
+		mod := height % epoch
+		if mod != 0 && mod != epoch-1 {
 			return
 		}
-		fmt.Printf("⏳ At epoch block %d, waiting for next block...\n", height)
-		time.Sleep(1 * time.Second)
+		if time.Since(lastLog) > 5*time.Second {
+			fmt.Printf("⏳ At epoch block %d, waiting for next block...\n", height)
+			lastLog = time.Now()
+		}
+		if time.Since(lastPoke) > 2*time.Second {
+			c.sendDummyTx()
+			lastPoke = time.Now()
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }

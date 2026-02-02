@@ -35,6 +35,10 @@ func TestG_DoubleSign(t *testing.T) {
 		if targetHeight.Cmp(big.NewInt(0)) <= 0 {
 			targetHeight = big.NewInt(1)
 		}
+		baseTime := header.Time
+		if targetHeader, err := ctx.Clients[0].HeaderByNumber(context.Background(), targetHeight); err == nil && targetHeader != nil {
+			baseTime = targetHeader.Time
+		}
 
 		t.Logf("Constructing double sign evidence for validator %s at height %s", valAddr.Hex(), targetHeight)
 
@@ -51,7 +55,7 @@ func TestG_DoubleSign(t *testing.T) {
 			Number:      targetHeight,
 			GasLimit:    30000000,
 			GasUsed:     0,
-			Time:        uint64(time.Now().Unix()),
+			Time:        baseTime,
 			Extra:       make([]byte, 32+65),
 			MixDigest:   common.Hash{},
 			Nonce:       types.BlockNonce{},
@@ -68,7 +72,7 @@ func TestG_DoubleSign(t *testing.T) {
 			Number:      targetHeight,
 			GasLimit:    30000000,
 			GasUsed:     0,
-			Time:        uint64(time.Now().Unix()),
+			Time:        baseTime,
 			Extra:       make([]byte, 32+65),
 			MixDigest:   common.Hash{},
 			Nonce:       types.BlockNonce{},
@@ -95,7 +99,11 @@ func TestG_DoubleSign(t *testing.T) {
 
 		receipt, err := ctx.Clients[0].TransactionReceipt(context.Background(), tx.Hash())
 		utils.AssertNoError(t, err, "failed to read receipt")
-		gasCost := new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), tx.GasPrice())
+		effectiveGasPrice := receipt.EffectiveGasPrice
+		if effectiveGasPrice == nil || effectiveGasPrice.Sign() == 0 {
+			effectiveGasPrice = tx.GasPrice()
+		}
+		gasCost := new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), effectiveGasPrice)
 
 		var rewardAmount *big.Int
 		for _, l := range receipt.Logs {

@@ -224,4 +224,4 @@ ci:
 ci-log:
 	@echo "$(YELLOW)Running Integration CI with logging...$(NC)"
 	@mkdir -p logs
-	@$(MAKE) ci 2>&1 | tee logs/ci_$$(date +%Y%m%d_%H%M%S).log
+	@bash -c 'set -o pipefail; $(MAKE) ci 2>&1 | tee logs/ci_$$(date +%Y%m%d_%H%M%S).log'

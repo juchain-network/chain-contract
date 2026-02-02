@@ -19,12 +19,12 @@ func TestD_StakingScenarios(t *testing.T) {
 	t.Run("S-17_StakeJitter", func(t *testing.T) {
 		// 1. Initial State
 		info1, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
-		
+
 		// 2. Add Stake
 		addAmt := utils.ToWei(100)
-		opts, _ := ctx.GetTransactor(valKey)
-		opts.Value = addAmt
-		tx1, err := ctx.Staking.AddValidatorStake(opts)
+		addOpts, _ := ctx.GetTransactor(valKey)
+		addOpts.Value = addAmt
+		tx1, err := ctx.Staking.AddValidatorStake(addOpts)
 		utils.AssertNoError(t, err, "S-17 add stake failed")
 		ctx.WaitMined(tx1.Hash())
 
@@ -33,8 +33,9 @@ func TestD_StakingScenarios(t *testing.T) {
 
 		// 4. Decrease Stake
 		decAmt := utils.ToWei(50)
-		opts.Value = nil
-		tx2, err := ctx.Staking.DecreaseValidatorStake(opts, decAmt)
+		decOpts, _ := ctx.GetTransactor(valKey)
+		decOpts.Value = nil
+		tx2, err := ctx.Staking.DecreaseValidatorStake(decOpts, decAmt)
 		utils.AssertNoError(t, err, "S-17 decrease stake failed")
 		ctx.WaitMined(tx2.Hash())
 
@@ -48,20 +49,20 @@ func TestD_StakingScenarios(t *testing.T) {
 	t.Run("S-18_MixedStakes", func(t *testing.T) {
 		// 1. Setup Delegator
 		userKey, _, _ := ctx.CreateAndFundAccount(utils.ToWei(200))
-		uOpts, _ := ctx.GetTransactor(userKey)
 
 		// 2. Delegate to Validator
 		delAmt := utils.ToWei(50)
-		uOpts.Value = delAmt
-		tx1, err := ctx.Staking.Delegate(uOpts, valAddr)
+		uOpts1, _ := ctx.GetTransactor(userKey)
+		uOpts1.Value = delAmt
+		tx1, err := ctx.Staking.Delegate(uOpts1, valAddr)
 		utils.AssertNoError(t, err, "S-18 delegate failed")
 		ctx.WaitMined(tx1.Hash())
 
 		// 3. Validator Increases Self Stake
-		vOpts, _ := ctx.GetTransactor(valKey)
 		vAddAmt := utils.ToWei(50)
-		vOpts.Value = vAddAmt
-		tx2, err := ctx.Staking.AddValidatorStake(vOpts)
+		vAddOpts, _ := ctx.GetTransactor(valKey)
+		vAddOpts.Value = vAddAmt
+		tx2, err := ctx.Staking.AddValidatorStake(vAddOpts)
 		utils.AssertNoError(t, err, "S-18 val add stake failed")
 		ctx.WaitMined(tx2.Hash())
 
@@ -71,20 +72,22 @@ func TestD_StakingScenarios(t *testing.T) {
 		// We need to fetch exact values because other tests might have changed state
 		// But we know TotalDelegated should at least be delAmt
 		utils.AssertTrue(t, info.TotalDelegated.Cmp(delAmt) >= 0, "TotalDelegated mismatch")
-		
+
 		// 5. Validator Decreases Self Stake
 		vDecAmt := utils.ToWei(20)
-		vOpts.Value = nil
-		tx3, err := ctx.Staking.DecreaseValidatorStake(vOpts, vDecAmt)
+		vDecOpts, _ := ctx.GetTransactor(valKey)
+		vDecOpts.Value = nil
+		tx3, err := ctx.Staking.DecreaseValidatorStake(vDecOpts, vDecAmt)
 		utils.AssertNoError(t, err, "S-18 val decrease stake failed")
 		ctx.WaitMined(tx3.Hash())
 
 		// 6. Delegator Increases Delegation
-		uOpts.Value = utils.ToWei(10)
-		tx4, err := ctx.Staking.Delegate(uOpts, valAddr)
+		uOpts2, _ := ctx.GetTransactor(userKey)
+		uOpts2.Value = utils.ToWei(10)
+		tx4, err := ctx.Staking.Delegate(uOpts2, valAddr)
 		utils.AssertNoError(t, err, "S-18 delegate more failed")
 		ctx.WaitMined(tx4.Hash())
-		
+
 		// 7. Final Check
 		finalInfo, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		utils.AssertTrue(t, finalInfo.TotalDelegated.Cmp(utils.ToWei(60)) >= 0, "Final delegated amount mismatch")

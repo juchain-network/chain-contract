@@ -34,7 +34,7 @@ func minerKeyOrSkip(t *testing.T) (*ecdsa.PrivateKey, common.Address) {
 	}
 	coinbase := header.Coinbase
 	key := keyForAddress(coinbase)
-	
+
 	if key != nil {
 		return key, coinbase
 	}
@@ -43,7 +43,7 @@ func minerKeyOrSkip(t *testing.T) (*ecdsa.PrivateKey, common.Address) {
 	for _, k := range ctx.GenesisValidators {
 		return k, crypto.PubkeyToAddress(k.PublicKey)
 	}
-	
+
 	t.Skip("no validator keys available")
 	return nil, common.Address{}
 }
@@ -70,12 +70,12 @@ func waitForNextEpochBlock(t *testing.T) uint64 {
 	blocksToWait := nextEpochBlock - cur
 
 	t.Logf("Current block %d, next epoch block %d, waiting %d blocks...", cur, nextEpochBlock, blocksToWait)
-	
+
 	// Wait until we are at nextEpochBlock - 1
 	if blocksToWait > 1 {
 		waitBlocks(t, int(blocksToWait-1))
 	}
-	
+
 	// Now wait block by block until we hit exactly nextEpochBlock
 	for {
 		header, _ := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
@@ -88,31 +88,31 @@ func waitForNextEpochBlock(t *testing.T) uint64 {
 	// Trigger the validator set update.
 	highest, _ := ctx.Validators.GetHighestValidators(nil)
 	top, _ := ctx.Staking.GetTopValidators(nil, highest)
-	
+
 	success := false
 	// Try aggressively to trigger the update
 	for retry := 0; retry < 10; retry++ {
 		curHeader, _ := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
 		curHeight := curHeader.Number.Uint64()
-		
+
 		// If we passed the window, we might have missed it or it happened
-		if curHeight > nextEpochBlock + 5 {
+		if curHeight > nextEpochBlock+5 {
 			break
 		}
 
 		for _, vk := range ctx.GenesisValidators {
 			addr := crypto.PubkeyToAddress(vk.PublicKey)
-			
-			// Refresh nonce to be safe
+
+			// Refresh nonce to be safe; allow epoch-block tx for validator-set update
 			ctx.RefreshNonce(addr)
-			opts, _ := ctx.GetTransactor(vk)
-			
+			opts, _ := ctx.GetTransactorNoEpochWait(vk, true)
+
 			// Try to update for the current block OR the next one
 			// We try both because we might be at the end of the block
 			targets := []uint64{curHeight, curHeight + 1}
-			
+
 			for _, target := range targets {
-				if target % epoch != 0 {
+				if target%epoch != 0 {
 					continue
 				}
 				tx, err := ctx.Validators.UpdateActiveValidatorSet(opts, top, big.NewInt(int64(target)))
@@ -127,7 +127,7 @@ func waitForNextEpochBlock(t *testing.T) uint64 {
 		time.Sleep(500 * time.Millisecond)
 	}
 Done:
-	
+
 	if !success {
 		t.Log("UpdateActiveValidatorSet was not triggered (might be already done or missed)")
 	}

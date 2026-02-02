@@ -24,6 +24,8 @@ func TestE_Delegation(t *testing.T) {
 	ctx.EnsureConfig(8, big.NewInt(1000000000000000000), mst)
 	mde, _ := ctx.Proposal.MinDelegation(nil)
 	ctx.EnsureConfig(10, big.NewInt(1000000000000000000), mde)
+	mud, _ := ctx.Proposal.MinUndelegation(nil)
+	ctx.EnsureConfig(11, utils.ToWei(1), mud)
 	unb, _ := ctx.Proposal.UnbondingPeriod(nil)
 	ctx.EnsureConfig(6, big.NewInt(10), unb)
 	unj, _ := ctx.Proposal.ValidatorUnjailPeriod(nil)
@@ -79,10 +81,10 @@ func TestE_Delegation(t *testing.T) {
 		infoBefore, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		t.Logf("Initial accumulated rewards: %s", infoBefore.AccumulatedRewards.String())
 		claimedBefore := infoBefore.TotalClaimedRewards
-		
+
 		waitBlocks(t, 5)
 		robustClaimValidatorRewards(t, valKey)
-		
+
 		infoAfter, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
 		utils.AssertTrue(t, infoAfter.TotalClaimedRewards.Cmp(claimedBefore) > 0, "total claimed rewards should increase")
 	})
@@ -92,7 +94,9 @@ func TestE_Delegation(t *testing.T) {
 		utils.AssertNoError(t, err, "setup user failed")
 		opts, _ := ctx.GetTransactor(userKey)
 		_, err = ctx.Staking.ClaimRewards(opts, valAddr)
-		if err == nil { t.Fatal("Should fail claim rewards with no delegation") }
+		if err == nil {
+			t.Fatal("Should fail claim rewards with no delegation")
+		}
 	})
 
 	t.Run("D-04a_ValidatorResignImpact", func(t *testing.T) {
@@ -101,15 +105,17 @@ func TestE_Delegation(t *testing.T) {
 		userKey, _, err := ctx.CreateAndFundAccount(utils.ToWei(50))
 		utils.AssertNoError(t, err, "setup user failed")
 		robustDelegate(t, userKey, addr, utils.ToWei(10))
-		
+
 		vOpts, _ := ctx.GetTransactor(key)
 		txR, _ := ctx.Staking.ResignValidator(vOpts)
 		ctx.WaitMined(txR.Hash())
-		
+
 		opts, _ := ctx.GetTransactor(userKey)
 		opts.Value = utils.ToWei(5)
 		_, err = ctx.Staking.Delegate(opts, addr)
-		if err == nil { t.Fatal("Should not be able to delegate to resigned validator") }
+		if err == nil {
+			t.Fatal("Should not be able to delegate to resigned validator")
+		}
 	})
 
 	t.Run("D-04b_MultiDelegatorIsolation", func(t *testing.T) {
@@ -117,10 +123,10 @@ func TestE_Delegation(t *testing.T) {
 		utils.AssertNoError(t, err, "setup user A failed")
 		keyB, _, err := ctx.CreateAndFundAccount(utils.ToWei(100))
 		utils.AssertNoError(t, err, "setup user B failed")
-		
+
 		robustDelegate(t, keyA, valAddr, utils.ToWei(10))
 		robustDelegate(t, keyB, valAddr, utils.ToWei(20))
-		
+
 		waitBlocks(t, 2)
 		infoA, _ := ctx.Staking.GetDelegationInfo(nil, crypto.PubkeyToAddress(keyA.PublicKey), valAddr)
 		infoB, _ := ctx.Staking.GetDelegationInfo(nil, crypto.PubkeyToAddress(keyB.PublicKey), valAddr)
@@ -134,7 +140,9 @@ func TestE_Delegation(t *testing.T) {
 		opts, _ := ctx.GetTransactor(userKey)
 		opts.Value = utils.ToWei(0.1)
 		_, err = ctx.Staking.Delegate(opts, valAddr)
-		if err == nil { t.Fatal("Should fail delegation below minimum (0.1 ETH)") }
+		if err == nil {
+			t.Fatal("Should fail delegation below minimum (0.1 ETH)")
+		}
 	})
 
 	t.Run("D-03_CompoundDelegation", func(t *testing.T) {
@@ -177,7 +185,7 @@ func TestE_Delegation(t *testing.T) {
 	t.Run("D-05_MultiValidatorDelegation", func(t *testing.T) {
 		val1 := common.HexToAddress(ctx.Config.Validators[0].Address)
 		val2 := common.HexToAddress(ctx.Config.Validators[1].Address)
-		
+
 		v1Info, _ := ctx.Staking.GetValidatorInfo(nil, val1)
 		v2Info, _ := ctx.Staking.GetValidatorInfo(nil, val2)
 		t.Logf("Val1: %s (Stake: %s), Val2: %s (Stake: %s)", val1.Hex(), v1Info.SelfStake, val2.Hex(), v2Info.SelfStake)
@@ -209,7 +217,10 @@ func TestE_Delegation(t *testing.T) {
 
 	t.Run("D-17_RoleDowngrade", func(t *testing.T) {
 		key, addr, err := createAndRegisterValidator(t, "D-17 Downgrade")
-		if err != nil { t.Logf("Skipping D-17: %v", err); return }
+		if err != nil {
+			t.Logf("Skipping D-17: %v", err)
+			return
+		}
 		opts, _ := ctx.GetTransactor(key)
 		ctx.Staking.ResignValidator(opts)
 		unjailPeriod, _ := ctx.Proposal.ValidatorUnjailPeriod(nil)
@@ -230,14 +241,18 @@ func TestE_Delegation(t *testing.T) {
 		robustUndelegate(t, userKey, valAddr, utils.ToWei(5))
 		opts, _ := ctx.GetTransactor(userKey)
 		_, err = ctx.Staking.WithdrawUnbonded(opts, valAddr, big.NewInt(10))
-		if err == nil { t.Fatal("Early withdraw should fail") }
+		if err == nil {
+			t.Fatal("Early withdraw should fail")
+		}
 	})
 
 	t.Run("D-07_SelfDelegation", func(t *testing.T) {
 		opts, _ := ctx.GetTransactor(valKey)
 		opts.Value = utils.ToWei(10)
 		_, err := ctx.Staking.Delegate(opts, valAddr)
-		if err == nil { t.Fatal("Self-delegation should fail") }
+		if err == nil {
+			t.Fatal("Self-delegation should fail")
+		}
 	})
 
 	t.Run("D-09_DelegateToNonExistent", func(t *testing.T) {
@@ -246,7 +261,9 @@ func TestE_Delegation(t *testing.T) {
 		opts, _ := ctx.GetTransactor(userKey)
 		opts.Value = utils.ToWei(10)
 		_, err = ctx.Staking.Delegate(opts, common.HexToAddress("0x1234"))
-		if err == nil { t.Fatal("Should fail delegating to non-existent") }
+		if err == nil {
+			t.Fatal("Should fail delegating to non-existent")
+		}
 	})
 
 	t.Run("D-11_ZeroUndelegate", func(t *testing.T) {
@@ -255,18 +272,24 @@ func TestE_Delegation(t *testing.T) {
 		robustDelegate(t, userKey, valAddr, utils.ToWei(10))
 		opts, _ := ctx.GetTransactor(userKey)
 		_, err = ctx.Staking.Undelegate(opts, valAddr, big.NewInt(0))
-		if err == nil { t.Fatal("Should fail zero undelegation") }
+		if err == nil {
+			t.Fatal("Should fail zero undelegation")
+		}
 	})
 
 	t.Run("D-18_UndelegateBelowMin", func(t *testing.T) {
 		minUndel, _ := ctx.Proposal.MinUndelegation(nil)
-		if minUndel.Cmp(big.NewInt(1)) <= 0 { t.Skip("minUndelegation too small") }
+		if minUndel.Cmp(big.NewInt(1)) <= 0 {
+			t.Skip("minUndelegation too small")
+		}
 		userKey, _, err := ctx.CreateAndFundAccount(utils.ToWei(50))
 		utils.AssertNoError(t, err, "setup user failed")
 		robustDelegate(t, userKey, valAddr, utils.ToWei(10))
 		opts, _ := ctx.GetTransactor(userKey)
 		_, err = ctx.Staking.Undelegate(opts, valAddr, new(big.Int).Sub(minUndel, big.NewInt(1)))
-		if err == nil { t.Fatal("Should fail undelegate below min") }
+		if err == nil {
+			t.Fatal("Should fail undelegate below min")
+		}
 	})
 
 	t.Run("D-12_DelegateToJailed", func(t *testing.T) {
@@ -279,7 +302,9 @@ func TestE_Delegation(t *testing.T) {
 		opts, _ := ctx.GetTransactor(userKey)
 		opts.Value = utils.ToWei(10)
 		_, err = ctx.Staking.Delegate(opts, addr)
-		if err == nil { t.Fatal("Should fail delegating to jailed") }
+		if err == nil {
+			t.Fatal("Should fail delegating to jailed")
+		}
 	})
 
 	t.Run("D-13_UndelegateFromJailed", func(t *testing.T) {
@@ -292,7 +317,7 @@ func TestE_Delegation(t *testing.T) {
 		ctx.Staking.ResignValidator(vOpts)
 		robustUndelegate(t, userKey, addr, utils.ToWei(10))
 	})
-	
+
 	t.Run("D-14_MaxUnbonding", func(t *testing.T) {
 		userKey, _, err := ctx.CreateAndFundAccount(utils.ToWei(100))
 		utils.AssertNoError(t, err, "setup user failed")
@@ -303,7 +328,9 @@ func TestE_Delegation(t *testing.T) {
 		}
 		opts, _ := ctx.GetTransactor(userKey)
 		_, err = ctx.Staking.Undelegate(opts, valAddr, utils.ToWei(1))
-		if err == nil { t.Fatal("Should fail exceeding max entries") }
+		if err == nil {
+			t.Fatal("Should fail exceeding max entries")
+		}
 	})
 
 	t.Run("D-19_InvalidMaxEntries", func(t *testing.T) {
@@ -311,8 +338,12 @@ func TestE_Delegation(t *testing.T) {
 		utils.AssertNoError(t, err, "setup user failed")
 		opts, _ := ctx.GetTransactor(userKey)
 		_, err = ctx.Staking.WithdrawUnbonded(opts, valAddr, big.NewInt(0))
-		if err == nil { t.Fatal("Should fail with maxEntries=0") }
+		if err == nil {
+			t.Fatal("Should fail with maxEntries=0")
+		}
 		_, err = ctx.Staking.WithdrawUnbonded(opts, valAddr, big.NewInt(21))
-		if err == nil { t.Fatal("Should fail with maxEntries too large") }
+		if err == nil {
+			t.Fatal("Should fail with maxEntries too large")
+		}
 	})
 }

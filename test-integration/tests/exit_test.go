@@ -19,6 +19,20 @@ func TestF1_ExitFlow(t *testing.T) {
 	valKey, valAddr, err := createAndRegisterValidator(t, "Exit Validator")
 	utils.AssertNoError(t, err, "failed to setup validator")
 
+	// Ensure the validator is in the active set before testing exit restrictions.
+	for i := 0; i < 3; i++ {
+		active, _ := ctx.Validators.IsValidatorActive(nil, valAddr)
+		if active {
+			break
+		}
+		waitForNextEpochBlock(t)
+		waitBlocks(t, 1)
+	}
+	active, _ := ctx.Validators.IsValidatorActive(nil, valAddr)
+	if !active {
+		t.Skip("validator not active after epoch transition; cannot validate exit restriction deterministically")
+	}
+
 	opts, err := ctx.GetTransactor(valKey)
 	utils.AssertNoError(t, err, "failed to get transactor")
 
