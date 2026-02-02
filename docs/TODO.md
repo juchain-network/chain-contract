@@ -16,6 +16,15 @@
 
 ## Validation Log (most recent first)
 ### 2026-02-02
+- **Run:** `make -C test-integration test-rewards`
+  - **Result:** PASS (~5.4 min)
+  - **Notes:** V-01 skipped when resign blocked by doubleSignWindow; system-tx reward tests skipped as expected.
+
+- **Run:** `make -C test-integration test-rewards`
+  - **Result:** FAIL
+  - **Failure:** `TestH_Robustness` → V-01 not jailed; S-15 proposal created by non-validator.
+  - **Action:** Ensure resign succeeds + retry jail check; use active proposer for proposal creation.
+
 - **Run:** `make -C test-integration test-punish`
   - **Result:** PASS (~36 min)
   - **Notes:** Multiple resets; some tests log expected “Miner only” reverts.
