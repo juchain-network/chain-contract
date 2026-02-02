@@ -82,6 +82,7 @@ echo "Funder: $FUNDER_ADDR"
 # Validators (3 nodes) + Sync Node (1 node) = 4 nodes total
 NUM_VALIDATORS=3
 NUM_NODES=4
+NODE_IPS=("172.28.0.10" "172.28.0.11" "172.28.0.12" "172.28.0.13")
 VAL_ADDRS=()
 VAL_PRIVS=()
 ENODES=()
@@ -96,8 +97,12 @@ for i in $(seq 0 $((NUM_NODES-1))); do
     IFS=',' read -r NODE_ADDR NODE_PRIV NODE_PUB <<< $(generate_key "node-p2p-$i")
     echo "$NODE_PRIV" > "$DATA_DIR/node$i/nodekey"
     
-    # Construct Enode URL
-    ENODES+=("enode://$NODE_PUB@node$i:30303")
+    # Construct Enode URL (use static IPs to avoid DNS resolution issues)
+    NODE_HOST="node$i"
+    if [ ${#NODE_IPS[@]} -gt $i ] && [ -n "${NODE_IPS[$i]}" ]; then
+        NODE_HOST="${NODE_IPS[$i]}"
+    fi
+    ENODES+=("enode://$NODE_PUB@${NODE_HOST}:30303")
     
     if [ $i -lt $NUM_VALIDATORS ]; then
         # Validator keys for 0-2

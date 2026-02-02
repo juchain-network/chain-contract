@@ -17,6 +17,8 @@ if [ "$SYNC_NODE" = "true" ]; then
         --config /data/config.toml \
         --networkid 666666 \
         --nodekey /data/nodekey \
+        --gcmode "archive" \
+        --cache 4096 \
         --http \
         --http.api "eth,net,web3,debug,admin,personal,miner,txpool" \
         --http.corsdomain "*" \
@@ -54,6 +56,8 @@ else
         --config /data/config.toml \
         --networkid 666666 \
         --nodekey /data/nodekey \
+        --cache 1024 \
+        --mine \
         --http \
         --http.api "eth,net,web3,debug,admin,personal,miner,txpool" \
         --http.corsdomain "*" \
@@ -133,11 +137,6 @@ if [ "$SYNC_NODE" != "true" ]; then
     if [ "$MINER_START_DELAY" -gt 0 ]; then
         sleep "$MINER_START_DELAY"
     fi
-
-    echo "Starting miner..."
-    curl -s -X POST -H "Content-Type: application/json" \
-        --data '{"jsonrpc":"2.0","method":"miner_start","params":[],"id":1}' \
-        "$RPC_URL" >/dev/null 2>&1 || true
 fi
 
 echo "Node is ready."
