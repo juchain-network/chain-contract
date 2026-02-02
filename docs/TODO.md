@@ -16,6 +16,15 @@
 
 ## Validation Log (most recent first)
 ### 2026-02-02
+- **Run:** `make -C test-integration test-punish`
+  - **Result:** PASS (~36 min)
+  - **Notes:** Multiple resets; some tests log expected “Miner only” reverts.
+
+- **Run:** `make -C test-integration test-punish`
+  - **Result:** FAIL (timeout)
+  - **Failure:** `TestF3_WithdrawProfits` waited `WithdrawProfitPeriod` (~86400 blocks) → go test timeout.
+  - **Action:** Set `WithdrawProfitPeriod` to 20 via `ctx.EnsureConfig` in `TestF3_WithdrawProfits`.
+
 - **Run:** `make -C test-integration test-delegation`
   - **Result:** PASS (~10.9 min)
   - **Notes:** D-04a logs a reverted vote tx warning but the suite completes successfully.

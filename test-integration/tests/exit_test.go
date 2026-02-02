@@ -132,6 +132,10 @@ func TestF3_WithdrawProfits(t *testing.T) {
 	if incoming.Cmp(big.NewInt(0)) > 0 {
 		period, err := ctx.Proposal.WithdrawProfitPeriod(nil)
 		utils.AssertNoError(t, err, "failed to read withdraw profit period")
+		// Keep the test deterministic and fast.
+		ctx.EnsureConfig(4, big.NewInt(20), period)
+		period, err = ctx.Proposal.WithdrawProfitPeriod(nil)
+		utils.AssertNoError(t, err, "failed to read withdraw profit period after update")
 		// Ensure we have waited enough blocks before first withdrawal
 		if period.Sign() > 0 {
 			waitBlocks(t, int(period.Uint64()+1))
