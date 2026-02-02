@@ -16,6 +16,18 @@
 
 ## Validation Log (most recent first)
 ### 2026-02-02
+- **Run:** `make -C test-integration test-delegation`
+  - **Result:** PASS (~10.9 min)
+  - **Notes:** D-04a logs a reverted vote tx warning but the suite completes successfully.
+
+- **Run:** `make -C test-integration test-delegation`
+  - **Result:** FAIL
+  - **Failure:** `TestE_Delegation/D-15_DelegatorToValidator` → register tx reverted
+  - **Action:** On WaitMined revert, refresh nonce, wait for next epoch, retry.
+
+- **Run:** `make -C test-integration test-staking`
+  - **Result:** PASS (~7.8 min)
+
 - **Run:** `make -C test-integration test-governance`
   - **Result:** PASS (~7.4 min)
   - **Notes:** G-16 logs “V2 register succeeded unexpectedly” (warning only; test still passes).

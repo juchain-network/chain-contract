@@ -168,59 +168,65 @@ func TestE_Delegation(t *testing.T) {
 		utils.AssertTrue(t, err != nil, "should fail undelegating more than staked")
 	})
 
-		t.Run("D-15_DelegatorToValidator", func(t *testing.T) {
-			userKey, userAddr, err := ctx.CreateAndFundAccount(utils.ToWei(250005))
-			utils.AssertNoError(t, err, "failed user setup")
-			robustDelegate(t, userKey, valAddr, utils.ToWei(10))
-			err = passProposalFor(t, userAddr, "D-15 Propose")
-			utils.AssertNoError(t, err, "proposal failed")
-			waitBlocks(t, 25)
+	t.Run("D-15_DelegatorToValidator", func(t *testing.T) {
+		userKey, userAddr, err := ctx.CreateAndFundAccount(utils.ToWei(250005))
+		utils.AssertNoError(t, err, "failed user setup")
+		robustDelegate(t, userKey, valAddr, utils.ToWei(10))
+		err = passProposalFor(t, userAddr, "D-15 Propose")
+		utils.AssertNoError(t, err, "proposal failed")
+		waitBlocks(t, 25)
 
-			var lastErr error
-			for retry := 0; retry < 10; retry++ {
-				opts, errG := ctx.GetTransactor(userKey)
-				if errG != nil {
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				opts.Value = utils.ToWei(100000)
-				opts.GasLimit = 5000000
+		var lastErr error
+		for retry := 0; retry < 10; retry++ {
+			opts, errG := ctx.GetTransactor(userKey)
+			if errG != nil {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			opts.Value = utils.ToWei(100000)
+			opts.GasLimit = 5000000
 
-				txReg, err := ctx.Staking.RegisterValidator(opts, big.NewInt(500))
-				if err != nil {
-					lastErr = err
-					if strings.Contains(err.Error(), "Epoch block forbidden") || strings.Contains(err.Error(), "Too many new validators") {
-						waitForNextEpochBlock(t)
-						waitBlocks(t, 1)
-						continue
-					}
-					break
-				}
-
-				if errW := ctx.WaitMined(txReg.Hash()); errW != nil {
-					lastErr = errW
-					continue
-				}
-				receipt, errR := ctx.Clients[0].TransactionReceipt(context.Background(), txReg.Hash())
-				if errR != nil {
-					lastErr = errR
-					continue
-				}
-				if receipt.Status == 0 {
-					lastErr = fmt.Errorf("register validator tx reverted")
+			txReg, err := ctx.Staking.RegisterValidator(opts, big.NewInt(500))
+			if err != nil {
+				lastErr = err
+				if strings.Contains(err.Error(), "Epoch block forbidden") || strings.Contains(err.Error(), "Too many new validators") {
 					waitForNextEpochBlock(t)
 					waitBlocks(t, 1)
 					continue
 				}
+				break
+			}
 
-				isVal, _ := ctx.Validators.IsValidatorExist(nil, userAddr)
-				utils.AssertTrue(t, isVal, "should be validator")
-				return
+			if errW := ctx.WaitMined(txReg.Hash()); errW != nil {
+				lastErr = errW
+				if strings.Contains(errW.Error(), "revert") || strings.Contains(errW.Error(), "reverted") {
+					ctx.RefreshNonce(userAddr)
+					waitForNextEpochBlock(t)
+					waitBlocks(t, 1)
+				}
+				continue
 			}
-			if lastErr != nil {
-				t.Fatalf("register validator failed: %v", lastErr)
+			receipt, errR := ctx.Clients[0].TransactionReceipt(context.Background(), txReg.Hash())
+			if errR != nil {
+				lastErr = errR
+				continue
 			}
-		})
+			if receipt.Status == 0 {
+				lastErr = fmt.Errorf("register validator tx reverted")
+				ctx.RefreshNonce(userAddr)
+				waitForNextEpochBlock(t)
+				waitBlocks(t, 1)
+				continue
+			}
+
+			isVal, _ := ctx.Validators.IsValidatorExist(nil, userAddr)
+			utils.AssertTrue(t, isVal, "should be validator")
+			return
+		}
+		if lastErr != nil {
+			t.Fatalf("register validator failed: %v", lastErr)
+		}
+	})
 
 	t.Run("D-05_MultiValidatorDelegation", func(t *testing.T) {
 		val1 := common.HexToAddress(ctx.Config.Validators[0].Address)
