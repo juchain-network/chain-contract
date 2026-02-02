@@ -16,6 +16,15 @@
 
 ## Validation Log (most recent first)
 ### 2026-02-02
+- **Run:** `make -C test-integration test-governance`
+  - **Result:** PASS (~7.4 min)
+  - **Notes:** G-16 logs “V2 register succeeded unexpectedly” (warning only; test still passes).
+
+- **Run:** `make -C test-integration test-governance`
+  - **Result:** FAIL
+  - **Failure:** `TestB_Governance/G-16_SmoothExpansion` → vote tx reverted (`G-16 V2 failed`)
+  - **Action:** Hardened `voteProposalToPass` to handle revert/epoch edge cases, skip inactive/jailed voters, and retry.
+
 - **Run:** `make -C test-integration test-config`
   - **Result:** PASS (~10.6 min)
   - **Notes:** Config suite is slow due to multiple epoch waits; no failures after import fix.

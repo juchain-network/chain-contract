@@ -86,6 +86,7 @@ func TestB_Governance(t *testing.T) {
 		threshold := votingCount.Uint64()/2 + 1
 		var votes uint64
 
+	voterLoop:
 		for _, vk := range ctx.GenesisValidators {
 			if votes >= threshold {
 				break
@@ -109,6 +110,7 @@ func TestB_Governance(t *testing.T) {
 				continue
 			}
 
+			var lastErr error
 			for vtry := 0; vtry < 5; vtry++ {
 				vo, _ := ctx.GetTransactor(vk)
 				txV, errV := ctx.Proposal.VoteProposal(vo, propID, true)
@@ -123,7 +125,7 @@ func TestB_Governance(t *testing.T) {
 						existing, err := ctx.Proposal.Votes(nil, voterAddr, propID)
 						if err == nil && existing.VoteTime != nil && existing.VoteTime.Sign() > 0 && existing.Auth {
 							votes++
-							break
+							continue voterLoop
 						}
 						t.Fatalf("%s failed: duplicate vote without record from %s", name, voterAddr.Hex())
 					}
@@ -134,13 +136,31 @@ func TestB_Governance(t *testing.T) {
 				if errW := ctx.WaitMined(txV.Hash()); errW != nil {
 					if strings.Contains(errW.Error(), "Epoch block forbidden") {
 						waitBlocks(t, 1)
+						lastErr = errW
+						continue
+					}
+					if strings.Contains(errW.Error(), "revert") || strings.Contains(errW.Error(), "reverted") {
+						existing, err := ctx.Proposal.Votes(nil, voterAddr, propID)
+						if err == nil && existing.VoteTime != nil && existing.VoteTime.Sign() > 0 && existing.Auth {
+							votes++
+							continue voterLoop
+						}
+						activeNow, _ := ctx.Validators.IsValidatorActive(nil, voterAddr)
+						infoNow, _ := ctx.Staking.GetValidatorInfo(nil, voterAddr)
+						if !activeNow || infoNow.IsJailed {
+							ctx.RefreshNonce(voterAddr)
+							continue voterLoop
+						}
+						ctx.RefreshNonce(voterAddr)
+						waitBlocks(t, 1)
+						lastErr = errW
 						continue
 					}
 					if strings.Contains(errW.Error(), "timeout waiting for tx") {
 						existing, err := ctx.Proposal.Votes(nil, voterAddr, propID)
 						if err == nil && existing.VoteTime != nil && existing.VoteTime.Sign() > 0 && existing.Auth {
 							votes++
-							break
+							continue voterLoop
 						}
 					}
 					t.Fatalf("%s failed: vote tx from %s: %v", name, voterAddr.Hex(), errW)
@@ -148,7 +168,15 @@ func TestB_Governance(t *testing.T) {
 				// Wait 1 block for state to settle
 				waitBlocks(t, 1)
 				votes++
-				break
+				continue voterLoop
+			}
+
+			if lastErr != nil {
+				activeNow, _ := ctx.Validators.IsValidatorActive(nil, voterAddr)
+				infoNow, _ := ctx.Staking.GetValidatorInfo(nil, voterAddr)
+				if activeNow && !infoNow.IsJailed {
+					t.Fatalf("%s failed: vote from %s did not succeed after retries: %v", name, voterAddr.Hex(), lastErr)
+				}
 			}
 		}
 
@@ -255,7 +283,7 @@ func TestB_Governance(t *testing.T) {
 		}
 		// Wait 1 block for proposal to be indexed
 		waitBlocks(t, 1)
-		
+
 		proposalID := getPropID(tx)
 		if proposalID == ([32]byte{}) {
 			return fmt.Errorf("createProposal missing proposal ID")
