@@ -224,11 +224,10 @@ awk '
     skip_ports=0
   }
   in_node3 && $0 ~ /^    ports:/ { skip_ports=1; next }
-  in_node0 && !inserted && $0 ~ /^    volumes:/ {
+  in_node3 && !inserted && $0 ~ /^    volumes:/ {
     print "    ports:"
     print "      - \"18545:8545\""
     print "      - \"18546:8546\" # WS"
-    print "      - \"30301:30303\" # P2P"
     inserted=1
   }
   { print }

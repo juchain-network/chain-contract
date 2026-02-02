@@ -610,7 +610,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     function distributeRewards() external payable onlyMiner onlyInitialized nonReentrant {
         // Check if block reward has already been distributed for this block
         if (operationsDone[block.number][uint8(Operations.Distribute)]) {
-            return; // Silently return to avoid consensus issues
+            revert("Already distributed");
         }
 
         // Clean up previous block's data to save storage
@@ -896,7 +896,18 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         }
 
         if (candidateCount == 0) {
-            return new address[](0);
+            // Fallback: if all candidates have zero self-stake, return original list
+            // (trimmed to maxValidators) to avoid empty validator set.
+            uint256 fallbackMaxValidators = proposalContract.maxValidators();
+            if (fallbackMaxValidators > CONSENSUS_MAX_VALIDATORS) {
+                fallbackMaxValidators = CONSENSUS_MAX_VALIDATORS;
+            }
+            uint256 fallbackReturnLength = validators.length < fallbackMaxValidators ? validators.length : fallbackMaxValidators;
+            address[] memory fallbackTopValidators = new address[](fallbackReturnLength);
+            for (uint256 i = 0; i < fallbackReturnLength; i++) {
+                fallbackTopValidators[i] = validators[i];
+            }
+            return fallbackTopValidators;
         }
 
         // Sort by total stake using heap sort for improved performance

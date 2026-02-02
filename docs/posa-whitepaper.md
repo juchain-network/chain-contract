@@ -83,24 +83,25 @@ The JPoSA consensus mechanism adopts a sustainable economic model that incentivi
 The network incentivizes validators to maintain network security and process transactions through block rewards. The quantity of block rewards can be adjusted through governance proposals:
 
 - **Basic Block Reward**: Each block generates 0.2 JU reward (sample value, adjustable through governance)
-- **Daily Total Issuance**: 17,280 JU (0.2 JU/block × 86,400 blocks/day)
-- **Annual Total Issuance**: Approximately 6,307,200 JU (17,280 JU/day × 365 days)
+- **Block Reward Parameter**: `blockReward` is a base parameter; actualReward per block is computed by consensus (see formula below)
+- **Expected Daily Issuance**: ≈ blockReward × blocks/day (assuming round-robin block production)
+- **Expected Annual Issuance**: ≈ blockReward × blocks/day × 365 (approximate)
 
 ### Reward Distribution Mechanism
 Block rewards are distributed in two parts:
 
 1. **Transaction Fee Distribution** (100%)
-   - All transaction fees are distributed to the block-producing validator
-   - Jailed validators cannot receive transaction fees
+   - If producer is not jailed, fees go to the block-producing validator
+   - If producer is jailed, fees are redistributed to other non-jailed validators
 
-2. **Basic Reward Distribution** (Proportional Distribution)
-   - Block-producing validators can set commission rates, extracting a certain percentage from basic rewards as commissions (default 10%)
+2. **Block Reward Distribution** (Proportional Distribution)
+   - Block-producing validators can set commission rates, extracting a percentage from actualReward as commissions (default 10%)
    - The remaining portion is distributed to validators and their delegators based on staking weight
 
 ### Staking Yield
 Staking yield depends on the network's total staking volume and transaction activity levels:
 
-- **Validator Self-Staking Income** = Personal share of basic rewards + Transaction fee share + Delegator commissions
+- **Validator Self-Staking Income** = Personal share of block rewards + Transaction fee share + Delegator commissions
 - **Delegator Income** = Reward share obtained based on delegated amount, validator's total staking, and validator's commission rate
 
 Assuming the network has 100,000,000 JU total staking and an annual inflation rate of 3%, the annualized yield is approximately 5-6%, depending specifically on the validator's commission rate and network usage.
@@ -146,7 +147,7 @@ In the JPoSA network, miners are called "validators" and are responsible for pro
 
 3. **Reward Withdrawal**
    - Regularly withdraw block rewards and commissions
-   - Rewards include basic rewards and transaction fee shares
+   - Rewards include block rewards and transaction fee shares
 
 4. **Delegation Management**
    - View delegator information and support
@@ -159,8 +160,8 @@ In the JPoSA network, miners are called "validators" and are responsible for pro
    - Missing block production will be punished
 
 2. **Punishment Mechanism**
-   - Over 24 blocks, suspend transaction fee income and forfeit transaction fees, distributed to other validators, but basic staking income remains
-   - Over 48 blocks, jailed and removed from validator set, but in the current epoch can still continue block production and receive basic staking income, but in the next epoch will be permanently kicked out, requiring re-proposal application to become a validator again
+   - Over 24 blocks, suspend transaction fee income and forfeit transaction fees, distributed to other validators; base reward only comes from blocks they actually produce
+   - Over 48 blocks, jailed and removed from validator set; after jail is recorded in parent state, consensus rejects their blocks, and they are removed at next epoch (re-proposal required)
    - Epoch cycle is 24 hours
 
 3. **Exit Mechanism**
@@ -188,7 +189,7 @@ Ordinary users can participate in network maintenance and earn rewards by delega
 
 3. **Reward Withdrawal**
    - Regularly withdraw delegation earnings
-   - Rewards include the portion belonging to oneself from the 90% of basic rewards
+   - Rewards include the portion belonging to oneself from block rewards after commission
    - Reward withdrawal requires no unbonding period and can be withdrawn anytime
 
 ### Unbonding and Withdrawal
@@ -337,7 +338,10 @@ The JPoSA network provides rich governable parameters, allowing validators to ad
    - Default value: 86,400 blocks (approximately 24 hours)
 
 2. **Block Reward** (blockReward)
-   - Basic reward amount produced per block
+   - Base reward parameter used by consensus to compute actualReward per block
+   - actualReward = blockReward * baseRatio/10000
+                  + blockReward * (10000 - baseRatio)/10000
+                    * validatorCount * (minerStake / totalStake)
    - Default value: 0.2 JU
 
 3. **Base Reward Ratio** (baseRewardRatio)

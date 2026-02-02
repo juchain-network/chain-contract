@@ -37,7 +37,8 @@ else
     # VALIDATOR NODE LOGIC
 
     # Import validator key if present
-    if [ -f "/data/validator.key" ]; then
+    echo "123456" > /tmp/password
+    if [ -f "/data/validator.key" ] && [ ! "$(ls -A /data/keystore 2>/dev/null)" ]; then
         echo "Importing validator key..."
         echo "123456" > /tmp/password
         juchain account import --datadir /data --password /tmp/password /data/validator.key

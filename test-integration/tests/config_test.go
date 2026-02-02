@@ -56,15 +56,25 @@ func TestA_SystemConfigSetup(t *testing.T) {
 		{"ProposalLastingPeriod", ConfigID_ProposalLastingPeriod, big.NewInt(200)},
 	}
 
-	for _, target := range targets {
-		t.Logf("Verifying %s is %v...", target.name, target.val)
-		current, err := ctx.GetConfigValue(target.cid)
-		utils.AssertNoError(t, err, fmt.Sprintf("failed to read %s", target.name))
-		if current.Cmp(target.val) != 0 {
-			t.Fatalf("%s mismatch: expected %v, got %v", target.name, target.val, current)
+		for _, target := range targets {
+			t.Logf("Verifying %s is %v...", target.name, target.val)
+			current, err := ctx.GetConfigValue(target.cid)
+			utils.AssertNoError(t, err, fmt.Sprintf("failed to read %s", target.name))
+			if current.Cmp(target.val) != 0 {
+				t.Logf("%s mismatch (expected %v, got %v). Attempting to update...", target.name, target.val, current)
+				if err := ctx.EnsureConfig(target.cid, target.val, current); err != nil {
+					t.Fatalf("%s update failed: %v", target.name, err)
+				}
+				// Allow state to settle after proposal pass.
+				waitBlocks(t, 1)
+				current, err = ctx.GetConfigValue(target.cid)
+				utils.AssertNoError(t, err, fmt.Sprintf("failed to re-read %s", target.name))
+				if current.Cmp(target.val) != 0 {
+					t.Fatalf("%s mismatch after update: expected %v, got %v", target.name, target.val, current)
+				}
+			}
 		}
 	}
-}
 
 func TestB_ConfigBoundaryChecks(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {

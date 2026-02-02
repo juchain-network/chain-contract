@@ -150,13 +150,14 @@ mapping(bytes32 => ResultInfo) public results;
    - `withdrawUnbonded(address validator, uint256 maxEntries)` after unbonding (~7 days)
 
 3) **Rewards**
-   - `distributeRewards(address validator)`: block reward split (validator + delegators)
-   - `claimRewards(address validator)`: withdraw rewards (validator commission + delegator rewards)
+   - `distributeRewards()`: block reward split (validator + delegators), `msg.value` computed by consensus
+   - `claimRewards(address validator)`: delegator rewards
+   - `claimValidatorRewards()`: validator commission rewards
 
 4) **Validator state**
    - `jailValidator(address validator, uint256 jailBlocks)`: jail (Punish only)
    - `unjailValidator(address validator)`: self-call unjail
-   - `getTopValidators()`: top validators for epoch (jailed filtered)
+   - `getTopValidators()`: top validators for epoch (filters only `selfStake > 0`)
    - `_removeFromAllValidators(address validator)`: internal removal (used by emergencyExit)
 
 #### Key Data
@@ -197,14 +198,15 @@ struct Delegation {
 1) **Validator sets**
    - `updateActiveValidatorSet(address[] memory newSet, uint256 epoch)` (called by consensus)
    - `getTopValidators()` returns `highestValidatorsSet` (POA mode cache)
-   - JPoSA mode: consensus calls `Staking.getTopValidators()` directly   - `getActiveValidators()` / `getActiveValidatorCount()` based on `currentValidatorSet`
+   - JPoSA mode: consensus calls `Staking.getTopValidators()` directly
+   - `getActiveValidators()` / `getActiveValidatorCount()` return `currentValidatorSet` (no jail filter)
 
 2) **Validator info**
    - `addValidator`, `removeValidator` (Punish only), `tryRemoveValidator` (Proposal only)
    - `editValidator(...)`
 
 3) **Rewards**
-   - `distributeBlockReward()`: distribute tx fees to active validators (jailed excluded)
+   - `distributeBlockReward()`: distribute tx fees to `currentValidatorSet`, excluding jailed validators
 
 4) **State queries**
    - `isValidatorJailed`, `isValidatorActive`, `isValidatorExist`
@@ -285,11 +287,10 @@ struct PunishRecord {
 
 2) Proposal.voteProposal(id, true) by multiple validators
    - record vote: results[id].agree/reject++
-   - count active votes via getActiveVoteCount()
-   - when agree >= activeValidators/2 + 1:
+   - when agree >= getVotingValidatorCount()/2 + 1:
        pass[dst] = true
        proposalPassedHeight[dst] = block.number
-   - only current active validators are counted
+   - threshold uses current voting validators; votes already cast are not revoked
 
 3) Register within proposal window (default ~7 days)
    - Proposal.isProposalValidForStaking(dst) for new registrations
@@ -327,8 +328,8 @@ struct PunishRecord {
      - remove from highestValidatorsSet if length > 1
 
 5) Next Epoch
-   - Staking.getTopValidators() filters jailed
-   - validator no longer in active set
+   - Staking.getTopValidators() sorts `highestValidatorsSet` (filters only `selfStake > 0`)
+   - removal from active set depends on `highestValidatorsSet` updates
 ```
 
 Double-sign evidence (non-epoch blocks):
@@ -351,11 +352,15 @@ Double-sign evidence (non-epoch blocks):
 1) Consensus Finalize()
    - if txs: distributeFeeReward()
      -> Validators.distributeBlockReward() {value: tx fees}
-        - share to active validators (jailed excluded)
+        - share to currentValidatorSet, excluding jailed validators
         - each gets totalReward / activeCount
 
    - distributeCoinbaseReward()
-     -> Staking.distributeRewards(validator) {value: base block reward}
+     -> Staking.distributeRewards() {value: actualReward}
+        - actualReward = blockReward * baseRatio/10000
+                       + blockReward * weightedRatio/10000
+                         * validatorCount * (minerStake / totalStake)
+        - weightedRatio = 10000 - baseRatio
         - validator: commission + remaining * selfStake/totalStake
         - delegators: remaining * delegated/totalStake
         - update rewardPerShare
@@ -366,7 +371,7 @@ Double-sign evidence (non-epoch blocks):
 ```
 1) Consensus Prepare() [Epoch block]
    - getTopValidators() using parent state
-     -> Staking.getTopValidators() (jailed filtered)
+     -> Staking.getTopValidators() (no jail filter; only `selfStake > 0`)
    - write to header.Extra
 
 2) Consensus Finalize() [Epoch block]
@@ -378,7 +383,7 @@ Double-sign evidence (non-epoch blocks):
 3) Consensus snapshot.apply() [historical validation]
    - getTopValidatorsFunc() using parent state
    - fallback to header.Extra if state unavailable
-   - snap.Validators excludes jailed validators
+   - snap.Validators may include jailed validators; Finalize rejects jailed validators
 ```
 
 ---
@@ -428,7 +433,7 @@ func (c *Congress) Finalize(...) error {
     }
 
     distributeCoinbaseReward(...)
-        // -> Staking.distributeRewards(validator) {value: base reward}
+        // -> Staking.distributeRewards() {value: actualReward}
 
     if header.Number % c.config.Epoch == 0 {
         handleEpochTransition(...)
@@ -440,7 +445,8 @@ func (c *Congress) Finalize(...) error {
 
 Key points:
 - Uses **current state** to update validator set
-- Jailed validators are excluded immediately
+- Blocks from validators already jailed in parent state are rejected in Finalize;
+  `currentValidatorSet` may still include jailed validators until next epoch
 
 #### VerifyHeader
 
@@ -449,7 +455,7 @@ func (c *Congress) VerifyHeader(...) error {
     // header sanity
     if header.Number % c.config.Epoch == 0 {
         // JPoSA: newValidators may be a subset of header.Extra
-        // (jailed are removed)
+        // (no jail filtering here; jail check happens in Finalize)
         // POA: must match exactly    }
 }
 ```
@@ -469,16 +475,18 @@ type Snapshot struct {
 
 Key mechanisms:
 - Update `snap.Validators` on epoch blocks
-- Use `getTopValidatorsFunc()` (jailed filtered); fallback to `header.Extra` if state unavailable (with warning)
+- Use `getTopValidatorsFunc()` (no jail filter; only `selfStake > 0`);
+  fallback to `header.Extra` if state unavailable (with warning)
 
 ### 5.3 Validator Selection
 
 **JPoSA mode**
 1. `Staking.getTopValidators()` filters:
-   - `selfStake >= MIN_VALIDATOR_STAKE` (100000 ether)
-   - `!isJailed`
-   - `proposal.pass(validator) == true`
-   - Note: does **not** check `isProposalValidForStaking()`; proposalLastingPeriod window is only in `registerValidator()`
+   - `selfStake > 0` (allows genesis validators and slashed validators with remaining stake)
+   - Note: min stake and proposal pass are enforced on `registerValidator()` / `unjailValidator()`,
+     not inside `getTopValidators()`
+   - Fallback: if all candidates have `selfStake == 0`, return original `highestValidatorsSet`
+     (trimmed to `maxValidators`) to avoid empty set
 2. Sort by `selfStake + totalDelegated`
 3. Return top `MAX_VALIDATORS` (21)
 
@@ -519,15 +527,15 @@ Stage 1: Create proposal
 
 Stage 2: Validator voting
   Proposal.voteProposal(id, true) by active validators
-    - onlyValidator: must be in currentValidatorSet
+    - onlyValidator: must be in currentValidatorSet and not jailed
     - not voted, not expired
     - results[id].agree++ (persistent for history)
-    - check threshold on active votes:
-        agree >= getActiveValidatorCount()/2 + 1
+    - check threshold on voting count:
+        agree >= getVotingValidatorCount()/2 + 1
         -> pass[dst] = true
         -> proposalPassedHeight[dst] = block.number
         -> emit LogPassProposal
-    - only votes from currently active validators count
+    - votes already cast are not revoked if validator later removed/jailed
 
 Stage 3: Register within proposal window (default ~7 days)
   block.number <= proposalPassedHeight[dst] + proposalLastingPeriod
@@ -541,7 +549,6 @@ Stage 4: Stake & register
     - selfStake == 0 (not registered)
     - proposal.pass(msg.sender) == true
     - isProposalValidForStaking(msg.sender) == true (within proposalLastingPeriod)
-    - !isJailed or jail period ended
     - create ValidatorStake; add to allValidators; update totalStaked
     - validators.tryAddValidatorToHighestSet(msg.sender)
     - emit ValidatorRegistered
@@ -573,11 +580,11 @@ graph TD
     
     A --> J[Step 2: Threshold Check]
     J --> K[Calculate Vote Counts]
-    K --> L[agree#95;active = getActiveVoteCount#40;id, true#41;]
-    K --> M[reject#95;active = getActiveVoteCount#40;id, false#41;]
+    K --> L[agree#95; = results#91;id#93;.agree]
+    K --> M[reject#95; = results#91;id#93;.reject]
     
     L --> N{Agreement Threshold}
-    N --> O[agree#95;active #62;= getActiveValidatorCount#40;#41;/2 + 1]
+    N --> O[agree#95; #62;= getVotingValidatorCount#40;#41;/2 + 1]
     O --> P{Proposal Type Check}
     P --> Q[proposalType == 1]
     Q --> R{Flag Value}
@@ -586,37 +593,37 @@ graph TD
     P --> U[proposalType == 2: updateConfig#40;...#41;]
     
     M --> V{Rejection Threshold}
-    V --> W[reject#95;active #62;= getActiveValidatorCount#40;#41;/2 + 1]
+    V --> W[reject#95; #62;= getVotingValidatorCount#40;#41;/2 + 1]
     W --> X[Proposal Rejected]
     
     A --> Y[Important Notes]
-    Y --> Z[Threshold based on current active validators]
-    Y --> AA[Votes from later removed/jailed validators don't count]
+    Y --> Z[Threshold based on current voting validators]
+    Y --> AA[Votes are not revoked after later removal/jailed]
     Y --> AB[One vote per validator]
 ```
 
 ```
 Step 1: Voting
   Proposal.voteProposal(id, auth) by active validator
-    - must be active (in currentValidatorSet)
+    - must be active (in currentValidatorSet and not jailed)
     - not voted, not expired
     - record vote
     - results[id].agree++ or reject++
 
 Step 2: Threshold check after each vote
-  - agree_active = getActiveVoteCount(id, true)
-  - reject_active = getActiveVoteCount(id, false)
-  - if agree_active >= getActiveValidatorCount()/2 + 1:
+  - agree = results[id].agree
+  - reject = results[id].reject
+  - if agree >= getVotingValidatorCount()/2 + 1:
       * if proposalType == 1:
           flag == true  -> pass[dst] = true
           flag == false -> pass[dst] = false; removeValidator(dst)
       * if proposalType == 2: updateConfig(...)
-  - if reject_active >= getActiveValidatorCount()/2 + 1:
+  - if reject >= getVotingValidatorCount()/2 + 1:
       * proposal rejected
 
 Notes:
-- Threshold based on *current* active validators (jailed excluded)
-- Votes from validators later removed/jail no longer count for threshold
+- Threshold based on current voting validators (excludes jailed)
+- Votes already cast are not revoked after later removal/jailed
 - One vote per validator; proposalLastingPeriod default 7 days
 ```
 
@@ -661,7 +668,6 @@ Pre-checks:
   proposal.pass(msg.sender) == true
   isProposalValidForStaking(msg.sender) == true (within proposalLastingPeriod; new registrations only)
   selfStake == 0 (not registered)
-  !isJailed or jailUntilBlock passed
 
 Register:
   Staking.registerValidator(commissionRate) {value >= 100000 ether}
@@ -685,11 +691,8 @@ graph TD
     
     B --> B1[value #62; 0]
     B --> B2[Validator is registered<br/>selfStake #62;= MIN_VALIDATOR_STAKE]
-    B --> B3[Validator not jailed<br/>or jail time ended]
-    
     B1 --> C[Checks Passed]
     B2 --> C
-    B3 --> C
     
     C --> D[Update Stakes]
     D --> D1[selfStake += value]
@@ -706,8 +709,7 @@ graph TD
 
 ```
 Staking.addValidatorStake() {value > 0}
-  - must be registered (selfStake >= MIN_VALIDATOR_STAKE)
-  - not jailed or jail ended
+  - must be registered
   - selfStake += value; totalStaked += value
   - emit ValidatorStakeWithdrawn(...)   // name kept for compatibility
   - set updates at next epoch
@@ -759,7 +761,7 @@ Emergency exit (full):
 graph TD
     %% Delegation Flow
     A[Delegate<br/>delegate#40;validator#41;] --> B[Pre-checks]
-    B --> B1[validator active & not jailed]
+    B --> B1[selfStake >= MIN_VALIDATOR_STAKE<br/>and not jailed]
     B --> B2[value >= MIN_DELEGATION]
     B --> B3[validator != sender]
     B1 --> C
@@ -782,7 +784,7 @@ graph TD
 ```
 Delegate:
   Staking.delegate(validator) {value >= 1 ether}
-    - validator must be active & not jailed
+    - validator selfStake >= MIN_VALIDATOR_STAKE and not jailed (no currentValidatorSet check)
     - value >= MIN_DELEGATION; validator != sender
     - _updateRewards(sender, validator)
     - delegations[delegator][validator].amount += value
@@ -859,10 +861,10 @@ Withdraw unbonded:
 graph TD
     %% Block Reward Distribution Flow
     A[Block Finalize] --> B[distributeCoinbaseReward]
-    B --> C[Staking.distributeRewards<br/>#123;value: base reward#125;]
+    B --> C[Staking.distributeRewards<br/>#123;value: actualReward#125;]
     C --> D[Access Control]
     D --> D1[onlyMiner]
-    D --> D2[validator must be active]
+    D --> D2[validator selfStake > 0]
     D1 --> E
     D2 --> E
     
@@ -875,10 +877,10 @@ graph TD
 ```
 
 ```
-Block base reward (JPoSA):
+Block reward (JPoSA):
   consensus Finalize -> distributeCoinbaseReward()
-    -> Staking.distributeRewards(validator) {value: base reward}
-       - onlyMiner; validator must be active
+    -> Staking.distributeRewards() {value: actualReward}
+       - onlyMiner; validator selfStake > 0
        - totalStake = selfStake + totalDelegated
        - commission = reward * commissionRate / 10000
        - remainingRewards = reward - commission
@@ -890,8 +892,7 @@ Block base reward (JPoSA):
 ```mermaid
 graph TD
     %% Validator Claim Flow
-    F[Validator Claim<br/>claimRewards#40;validator#41;] --> G[_updateRewards#40;validator, validator#41;]
-    G --> H[Transfer commission + validator share]
+    F[Validator Claim<br/>claimValidatorRewards#40;#41;] --> G[Transfer commission + validator share]
     
     %% Delegator Claim Flow
     I[Delegator Claim<br/>claimRewards#40;validator#41;] --> J[_updateRewards#40;delegator, validator#41;]
@@ -971,12 +972,12 @@ Punish.punish:
 
 Immediate effect on epoch block:
   - If current block is epoch:
-      consensus gets Staking.getTopValidators() (jailed filtered)
+      consensus gets Staking.getTopValidators() (no jail filter; `selfStake > 0`)
       Validators.updateActiveValidatorSet(newSet, epoch) → validator removed now
 
 Non-epoch block:
   - validator still in currentValidatorSet for this epoch
-  - snapshot.apply filters jailed, so cannot seal
+  - consensus rejects jailed validators in Finalize (cannot seal after jail is in parent state)
 ```
 
 ### 6.9 Rejoin Flow (current)
@@ -1023,7 +1024,7 @@ graph TD
     
     B --> B1[getTopValidators using parent state]
     B1 --> B2[Staking.getTopValidators]
-    B2 --> B3[Filter: selfStake>=MIN, !isJailed, pass==true]
+    B2 --> B3[Filter: selfStake > 0]
     B3 --> B4[Sort by selfStake + totalDelegated]
     B4 --> B5[Return top MAX_VALIDATORS]
     B5 --> B6[Write header.Extra]
@@ -1033,7 +1034,7 @@ graph TD
     C2 --> C3[handleEpochTransition]
     C3 --> C4[updateValidators]
     C4 --> C5[Staking.getTopValidators - current state]
-    C5 --> C6[Filter jailed validators]
+    C5 --> C6[Filter: selfStake > 0]
     C6 --> C7[Validators.updateActiveValidatorSet]
     C7 --> C8[decreaseMissedBlocksCounter]
     
@@ -1045,7 +1046,7 @@ graph TD
 ```
 Prepare (epoch block):
   - getTopValidators() using parent state
-    * Staking.getTopValidators(): selfStake>=MIN, !isJailed, pass==true
+    * Staking.getTopValidators(): selfStake > 0
     * sort by selfStake + totalDelegated
     * return top MAX_VALIDATORS (21)
   - write header.Extra
@@ -1055,7 +1056,7 @@ Finalize (epoch block):
   - distribute rewards
   - handleEpochTransition():
       * updateValidators():
-          - Staking.getTopValidators() (current state, jailed filtered)
+          - Staking.getTopValidators() (current state; no jail filter)
           - Validators.updateActiveValidatorSet(newSet, epoch)
             (highestValidatorsSet not synced here)
       * decreaseMissedBlocksCounter(): Punish.decreaseMissedBlocksCounter(epoch)
@@ -1071,7 +1072,6 @@ Snapshot.apply:
 Staking.updateCommissionRate(newCommissionRate)
   - onlyValidValidator
   - newCommissionRate <= COMMISSION_RATE_BASE
-  - not jailed or jail ended
   - update commissionRate; emit ValidatorUpdated
 ```
 
@@ -1097,11 +1097,10 @@ Validators.editValidator(feeAddr, moniker, identity, website, email, details)
 - Purpose: prevent malicious quick flips; enforce timely onboarding
 
 **Voting thresholds**
-- Pass: `activeAgree >= activeValidators/2 + 1`
-- Reject: `activeReject >= activeValidators/2 + 1`
-- Active count: `getActiveValidatorCount()` (currentValidatorSet, jailed filtered)
-- Counting uses `getActiveVoteCount()` to include only currently active validators
-  - Votes from kicked/jailed validators no longer count toward threshold
+- Pass: `agree >= getVotingValidatorCount()/2 + 1`
+- Reject: `reject >= getVotingValidatorCount()/2 + 1`
+- Voting count: `getVotingValidatorCount()` (currentValidatorSet excluding jailed)
+- Votes already cast are not revoked after later removal/jailed
   - `results[id].agree/reject` keep full history
 
 ### 7.2 Jail Mechanics
@@ -1111,8 +1110,8 @@ Validators.editValidator(feeAddr, moniker, identity, website, email, details)
 **Effects**:
 - `isJailed = true`
 - `jailUntilBlock = block.number + validatorUnjailPeriod` (default 86,400)
-- Excluded next epoch; in current epoch fees are filtered
-- Cannot stake/add stake/update commission
+- Excluded next epoch; consensus rejects blocks from jailed validators after jail is in parent state
+- Tx fee rewards for a jailed producer are redistributed
 
 **Unjail conditions**:
 - Wait until `block.number >= jailUntilBlock`
@@ -1122,19 +1121,21 @@ Validators.editValidator(feeAddr, moniker, identity, website, email, details)
 ### 7.3 Reward Mechanics
 
 **Base block reward (JPoSA)**
+- Actual reward computed in consensus:
+  `blockReward * baseRatio/10000 + blockReward * weightedRatio/10000 * validatorCount * (minerStake/totalStake)`
 - Split between block validator and delegators
 - Validator:
   - commission: `reward * commissionRate / 10000`
   - validator share: `(reward - commission) * selfStake / totalStake`
 - Delegators:
   - `(reward - commission) * delegatedAmount / totalStake`
-- Claim via `Staking.claimRewards`
+- Claim via `Staking.claimRewards` (delegators) / `claimValidatorRewards` (validator)
 
 ### 7.4 Delegation Mechanics
 
 **Requirements**
 - MIN_DELEGATION = 1 ether
-- Validator must be active and not jailed
+- Validator selfStake >= MIN_VALIDATOR_STAKE and not jailed (no currentValidatorSet check)
 
 **Unbonding**
 - UNBONDING_PERIOD = 604,800 blocks (~7 days)
@@ -1176,12 +1177,12 @@ Validators.editValidator(feeAddr, moniker, identity, website, email, details)
 
 **Validator queries**
 - Validators.isValidatorJailed → Staking.isValidatorJailed
-- Validators.isValidatorActive → Staking.getValidatorStatus
+- Validators.isValidatorActive → currentValidatorSet + Staking.isValidatorJailed
 - Validators.isValidatorExist → stake existence
 
 **Active set queries**
-- getActiveValidators / getActiveValidatorCount: from `currentValidatorSet`, filter jailed
-- These reflect consensus-effective validators; `getTopValidators()` may include newly registered not yet active
+- getActiveValidators / getActiveValidatorCount: from `currentValidatorSet` (no jail filter)
+- For voting, use `getVotingValidatorCount()` (excludes jailed)
 
 ### 7.7 Protections
 
@@ -1189,7 +1190,7 @@ Validators.editValidator(feeAddr, moniker, identity, website, email, details)
 - removeValidator/removeFromHighestSet require `highestValidatorsSet.length > 1` to avoid empty set
 
 **Active set lag**
-- Jailed within current epoch remain in `currentValidatorSet`, but rewards filter them; removed next epoch
+- Jailed within current epoch remain in `currentValidatorSet`, but consensus rejects their blocks; removed next epoch
 
 **Reentrancy**
 - Validators and Staking inherit ReentrancyGuard
@@ -1218,7 +1219,7 @@ Execute txs
 Finalize:
   - punish missed validator if any (punishOutOfTurnValidator -> Punish.punish)
   - distribute tx fees if txs (Validators.distributeBlockReward)
-  - distribute base reward (JPoSA) (Staking.distributeRewards)
+  - distribute actualReward (JPoSA) (Staking.distributeRewards)
   - if epoch block:
       handleEpochTransition -> updateValidators -> Staking.getTopValidators -> Validators.updateActiveValidatorSet
       decreaseMissedBlocksCounter -> Punish.decreaseMissedBlocksCounter
@@ -1238,10 +1239,10 @@ Execute txs
 Finalize:
   - punish (may jail)
   - distribute fees
-  - distribute base reward
+  - distribute actualReward
   - handleEpochTransition:
       * updateValidators:
-          - Staking.getTopValidators() (current state, jailed filtered)
+          - Staking.getTopValidators() (current state; no jail filter)
           - Validators.updateActiveValidatorSet(newSet, epoch)
             (highestValidatorsSet not synced here)
       * decreaseMissedBlocksCounter (Punish)
@@ -1253,14 +1254,14 @@ Finalize:
 Validator A turn (block N)
 Prepare:
   - check N % len(validators) == index of A
-  - ensure A in snap.Validators (if jailed, absent → cannot seal)
+  - ensure A in snap.Validators (snapshot may include jailed)
   - set header.Coinbase = A
 
 Seal:
-  - ensure A in snap.Validators; sign
+  - ensure A in snap.Validators; sign (Finalize will reject if A is jailed in parent state)
 
 Finalize:
-  - if A sealed: fee + base rewards to A (+delegators)
+  - if A sealed: fee + actualReward to A (+delegators)
   - if missed: punishOutOfTurnValidator -> Punish.punish(A)
 ```
 
@@ -1283,7 +1284,7 @@ Finalize [state at N]:
 
 Key:
 - Prepare uses parent state; Finalize uses current state
-- If jailed in this block, excluded in Finalize update
+- If jailed in this block, exclusion from the next set depends on `highestValidatorsSet` updates
 ```
 
 ```
@@ -1372,7 +1373,7 @@ Mechanisms:
   - Staking.emergencyExit
   - Staking.claimRewards
 - Block-level: `operationsDone[block.number][operation]`
-  - set immediately; one operation per block
+  - set immediately; repeated execution reverts (prevents pre-calls)
 - CEI pattern: checks → effects → interactions
 
 Applies to:
@@ -1462,12 +1463,12 @@ A: Yes; funds enter 7-day unbonding. Tokens still count toward total stake durin
 
 **Q: How are rewards split?**  
 A:  
-- Tx fees: split equally among active (non-jailed) validators  
-- Block base reward: validator commission + validator share; remaining to delegators
+- Tx fees: if producer not jailed, go to producer; if producer jailed, redistributed to non-jailed validators  
+- Block reward (actualReward): validator commission + validator share; remaining to delegators
 
 **Q: How to claim?**  
 A:  
-- Validator commission/validator share: `Staking.claimRewards(validator)`  
+- Validator commission/validator share: `Staking.claimValidatorRewards()`  
 - Delegator rewards: `Staking.claimRewards(validator)`  
 - Tx fees: `Validators.withdrawProfits(validator)`
 
@@ -1482,7 +1483,7 @@ A: Only on epoch blocks (`block.number % 86400 == 0`):
 **Q: When is a jailed validator removed?**  
 A:  
 - If epoch block: removed immediately in Finalize  
-- If non-epoch: still in currentValidatorSet but absent from snap.Validators → cannot seal; removed next epoch
+- If non-epoch: still in currentValidatorSet; cannot seal once jailed is in parent state; removed next epoch
 
 ---
 
@@ -1494,7 +1495,7 @@ A:
 2. Minimum self-stake 100,000 ether  
 3. proposalLastingPeriod window for new registrations after pass (default ~7 days; existing validators exempt)  
 4. Validator set updates only on epoch blocks  
-5. Jail: rewards filtered this epoch; removal next epoch  
+5. Jail: cannot seal after jail is in parent state; removal next epoch  
 6. Unified state ownership: jail in Staking, authorization in Proposal
 
 ### 12.2 Key Flows
@@ -1503,7 +1504,8 @@ A:
 2. Punish: miss → Punish counter → threshold → jail+remove+clear pass → re-propose + wait jail + unjail  
 3. Exit: `resignValidator()` (technical jail + clear pass) → leave active set → `emergencyExit()` full withdraw  
 4. Recover: re-propose, wait jail end, call `unjailValidator()`; re-register if stake < minimum  
-5. Rewards: tx fees to active (jailed filtered; if producer jailed, redistributed); base reward to block validator + delegators
+5. Rewards: tx fees to currentValidatorSet excluding jailed (if producer jailed, redistributed);
+   base reward (actualReward) to block validator + delegators
 
 ### 12.3 Safety
 
@@ -1523,7 +1525,7 @@ A:
 - Removed staged punishment text (violationCount/autoRestorePass); unified to “re-propose + wait jail end + self-unjail”
 - Clarified `emergencyExit` needs leaving active set first; no min-validator check; resign removes from candidate set and clears pass
 - Epoch update no longer syncs highestValidatorsSet; active set overwritten only via `updateActiveValidatorSet`
-- Rewards/punish note: jailed block producer’s fees redistributed; current epoch still cached but rewards filtered; removed next epoch
+- Rewards/punish note: jailed producer’s fees redistributed; current epoch still cached; blocks from jailed validators rejected after jail is in parent state; removed next epoch
 
 **Changes (v1.4):**
 - Removed `updateValidatorSetByStake()`; use `updateActiveValidatorSet()` only

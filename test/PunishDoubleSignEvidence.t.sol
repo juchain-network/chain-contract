@@ -190,7 +190,7 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         bytes32 mixDigest,
         bytes8 nonce,
         uint256 signerKey
-    ) internal view returns (bytes memory) {
+    ) internal pure returns (bytes memory) {
         bytes memory extraTrimmed = new bytes(32);
         return _buildSignedHeaderWithExtra(number, coinbase, mixDigest, nonce, signerKey, extraTrimmed);
     }
@@ -202,7 +202,7 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         bytes8 nonce,
         uint256 signerKey,
         bytes memory extraTrimmed
-    ) internal view returns (bytes memory) {
+    ) internal pure returns (bytes memory) {
         bytes memory rlpForSeal = _buildHeaderRlp(number, coinbase, mixDigest, nonce, extraTrimmed);
         bytes32 sealHash = keccak256(rlpForSeal);
 
