@@ -8,7 +8,6 @@ SCRIPTS_DIR := scripts
 DATA_DIR := data
 # Docker directory
 DOCKER_DIR := docker
-
 # Detect docker compose command (v2 plugin or legacy standalone)
 DOCKER_COMPOSE := $(shell if docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
 
@@ -40,8 +39,13 @@ init:
 # Start Network
 run:
 	@echo "🚀 Starting network cluster..."
-	@cd $(DOCKER_DIR) && $(DOCKER_COMPOSE) up -d
-	@bash $(SCRIPTS_DIR)/wait_for_node.sh http://localhost:18545
+	@compose_file="$(PWD)/$(DATA_DIR)/docker-compose.runtime.yml"; \
+	if [ ! -f "$$compose_file" ]; then \
+		compose_file="$(PWD)/$(DOCKER_DIR)/docker-compose.yml"; \
+	fi; \
+	cd $(DOCKER_DIR) && COMPOSE_FILE="$$compose_file" $(DOCKER_COMPOSE) up -d
+	@bash $(SCRIPTS_DIR)/ensure_miners.sh
+	@INCREMENTS_REQUIRED=0 bash $(SCRIPTS_DIR)/wait_for_node.sh http://localhost:18545
 
 # Wait for Node Readiness
 ready:
@@ -98,18 +102,26 @@ test: ready
 
 # View Logs
 logs:
-	@cd $(DOCKER_DIR) && $(DOCKER_COMPOSE) logs -f $(NODE)
+	@compose_file="$(PWD)/$(DATA_DIR)/docker-compose.runtime.yml"; \
+	if [ ! -f "$$compose_file" ]; then \
+		compose_file="$(PWD)/$(DOCKER_DIR)/docker-compose.yml"; \
+	fi; \
+	cd $(DOCKER_DIR) && COMPOSE_FILE="$$compose_file" $(DOCKER_COMPOSE) logs -f $(NODE)
 
 # Stop Network
 stop:
 	@echo "🛑 Stopping network..."
-	@cd $(DOCKER_DIR) && $(DOCKER_COMPOSE) down
+	@compose_file="$(PWD)/$(DATA_DIR)/docker-compose.runtime.yml"; \
+	if [ ! -f "$$compose_file" ]; then \
+		compose_file="$(PWD)/$(DOCKER_DIR)/docker-compose.yml"; \
+	fi; \
+	cd $(DOCKER_DIR) && COMPOSE_FILE="$$compose_file" $(DOCKER_COMPOSE) down --remove-orphans
 
 # Clean Everything
 clean: stop
 	@echo "🧹 Cleaning data directory..."
 	@if [ -d "$(DATA_DIR)" ]; then \
-		docker run --rm -v $(PWD):/work alpine sh -c "rm -rf /work/$(DATA_DIR)/*"; \
+		docker run --rm -v $(PWD):/work alpine sh -c "rm -rf /work/$(DATA_DIR)"; \
 	fi
 	@docker network prune -f
 	@docker image prune -f
