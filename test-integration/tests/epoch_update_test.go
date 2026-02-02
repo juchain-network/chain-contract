@@ -46,19 +46,8 @@ func TestY_UpdateActiveValidatorSet(t *testing.T) {
 		if len(expected) == 0 {
 			t.Skip("expected validator set empty")
 		}
-
-		opts, _ := ctx.GetTransactorNoEpochWait(minerKey, true)
-		tx, err := ctx.Validators.UpdateActiveValidatorSet(opts, expected, epoch)
-		if err != nil {
-			if strings.Contains(err.Error(), "Miner only") || strings.Contains(err.Error(), "forbidden system transaction") {
-				t.Skip("caller is not current miner or system blocked")
-			}
-			t.Fatalf("updateActiveValidatorSet failed: %v", err)
-		}
-		// Mine the epoch block (if needed) and wait
+		// At epoch boundary, active set should match top validators.
 		waitBlocks(t, 1)
-		ctx.WaitMined(tx.Hash())
-
 		newSet, _ := ctx.Validators.GetActiveValidators(nil)
 		if len(newSet) != len(expected) {
 			t.Fatalf("validator set length mismatch: expected %d, got %d", len(expected), len(newSet))

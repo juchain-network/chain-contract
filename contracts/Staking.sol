@@ -604,8 +604,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
      * @dev Distribute rewards to the current block miner (validator)
      * @notice Validator address is obtained from block.coinbase
      * @notice Block reward is passed via msg.value (consensus layer reads from Proposal contract)
-     * @notice Jailed validators can still produce blocks and receive rewards in the current epoch
-     * @notice They will be excluded from the validator set at the next epoch transition
+     * @notice If a validator is jailed in parent state, consensus rejects their blocks
+     * @notice Jailed validators may remain in currentValidatorSet until the next epoch transition
      */
     function distributeRewards() external payable onlyMiner onlyInitialized nonReentrant {
         // Check if block reward has already been distributed for this block

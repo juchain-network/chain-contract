@@ -86,7 +86,8 @@ test-rewards:
 
 test-epoch:
 	@$(MAKE) reset && go test ./tests/... -v -run "TestY_UpdateActiveValidatorSet" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestZ_LastManStanding|TestZ_UpgradesAndInitGuards" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestZ_LastManStanding" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(MAKE) reset && go test ./tests/... -v -run "TestZ_UpgradesAndInitGuards" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
 
 # Run ALL tests serially with isolated reset per test
 test-all:

@@ -448,9 +448,8 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @dev Get active validators list
      * @notice Returns validators from currentValidatorSet
      * @notice currentValidatorSet is only updated at epoch blocks, so jailed validators
-     *         remain in the set until the next epoch transition
-     * @notice This aligns with consensus behavior where jailed validators can still
-     *         produce blocks in the current epoch
+     *         may remain in the set until the next epoch transition
+     * @notice Consensus rejects blocks from validators jailed in parent state
      * @return Array of validators in currentValidatorSet
      */
     function getActiveValidators() public view returns (address[] memory) {
@@ -463,9 +462,8 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @dev Get active validators list with their total stake amounts
      * @notice Returns validators from currentValidatorSet along with their total stake (selfStake + totalDelegated)
      * @notice currentValidatorSet is only updated at epoch blocks, so jailed validators
-     *         remain in the set until the next epoch transition
-     * @notice This aligns with consensus behavior where jailed validators can still
-     *         produce blocks in the current epoch
+     *         may remain in the set until the next epoch transition
+     * @notice Consensus rejects blocks from validators jailed in parent state
      * @return validators Array of validators in currentValidatorSet
      * @return totalStakes Array of total stake amounts for each validator (selfStake + totalDelegated)
      */
