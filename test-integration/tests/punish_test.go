@@ -85,7 +85,8 @@ func TestG_DoubleSign(t *testing.T) {
 		utils.AssertNoError(t, err, "failed to sign h2")
 
 		infoBefore, _ := ctx.Staking.GetValidatorInfo(nil, valAddr)
-		reporterBalBefore, _ := ctx.Clients[0].BalanceAt(nil, reporterAddr, nil)
+		beforeBlock := new(big.Int).Set(header.Number)
+		reporterBalBefore, _ := ctx.Clients[0].BalanceAt(context.Background(), reporterAddr, beforeBlock)
 
 		opts, err := ctx.GetTransactor(reporterKey)
 		utils.AssertNoError(t, err, "transactor failed")
@@ -126,7 +127,7 @@ func TestG_DoubleSign(t *testing.T) {
 			t.Fatal("failed to parse double sign reward amount from logs")
 		}
 
-		reporterBalAfter, _ := ctx.Clients[0].BalanceAt(nil, reporterAddr, nil)
+		reporterBalAfter, _ := ctx.Clients[0].BalanceAt(context.Background(), reporterAddr, receipt.BlockNumber)
 		expectedMin := new(big.Int).Sub(reporterBalBefore, gasCost)
 		expectedMin.Add(expectedMin, rewardAmount)
 		if reporterBalAfter.Cmp(expectedMin) < 0 {

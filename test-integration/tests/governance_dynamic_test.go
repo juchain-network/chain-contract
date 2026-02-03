@@ -395,12 +395,9 @@ func TestB_Governance_DynamicThreshold(t *testing.T) {
 	if votesToCast < 1 {
 		t.Fatalf("threshold too low to test dynamic change")
 	}
-	votedKeys := make([]*ecdsa.PrivateKey, 0, votesToCast)
 	for i := 0; i < votesToCast; i++ {
 		vk := ctx.GenesisValidators[i]
-		if _, err := robustVoteTx(t, vk, propID, true); err == nil {
-			votedKeys = append(votedKeys, vk)
-		}
+		_, _ = robustVoteTx(t, vk, propID, true)
 	}
 
 	pass, _ := ctx.Proposal.Pass(nil, v5Addr)
@@ -470,15 +467,16 @@ func TestB_Governance_DynamicThreshold(t *testing.T) {
 
 	// 4. Check if already passed (due to threshold reduction)
 	passV5, _ := ctx.Proposal.Pass(nil, v5Addr)
-	
+
 	// Calculate new threshold
 	newThreshold := int(votingCountAfter/2 + 1)
-	t.Logf("Votes cast: %d, New threshold: %d", votesToCast, newThreshold)
+	// Use actual agree count instead of intended votes to avoid flakiness
+	results, _ := ctx.Proposal.Results(nil, propID)
+	agree := int(results.Agree)
+	t.Logf("Votes cast: %d, New threshold: %d", agree, newThreshold)
 
-	if votesToCast >= newThreshold {
-		// Case: 4 validators -> 3 validators (Threshold 3 -> 2). Votes 2. 2 >= 2. Pass.
+	if agree >= newThreshold {
 		if !passV5 {
-			// Wait a bit more for state to settle if needed
 			waitBlocks(t, 2)
 			passV5, _ = ctx.Proposal.Pass(nil, v5Addr)
 		}
@@ -486,57 +484,13 @@ func TestB_Governance_DynamicThreshold(t *testing.T) {
 		return
 	}
 
-	// Case: 3 validators -> 2 validators (Threshold 2 -> 2). Votes 1. 1 < 2. Not Pass.
+	// Case: 3 validators -> 2 validators (Threshold 2 -> 2). Need one more vote.
 	if passV5 {
-		t.Fatalf("V5 passed unexpectedly: votes(%d) < threshold(%d)", votesToCast, newThreshold)
-	}
-	
-	t.Log("Threshold did not drop enough to auto-pass (expected for 3 validators). Casting final vote...")
-
-	// Otherwise, trigger check by another vote
-	var finalVoter *ecdsa.PrivateKey
-	for _, vk := range ctx.GenesisValidators {
-		// Ensure voter is active (don't use the removed validator)
-		addr := crypto.PubkeyToAddress(vk.PublicKey)
-		active, _ := ctx.Validators.IsValidatorActive(nil, addr)
-		if !active {
-			continue
-		}
-		
-		info, _ := ctx.Staking.GetValidatorInfo(nil, addr)
-		if info.IsJailed {
-			continue
-		}
-
-		already := false
-		for _, used := range votedKeys {
-			if vk == used {
-				already = true
-				break
-			}
-		}
-		if !already {
-			finalVoter = vk
-			break
-		}
-	}
-	if finalVoter == nil {
-		t.Fatalf("no additional active voter available for final vote")
+		t.Fatalf("V5 passed unexpectedly: votes(%d) < threshold(%d)", agree, newThreshold)
 	}
 
-	// Manually construct tx with fixed gas limit to avoid estimation issues on edge cases
-	opts, _ := ctx.GetTransactor(finalVoter)
-	opts.GasLimit = 500000 // Fixed high gas limit
-	txFinal, err := ctx.Proposal.VoteProposal(opts, propID, true)
-	if err != nil {
-		t.Fatalf("failed to send final vote: %v", err)
-	}
-	broadcastTx(txFinal)
-	
-	if err := ctx.WaitMined(txFinal.Hash()); err != nil {
-		t.Fatalf("final vote mining failed: %v", err)
-	}
-
+	t.Log("Threshold did not drop enough to auto-pass (expected for 3 validators). Casting additional votes...")
+	voteProposalToPass(t, propID, "G-15 Add V5 after threshold reduction")
 	passV5, _ = ctx.Proposal.Pass(nil, v5Addr)
 	utils.AssertTrue(t, passV5, "V5 should pass after threshold reduction")
 }

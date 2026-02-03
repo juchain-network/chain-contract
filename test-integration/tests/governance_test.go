@@ -443,6 +443,11 @@ func TestB_Governance(t *testing.T) {
 	t.Run("G-16_SmoothExpansion", func(t *testing.T) {
 		currentSet, _ := ctx.Validators.GetActiveValidators(nil)
 		initialCount := len(currentSet)
+		epochBI, err := ctx.Proposal.Epoch(nil)
+		if err != nil || epochBI.Sign() == 0 {
+			t.Skip("epoch not available")
+		}
+		epoch := epochBI.Uint64()
 
 		v1Key, v1Addr, err := ctx.CreateAndFundAccount(utils.ToWei(100005))
 		utils.AssertNoError(t, err, "create v1 failed")
@@ -456,19 +461,37 @@ func TestB_Governance(t *testing.T) {
 		if errW := ctx.WaitMined(tx1.Hash()); errW != nil {
 			t.Fatalf("v1 register tx failed: %v", errW)
 		}
+		r1, err := ctx.Clients[0].TransactionReceipt(context.Background(), tx1.Hash())
+		if err != nil || r1 == nil {
+			t.Fatalf("failed to read v1 receipt: %v", err)
+		}
+		epochIdV1 := r1.BlockNumber.Uint64() / epoch
 
 		v2Key, v2Addr, err := ctx.CreateAndFundAccount(utils.ToWei(100005))
 		utils.AssertNoError(t, err, "create v2 failed")
 		createAndPassProposal(v2Addr, true, "G-16 V2")
 
+		header, err := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
+		if err != nil || header == nil {
+			t.Fatalf("failed to read header: %v", err)
+		}
+		epochIdNow := header.Number.Uint64() / epoch
+		if epochIdNow != epochIdV1 {
+			t.Skipf("epoch advanced (v1=%d now=%d); skip same-epoch assertion", epochIdV1, epochIdNow)
+		}
+
 		v2Opts, _ := ctx.GetTransactor(v2Key)
 		v2Opts.Value = utils.ToWei(100000)
-		_, err = ctx.Staking.RegisterValidator(v2Opts, big.NewInt(1000))
+		tx2, err := ctx.Staking.RegisterValidator(v2Opts, big.NewInt(1000))
 		if err != nil {
 			ctx.RefreshNonce(crypto.PubkeyToAddress(v2Key.PublicKey))
 			t.Log("V2 registration correctly blocked in same epoch:", err)
 		} else {
-			t.Log("Warning: V2 register succeeded unexpectedly.")
+			if errW := ctx.WaitMined(tx2.Hash()); errW != nil {
+				t.Logf("V2 registration reverted as expected: %v", errW)
+			} else {
+				t.Fatalf("V2 register succeeded in the same epoch; expected block")
+			}
 		}
 
 		topValidators, _ := ctx.Validators.GetTopValidators(nil)

@@ -126,11 +126,18 @@ func robustVote(t *testing.T, voterKey *ecdsa.PrivateKey, propID [32]byte, auth 
 	var err error
 	voterAddr := crypto.PubkeyToAddress(voterKey.PublicKey)
 	for retry := 0; retry < 10; retry++ {
-		// Check if still a validator
-		isVal, _ := ctx.Validators.IsValidatorExist(nil, voterAddr)
-		if !isVal {
+		// Only active, non-jailed validators can vote
+		active, _ := ctx.Validators.IsValidatorActive(nil, voterAddr)
+		if !active {
 			return
 		}
+		info, _ := ctx.Staking.GetValidatorInfo(nil, voterAddr)
+		if info.IsJailed {
+			return
+		}
+
+		// Avoid epoch blocks which are forbidden for voting
+		ctx.WaitIfEpochBlock()
 
 		opts, errG := ctx.GetTransactor(voterKey)
 		if errG != nil {
@@ -148,6 +155,9 @@ func robustVote(t *testing.T, voterKey *ecdsa.PrivateKey, propID [32]byte, auth 
 					time.Sleep(1 * time.Second)
 					continue
 				}
+				if strings.Contains(errW.Error(), "Validator only") || strings.Contains(errW.Error(), "Validator is jailed") {
+					return
+				}
 				if t != nil {
 					t.Logf("vote tx failed: %v", errW)
 				}
@@ -157,6 +167,9 @@ func robustVote(t *testing.T, voterKey *ecdsa.PrivateKey, propID [32]byte, auth 
 		if strings.Contains(err.Error(), "Epoch block forbidden") {
 			time.Sleep(1 * time.Second)
 			continue
+		}
+		if strings.Contains(err.Error(), "Validator only") || strings.Contains(err.Error(), "Validator is jailed") {
+			return
 		}
 		if strings.Contains(err.Error(), "Proposal already passed") {
 			return
