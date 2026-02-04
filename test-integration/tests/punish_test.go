@@ -253,6 +253,110 @@ func TestG_DoubleSign(t *testing.T) {
 			t.Fatal("Should fail with 'Future block'")
 		}
 	})
+
+	time.Sleep(2 * time.Second)
+
+	// [P-23] Multi-Validator Double Sign (same epoch)
+	t.Run("P-23_MultiValidatorDoubleSign", func(t *testing.T) {
+		if len(ctx.GenesisValidators) < 2 {
+			t.Skip("not enough validator keys")
+		}
+
+		// Avoid epoch boundary blocks
+		ctx.WaitIfEpochBlock()
+		header, _ := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
+		epochBI, _ := ctx.Proposal.Epoch(nil)
+		if epochBI != nil && epochBI.Sign() > 0 {
+			epoch := epochBI.Uint64()
+			mod := header.Number.Uint64() % epoch
+			if mod > epoch-5 {
+				waitForNextEpochBlock(t)
+				waitBlocks(t, 1)
+				header, _ = ctx.Clients[0].HeaderByNumber(context.Background(), nil)
+			}
+		}
+
+		miner := header.Coinbase
+		type target struct {
+			key  *ecdsa.PrivateKey
+			addr common.Address
+		}
+		targets := make([]target, 0, 2)
+		seen := make(map[common.Address]bool)
+		for _, k := range ctx.GenesisValidators {
+			addr := crypto.PubkeyToAddress(k.PublicKey)
+			if addr == miner {
+				continue
+			}
+			if !seen[addr] {
+				seen[addr] = true
+				targets = append(targets, target{key: k, addr: addr})
+			}
+			if len(targets) >= 2 {
+				break
+			}
+		}
+		if len(targets) < 2 {
+			// Fallback to any two distinct genesis validators
+			for _, k := range ctx.GenesisValidators {
+				addr := crypto.PubkeyToAddress(k.PublicKey)
+				if !seen[addr] {
+					seen[addr] = true
+					targets = append(targets, target{key: k, addr: addr})
+				}
+				if len(targets) >= 2 {
+					break
+				}
+			}
+		}
+		if len(targets) < 2 {
+			t.Skip("insufficient distinct validators for multi-double-sign")
+		}
+
+		reporterKey, _, err := ctx.CreateAndFundAccount(utils.ToWei(10))
+		utils.AssertNoError(t, err, "failed to setup reporter")
+
+		submitEvidence := func(tgt target, rootBase byte) {
+			ctx.WaitIfEpochBlock()
+			head, _ := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
+			targetHeight := new(big.Int).Sub(head.Number, big.NewInt(1))
+			if targetHeight.Sign() <= 0 {
+				targetHeight = big.NewInt(1)
+			}
+			baseTime := head.Time
+			if targetHeader, err := ctx.Clients[0].HeaderByNumber(context.Background(), targetHeight); err == nil && targetHeader != nil {
+				baseTime = targetHeader.Time
+			}
+
+			h1 := &types.Header{Coinbase: tgt.addr, Number: targetHeight, Extra: make([]byte, 32+65), Root: common.Hash{rootBase}, Time: baseTime}
+			h2 := &types.Header{Coinbase: tgt.addr, Number: targetHeight, Extra: make([]byte, 32+65), Root: common.Hash{rootBase + 1}, Time: baseTime}
+			rlp1, err := signHeaderClique(h1, tgt.key)
+			utils.AssertNoError(t, err, "failed to sign h1")
+			rlp2, err := signHeaderClique(h2, tgt.key)
+			utils.AssertNoError(t, err, "failed to sign h2")
+
+			opts, err := ctx.GetTransactor(reporterKey)
+			utils.AssertNoError(t, err, "transactor failed for multi double sign")
+			tx, err := ctx.Punish.SubmitDoubleSignEvidence(opts, rlp1, rlp2)
+			utils.AssertNoError(t, err, "failed to submit multi double sign evidence")
+			ctx.WaitMined(tx.Hash())
+		}
+
+		// Submit evidence for two validators in the same epoch
+		submitEvidence(targets[0], 0x41)
+		submitEvidence(targets[1], 0x51)
+
+		// Both should be jailed
+		for _, tgt := range targets[:2] {
+			info, _ := ctx.Staking.GetValidatorInfo(nil, tgt.addr)
+			utils.AssertTrue(t, info.IsJailed, "validator should be jailed after double sign")
+		}
+
+		// Ensure chain still progresses with remaining validator(s)
+		if err := ctx.WaitForBlockProgress(2, 30*time.Second); err != nil {
+			t.Fatalf("chain did not progress after multi-validator double sign: %v", err)
+		}
+	})
 }
 
 func signHeaderClique(h *types.Header, key *ecdsa.PrivateKey) ([]byte, error) {

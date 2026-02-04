@@ -28,23 +28,22 @@ func minerKeyOrSkip(t *testing.T) (*ecdsa.PrivateKey, common.Address) {
 	if ctx == nil || len(ctx.Clients) == 0 {
 		t.Skip("Context not initialized")
 	}
-	header, err := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
-	if err != nil {
-		t.Skipf("failed to read header: %v", err)
-	}
-	coinbase := header.Coinbase
-	key := keyForAddress(coinbase)
 
-	if key != nil {
-		return key, coinbase
+	for attempt := 0; attempt < 10; attempt++ {
+		header, err := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
+		if err != nil {
+			t.Skipf("failed to read header: %v", err)
+		}
+		coinbase := header.Coinbase
+		if coinbase != (common.Address{}) {
+			if key := keyForAddress(coinbase); key != nil {
+				return key, coinbase
+			}
+		}
+		time.Sleep(1 * time.Second)
 	}
 
-	// Try all validators if coinbase doesn't match (might be a system node)
-	for _, k := range ctx.GenesisValidators {
-		return k, crypto.PubkeyToAddress(k.PublicKey)
-	}
-
-	t.Skip("no validator keys available")
+	t.Skip("no validator key matches current coinbase")
 	return nil, common.Address{}
 }
 

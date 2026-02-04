@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,11 @@ var (
 )
 
 var deterministicKeyBase = new(big.Int).Lsh(big.NewInt(1), 252)
+
+func debugEnabled() bool {
+	v := strings.ToLower(os.Getenv("JUCHAIN_TEST_DEBUG"))
+	return v == "1" || v == "true" || v == "yes"
+}
 
 type CIContext struct {
 	Config  *config.Config
@@ -413,7 +419,9 @@ func (c *CIContext) RefreshNonce(addr common.Address) {
 	c.mu.Lock()
 	c.nonces[addr] = maxNonce
 	c.mu.Unlock()
-	fmt.Printf("DEBUG: Refreshed nonce for %s to %d\n", addr.Hex(), maxNonce)
+	if debugEnabled() {
+		fmt.Printf("DEBUG: Refreshed nonce for %s to %d\n", addr.Hex(), maxNonce)
+	}
 }
 
 func (c *CIContext) SyncNonces() {
@@ -452,7 +460,9 @@ func (c *CIContext) CreateAndFundAccount(amount *big.Int) (*ecdsa.PrivateKey, co
 		return nil, common.Address{}, err
 	}
 
-	fmt.Printf("DEBUG: Funding account %s from %s using nonce %d\n", addr.Hex(), crypto.PubkeyToAddress(c.FunderKey.PublicKey).Hex(), opts.Nonce.Uint64())
+	if debugEnabled() {
+		fmt.Printf("DEBUG: Funding account %s from %s using nonce %d\n", addr.Hex(), crypto.PubkeyToAddress(c.FunderKey.PublicKey).Hex(), opts.Nonce.Uint64())
+	}
 
 	// For simple transfers, 21000 is enough
 	tx := types.NewTransaction(opts.Nonce.Uint64(), addr, amount, 21000, opts.GasPrice, nil)

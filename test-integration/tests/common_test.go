@@ -52,6 +52,11 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func debugEnabled() bool {
+	v := strings.ToLower(os.Getenv("JUCHAIN_TEST_DEBUG"))
+	return v == "1" || v == "true" || v == "yes"
+}
+
 // Helpers
 
 func waitBlocks(t *testing.T, n int) {
@@ -60,7 +65,9 @@ func waitBlocks(t *testing.T, n int) {
 	}
 	start, _ := ctx.Clients[0].BlockNumber(context.Background())
 	target := start + uint64(n)
-	fmt.Printf("DEBUG: Waiting for %d blocks (from %d to %d)...\n", n, start, target)
+	if debugEnabled() {
+		fmt.Printf("DEBUG: Waiting for %d blocks (from %d to %d)...\n", n, start, target)
+	}
 
 	// Send dummy transactions to force block production if needed
 	// (Some PoA networks only seal blocks when there are transactions)

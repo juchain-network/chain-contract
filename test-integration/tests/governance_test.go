@@ -448,6 +448,21 @@ func TestB_Governance(t *testing.T) {
 			t.Skip("epoch not available")
 		}
 		epoch := epochBI.Uint64()
+		header, err := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
+		if err != nil || header == nil {
+			t.Fatalf("failed to read header: %v", err)
+		}
+		cur := header.Number.Uint64()
+		blocksInto := cur % epoch
+		remaining := epoch - blocksInto
+		if remaining < 20 {
+			t.Logf("Not enough blocks in current epoch (%d remaining), waiting for next epoch...", remaining)
+			waitForNextEpochBlock(t)
+			waitBlocks(t, 1)
+		} else if blocksInto == 0 {
+			// Avoid onlyNotEpoch reverts on epoch blocks.
+			waitBlocks(t, 1)
+		}
 
 		v1Key, v1Addr, err := ctx.CreateAndFundAccount(utils.ToWei(100005))
 		utils.AssertNoError(t, err, "create v1 failed")
@@ -471,7 +486,7 @@ func TestB_Governance(t *testing.T) {
 		utils.AssertNoError(t, err, "create v2 failed")
 		createAndPassProposal(v2Addr, true, "G-16 V2")
 
-		header, err := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
+		header, err = ctx.Clients[0].HeaderByNumber(context.Background(), nil)
 		if err != nil || header == nil {
 			t.Fatalf("failed to read header: %v", err)
 		}

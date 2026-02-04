@@ -1,10 +1,11 @@
 package tests
 
 import (
+	"context"
 	"crypto/ecdsa"
+	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"juchain.org/chain/tools/ci/internal/utils"
 )
@@ -28,8 +29,26 @@ func TestH_Robustness(t *testing.T) {
 
 	// [V-01] Jailed Validator Redistribution
 	t.Run("V-01_JailedRedistribution", func(t *testing.T) {
-		valAddr := common.HexToAddress(ctx.Config.Validators[1].Address)
-		valKey := ctx.GenesisValidators[1]
+		valKey, valAddr, err := createAndRegisterValidator(t, "V-01 Resign")
+		utils.AssertNoError(t, err, "setup validator failed")
+		// Ensure doubleSignWindow is small enough for test.
+		curWindow, _ := ctx.Proposal.DoubleSignWindow(nil)
+		if curWindow != nil && curWindow.Cmp(big.NewInt(200)) > 0 {
+			_ = ctx.EnsureConfig(15, big.NewInt(20), curWindow)
+			curWindow = big.NewInt(20)
+		}
+		// Wait until we're outside the doubleSignWindow to avoid revert.
+		if curWindow != nil && curWindow.Sign() > 0 {
+			lastActive, _ := ctx.Staking.LastActiveBlock(nil, valAddr)
+			if lastActive != nil && lastActive.Sign() > 0 {
+				curHeight, _ := ctx.Clients[0].BlockNumber(context.Background())
+				target := new(big.Int).Add(lastActive, curWindow)
+				target.Add(target, big.NewInt(1))
+				if curHeight < target.Uint64() {
+					waitBlocks(t, int(target.Uint64()-curHeight))
+				}
+			}
+		}
 		ctx.WaitIfEpochBlock()
 		opts, _ := ctx.GetTransactor(valKey)
 		tx, err := ctx.Staking.ResignValidator(opts)
