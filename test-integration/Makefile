@@ -1,4 +1,4 @@
-.PHONY: all ci clean image init run ready reset test stop help logs test-all test-all-legacy
+.PHONY: all ci clean image init run ready reset test stop help logs test-all test-all-legacy ci-tool ci-groups ci-tests
 
 # Current directory
 PWD := $(shell pwd)
@@ -10,6 +10,9 @@ DATA_DIR := data
 DOCKER_DIR := docker
 # Detect docker compose command (v2 plugin or legacy standalone)
 DOCKER_COMPOSE := $(shell if docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
+
+CI_TOOL := go run ./ci.go
+CI_COMMON_FLAGS := $(if $(DEBUG),-debug,) $(if $(GOCACHE),-gocache $(GOCACHE),) $(if $(CONFIG),-config $(CONFIG),) $(if $(REPORT_DIR),-report-dir $(REPORT_DIR),)
 
 help:
 	@echo "Usage: make [target]"
@@ -25,6 +28,9 @@ help:
 	@echo "  logs    - View cluster logs (Use NODE=node0 for specific node)"
 	@echo "  test-all- Run all test groups sequentially with isolation"
 	@echo "  ci      - Run full CI flow (build + test-all)"
+	@echo "  ci-tool - Run ci.go with custom ARGS (see ci.go flags)"
+	@echo "  ci-groups - Grouped runs via ci.go (set GROUPS, CI_LOG=1)"
+	@echo "  ci-tests - Per-test runs via ci.go (set TESTS or RUN)"
 
 # Build Docker Image
 image:
@@ -57,49 +63,42 @@ reset: clean init run ready
 # Punish tests are split with resets to avoid chain stall
 test-punish:
 	@echo "🧪 Running Punishment Test Group..."
-	@$(MAKE) reset && go test ./tests/... -v -run "TestF1_ExitFlow" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestF2_QuickReEntry" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestF3_WithdrawProfits" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestF4_MiscExit" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestF5_RoleChange" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestF6_DoubleSignWindow" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestF7_PunishedRedemption" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestG_DoubleSign" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestG_PunishPaths" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -tests TestF1_ExitFlow,TestF2_QuickReEntry,TestF3_WithdrawProfits,TestF4_MiscExit,TestF5_RoleChange,TestF6_DoubleSignWindow,TestF7_PunishedRedemption,TestG_DoubleSign,TestG_PunishPaths
 
 # Individual Test Groups
 test-config:
-	@$(MAKE) reset && go test ./tests/... -v -run "TestA_SystemConfigSetup|TestB_ConfigBoundaryChecks" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestA_SystemConfigSetup|TestB_ConfigBoundaryChecks"
 
 test-governance:
-	@$(MAKE) reset && go test ./tests/... -v -run "TestB_Governance.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestB_Governance.*"
 
 test-staking:
-	@$(MAKE) reset && go test ./tests/... -v -run "TestC_Staking.*|TestD_Staking.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestC_Staking.*|TestD_Staking.*"
 
 test-delegation:
-	@$(MAKE) reset && go test ./tests/... -v -run "TestE_Delegation.*" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestE_Delegation.*"
 
 test-rewards:
-	@$(MAKE) reset && go test ./tests/... -v -run "TestH_Robustness" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestI_ConsensusRewards|TestI_PublicQueryCoverage|TestI_ValidatorExtras" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestH_Robustness"
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestI_ConsensusRewards|TestI_PublicQueryCoverage|TestI_ValidatorExtras"
 
 test-epoch:
-	@$(MAKE) reset && go test ./tests/... -v -run "TestY_UpdateActiveValidatorSet" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestZ_LastManStanding" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
-	@$(MAKE) reset && go test ./tests/... -v -run "TestZ_UpgradesAndInitGuards" -config $(PWD)/$(DATA_DIR)/test_config.yaml; $(MAKE) stop
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestY_UpdateActiveValidatorSet"
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestZ_LastManStanding"
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestZ_UpgradesAndInitGuards"
 
 # Run ALL tests serially with isolated reset per test
 test-all:
-	@bash $(SCRIPTS_DIR)/run_tests_serial.sh
+	@$(CI_TOOL) -mode all $(CI_COMMON_FLAGS)
 
 # Legacy grouped runs
-test-all-legacy: test-config test-governance test-staking test-delegation test-punish test-rewards test-epoch
+test-all-legacy:
+	@$(CI_TOOL) -mode groups $(CI_COMMON_FLAGS) -groups config,governance,staking,delegation,punish,rewards,epoch
 
 # Legacy single-pass test (runs everything in one go without reset)
 test: ready
 	@echo "🧪 Running Integration Tests (Single Pass)..."
-	@go test ./tests/... -v -config $(PWD)/$(DATA_DIR)/test_config.yaml
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "." -skip-setup
 
 # View Logs
 logs:
@@ -131,3 +130,14 @@ clean: stop
 
 # CI
 ci: image test-all
+
+# ci.go wrapper targets (does not remove legacy targets)
+ci-tool:
+	@$(CI_TOOL) $(CI_COMMON_FLAGS) $(ARGS)
+
+ci-groups:
+	@$(CI_TOOL) -mode groups $(CI_COMMON_FLAGS) $(if $(GROUPS),-groups $(GROUPS),) $(if $(CI_LOG),-ci-log,)
+
+ci-tests:
+	@if [ -z "$(TESTS)" ] && [ -z "$(RUN)" ]; then echo "Set TESTS or RUN"; exit 1; fi
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) $(if $(TESTS),-tests $(TESTS),) $(if $(RUN),-run $(RUN),) $(if $(TIMEOUT),-timeout $(TIMEOUT),)
