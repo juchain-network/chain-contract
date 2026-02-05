@@ -486,23 +486,33 @@ func TestB_Governance(t *testing.T) {
 		utils.AssertNoError(t, err, "create v2 failed")
 		createAndPassProposal(v2Addr, true, "G-16 V2")
 
-		header, err = ctx.Clients[0].HeaderByNumber(context.Background(), nil)
-		if err != nil || header == nil {
-			t.Fatalf("failed to read header: %v", err)
-		}
-		epochIdNow := header.Number.Uint64() / epoch
-		if epochIdNow != epochIdV1 {
-			t.Skipf("epoch advanced (v1=%d now=%d); skip same-epoch assertion", epochIdV1, epochIdNow)
-		}
-
 		v2Opts, _ := ctx.GetTransactor(v2Key)
 		v2Opts.Value = utils.ToWei(100000)
 		tx2, err := ctx.Staking.RegisterValidator(v2Opts, big.NewInt(1000))
 		if err != nil {
 			ctx.RefreshNonce(crypto.PubkeyToAddress(v2Key.PublicKey))
+			header, herr := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
+			if herr == nil && header != nil {
+				epochIdNow := header.Number.Uint64() / epoch
+				if epochIdNow != epochIdV1 {
+					t.Skipf("epoch advanced before v2 tx accepted (v1=%d now=%d); skip same-epoch assertion", epochIdV1, epochIdNow)
+				}
+			}
 			t.Log("V2 registration correctly blocked in same epoch:", err)
 		} else {
-			if errW := ctx.WaitMined(tx2.Hash()); errW != nil {
+			errW := ctx.WaitMined(tx2.Hash())
+			r2, rerr := ctx.Clients[0].TransactionReceipt(context.Background(), tx2.Hash())
+			if rerr != nil || r2 == nil {
+				if errW != nil {
+					t.Fatalf("v2 register failed but receipt missing: %v", errW)
+				}
+				t.Fatalf("failed to read v2 receipt: %v", rerr)
+			}
+			epochIdV2 := r2.BlockNumber.Uint64() / epoch
+			if epochIdV2 != epochIdV1 {
+				t.Skipf("epoch advanced (v1=%d v2=%d); skip same-epoch assertion", epochIdV1, epochIdV2)
+			}
+			if errW != nil {
 				t.Logf("V2 registration reverted as expected: %v", errW)
 			} else {
 				t.Fatalf("V2 register succeeded in the same epoch; expected block")
