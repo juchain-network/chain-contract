@@ -3,3 +3,4 @@ tests.test
 data/
 .gocache/
 reports/
+docker/juchain

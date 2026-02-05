@@ -18,7 +18,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@echo "  image   - Build the Docker image (juchain-node:latest)"
+	@echo "  image   - Build the juchain binary for docker runtime"
 	@echo "  init    - Generate genesis, keys, and network config"
 	@echo "  run     - Start the network cluster (background)"
 	@echo "  ready   - Wait for Node 0 to be ready (RPC check)"
@@ -34,7 +34,7 @@ help:
 
 # Build Docker Image
 image:
-	@echo "🚀 Building Docker image..."
+	@echo "🚀 Building juchain binary for docker runtime..."
 	@bash $(SCRIPTS_DIR)/build_docker.sh
 
 # Initialize Configuration (Genesis, Keys, Configs)
@@ -43,7 +43,7 @@ init:
 	@bash $(SCRIPTS_DIR)/gen_network_config.sh
 
 # Start Network
-run:
+run: image
 	@echo "🚀 Starting network cluster..."
 	@compose_file="$(PWD)/$(DATA_DIR)/docker-compose.runtime.yml"; \
 	if [ ! -f "$$compose_file" ]; then \

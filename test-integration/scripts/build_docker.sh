@@ -8,6 +8,12 @@ DOCKER_DIR="$SCRIPT_DIR/../docker"
 
 echo "=== Building geth binary from $CHAIN_ROOT ==="
 
+# Fast path: reuse existing binary unless FORCE_BUILD is set.
+if [ -x "$DOCKER_DIR/juchain" ] && [ -z "${FORCE_BUILD:-}" ]; then
+    echo "✅ Binary already exists at $DOCKER_DIR/juchain (set FORCE_BUILD=1 to rebuild)"
+    exit 0
+fi
+
 # Compile geth into a writable temp path to avoid permission issues in chain/build.
 TMP_BUILD_OUT="${TMPDIR:-/tmp}/juchain-geth"
 GOCACHE_DIR="${GOCACHE:-/tmp/go-build}"
@@ -19,18 +25,13 @@ BIN_SRC="$TMP_BUILD_OUT"
 popd >/dev/null
 
 # Copy binary (renaming to juchain to match Dockerfile/start.sh expectations)
-echo "=== Copying binary to Docker context ==="
+echo "=== Copying binary to docker/juchain ==="
 if [ -f "$BIN_SRC" ]; then
     cp "$BIN_SRC" "$DOCKER_DIR/juchain"
+    chmod +x "$DOCKER_DIR/juchain"
 else
     echo "❌ Error: $BIN_SRC not found. Build failed?"
     exit 1
 fi
 
-echo "=== Building Docker image ==="
-pushd "$DOCKER_DIR"
-docker build -t juchain-node:latest .
-rm juchain  # Cleanup binary after build
-popd
-
-echo "✅ Docker image 'juchain-node:latest' built successfully."
+echo "✅ Binary ready at $DOCKER_DIR/juchain"

@@ -82,11 +82,8 @@ fi
 
 wait_for_rpc() {
     for i in $(seq 1 120); do
-        RESP=$(curl -s -X POST -H "Content-Type: application/json" \
-            --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-            "$RPC_URL" || true)
-        HEX=$(echo "$RESP" | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p')
-        if [ -n "$HEX" ]; then
+        RESP=$(juchain attach --datadir /data --exec "eth.blockNumber" 2>/dev/null || true)
+        if [[ "$RESP" =~ ^0x[0-9a-fA-F]+$ ]]; then
             return 0
         fi
         if ! kill -0 "$NODE_PID" >/dev/null 2>&1; then
@@ -100,17 +97,12 @@ wait_for_rpc() {
 wait_for_peers() {
     MIN_PEERS="${MIN_PEERS:-3}"
     for i in $(seq 1 300); do
-        RESP=$(curl -s -X POST -H "Content-Type: application/json" \
-            --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' \
-            "$RPC_URL" || true)
-        HEX=$(echo "$RESP" | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p')
-        if [ -n "$HEX" ]; then
-            DEC=${HEX#0x}
-            if [ -n "$DEC" ]; then
-                CUR=$((16#$DEC))
-                if [ "$CUR" -ge "$MIN_PEERS" ]; then
-                    return 0
-                fi
+        RESP=$(juchain attach --datadir /data --exec "net.peerCount" 2>/dev/null || true)
+        if [[ "$RESP" =~ ^0x[0-9a-fA-F]+$ ]]; then
+            DEC=${RESP#0x}
+            CUR=$((16#$DEC))
+            if [ "$CUR" -ge "$MIN_PEERS" ]; then
+                return 0
             fi
         fi
         if ! kill -0 "$NODE_PID" >/dev/null 2>&1; then

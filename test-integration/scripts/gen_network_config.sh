@@ -233,4 +233,10 @@ awk '
   { print }
 ' "$TEST_INT_DIR/docker/docker-compose.yml" > "$DATA_DIR/docker-compose.runtime.yml"
 
+# Ensure runtime compose mounts the base image assets from test-integration/docker.
+sed -i \
+  -e 's|\./juchain|../docker/juchain|g' \
+  -e 's|\./start.sh|../docker/start.sh|g' \
+  "$DATA_DIR/docker-compose.runtime.yml"
+
 echo "✅ Configuration generated at $DATA_DIR"

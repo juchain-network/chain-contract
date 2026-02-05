@@ -2,11 +2,12 @@ version: '3.8'
 
 services:
   node0:
-    image: juchain-node:latest
+    image: ubuntu:24.04
     container_name: juchain-node0
     environment:
       - MIN_PEERS=3
       - MINER_START_DELAY=1
+    command: ["bash","-lc","/bin/bash /usr/local/bin/start.sh"]
     cpus: 1.5
     mem_limit: 3096m
     mem_reservation: 1024m
@@ -21,16 +22,19 @@ services:
     volumes:
       - ../data/node0:/data
       - ../data/genesis.json:/genesis.json
+      - ./juchain:/usr/local/bin/juchain:ro
+      - ./start.sh:/usr/local/bin/start.sh:ro
     networks:
       juchain-net:
         ipv4_address: 172.28.0.10
 
   node1:
-    image: juchain-node:latest
+    image: ubuntu:24.04
     container_name: juchain-node1
     environment:
       - MIN_PEERS=3
       - MINER_START_DELAY=6
+    command: ["bash","-lc","/bin/bash /usr/local/bin/start.sh"]
     cpus: 1.5
     mem_limit: 3096m
     mem_reservation: 1024m      
@@ -45,16 +49,19 @@ services:
     volumes:
       - ../data/node1:/data
       - ../data/genesis.json:/genesis.json
+      - ./juchain:/usr/local/bin/juchain:ro
+      - ./start.sh:/usr/local/bin/start.sh:ro
     networks:
       juchain-net:
         ipv4_address: 172.28.0.11
 
   node2:
-    image: juchain-node:latest
+    image: ubuntu:24.04
     container_name: juchain-node2
     environment:
       - MIN_PEERS=3
       - MINER_START_DELAY=11
+    command: ["bash","-lc","/bin/bash /usr/local/bin/start.sh"]
     cpus: 1.5
     mem_limit: 3096m
     mem_reservation: 1024m      
@@ -69,16 +76,19 @@ services:
     volumes:
       - ../data/node2:/data
       - ../data/genesis.json:/genesis.json
+      - ./juchain:/usr/local/bin/juchain:ro
+      - ./start.sh:/usr/local/bin/start.sh:ro
     networks:
       juchain-net:
         ipv4_address: 172.28.0.12
 
   node3:
-    image: juchain-node:latest
+    image: ubuntu:24.04
     container_name: juchain-node3
     environment:
       - MIN_PEERS=3
       - SYNC_NODE=true
+    command: ["bash","-lc","/bin/bash /usr/local/bin/start.sh"]
     cpus: 3
     mem_limit: 6800m
     mem_reservation: 1024m      
@@ -97,6 +107,8 @@ services:
     volumes:
       - ../data/node3:/data
       - ../data/genesis.json:/genesis.json
+      - ./juchain:/usr/local/bin/juchain:ro
+      - ./start.sh:/usr/local/bin/start.sh:ro
     networks:
       juchain-net:
         ipv4_address: 172.28.0.13
