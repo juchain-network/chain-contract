@@ -16,10 +16,10 @@ import (
 
 func TestB_Governance(t *testing.T) {
 	if ctx == nil {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 	if len(ctx.GenesisValidators) == 0 {
-		t.Skip("No genesis validators configured")
+		t.Fatalf("No genesis validators configured")
 	}
 
 	// Proposer rotation counter
@@ -58,18 +58,22 @@ func TestB_Governance(t *testing.T) {
 
 	// Helper to find an active validator proposer
 	getActiveProposer := func() *ecdsa.PrivateKey {
-		for i := 0; i < len(ctx.GenesisValidators)*2; i++ {
-			k := ctx.GenesisValidators[proposerIndex%len(ctx.GenesisValidators)]
-			proposerIndex++
-			addr := crypto.PubkeyToAddress(k.PublicKey)
-			active, _ := ctx.Validators.IsValidatorActive(nil, addr)
-			if !active {
-				continue
+		for attempt := 0; attempt < 3; attempt++ {
+			for i := 0; i < len(ctx.GenesisValidators)*2; i++ {
+				k := ctx.GenesisValidators[proposerIndex%len(ctx.GenesisValidators)]
+				proposerIndex++
+				addr := crypto.PubkeyToAddress(k.PublicKey)
+				active, _ := ctx.Validators.IsValidatorActive(nil, addr)
+				if !active {
+					continue
+				}
+				info, _ := ctx.Staking.GetValidatorInfo(nil, addr)
+				if !info.IsJailed {
+					return k
+				}
 			}
-			info, _ := ctx.Staking.GetValidatorInfo(nil, addr)
-			if !info.IsJailed {
-				return k
-			}
+			waitForNextEpochBlock(t)
+			waitBlocks(t, 1)
 		}
 		return nil
 	}
@@ -445,7 +449,7 @@ func TestB_Governance(t *testing.T) {
 		initialCount := len(currentSet)
 		epochBI, err := ctx.Proposal.Epoch(nil)
 		if err != nil || epochBI.Sign() == 0 {
-			t.Skip("epoch not available")
+			t.Fatalf("epoch not available")
 		}
 		epoch := epochBI.Uint64()
 		header, err := ctx.Clients[0].HeaderByNumber(context.Background(), nil)
@@ -455,8 +459,15 @@ func TestB_Governance(t *testing.T) {
 		cur := header.Number.Uint64()
 		blocksInto := cur % epoch
 		remaining := epoch - blocksInto
-		if remaining < 20 {
-			t.Logf("Not enough blocks in current epoch (%d remaining), waiting for next epoch...", remaining)
+		minRemaining := uint64(50)
+		if epoch < minRemaining {
+			minRemaining = epoch / 2
+			if minRemaining < 10 && epoch > 1 {
+				minRemaining = epoch - 1
+			}
+		}
+		if remaining < minRemaining {
+			t.Logf("Not enough blocks in current epoch (%d remaining, need >=%d), waiting for next epoch...", remaining, minRemaining)
 			waitForNextEpochBlock(t)
 			waitBlocks(t, 1)
 		} else if blocksInto == 0 {
@@ -495,7 +506,7 @@ func TestB_Governance(t *testing.T) {
 			if herr == nil && header != nil {
 				epochIdNow := header.Number.Uint64() / epoch
 				if epochIdNow != epochIdV1 {
-					t.Skipf("epoch advanced before v2 tx accepted (v1=%d now=%d); skip same-epoch assertion", epochIdV1, epochIdNow)
+					t.Fatalf("epoch advanced before v2 tx accepted (v1=%d now=%d); same-epoch assertion invalid", epochIdV1, epochIdNow)
 				}
 			}
 			t.Log("V2 registration correctly blocked in same epoch:", err)
@@ -510,7 +521,7 @@ func TestB_Governance(t *testing.T) {
 			}
 			epochIdV2 := r2.BlockNumber.Uint64() / epoch
 			if epochIdV2 != epochIdV1 {
-				t.Skipf("epoch advanced (v1=%d v2=%d); skip same-epoch assertion", epochIdV1, epochIdV2)
+				t.Fatalf("epoch advanced (v1=%d v2=%d); same-epoch assertion invalid", epochIdV1, epochIdV2)
 			}
 			if errW != nil {
 				t.Logf("V2 registration reverted as expected: %v", errW)

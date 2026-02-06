@@ -9,7 +9,7 @@ import (
 
 func TestI_PublicQueryCoverage(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	valAddr := common.HexToAddress(ctx.Config.Validators[0].Address)

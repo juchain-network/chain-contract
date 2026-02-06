@@ -11,7 +11,7 @@ import (
 
 func TestD_StakingManagement(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized or no validators")
+		t.Fatalf("Context not initialized or no validators")
 	}
 
 	valKey := ctx.GenesisValidators[0]
@@ -135,7 +135,7 @@ func TestD_StakingManagement(t *testing.T) {
 		waitBlocks(t, 1)
 
 		key, addr, err := createAndRegisterValidator(t, "S-05 Reinc")
-		if err != nil { t.Skipf("creation failed: %v", err) }
+		if err != nil { t.Fatalf("creation failed: %v", err) }
 		
 		ctx.WaitIfEpochBlock()
 		opts, _ := ctx.GetTransactor(key)
@@ -189,7 +189,7 @@ func TestD_StakingManagement(t *testing.T) {
 		t.Log("Waiting for fresh epoch...")
 		waitBlocks(t, 25)
 		key, addr, err := createAndRegisterValidator(t, "S-12 Zombie")
-		if err != nil { t.Skip(err) }
+		if err != nil { t.Fatalf("create validator failed: %v", err) }
 		
 		// Just manually remove it
 		adminKey := ctx.GenesisValidators[0]

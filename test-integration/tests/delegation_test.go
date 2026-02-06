@@ -15,7 +15,7 @@ import (
 
 func TestE_Delegation(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	valAddr := common.HexToAddress(ctx.Config.Validators[0].Address)
@@ -325,8 +325,17 @@ func TestE_Delegation(t *testing.T) {
 
 	t.Run("D-18_UndelegateBelowMin", func(t *testing.T) {
 		minUndel, _ := ctx.Proposal.MinUndelegation(nil)
+		if minUndel == nil || minUndel.Sign() <= 0 {
+			t.Fatalf("minUndelegation unavailable")
+		}
 		if minUndel.Cmp(big.NewInt(1)) <= 0 {
-			t.Skip("minUndelegation too small")
+			if err := ctx.EnsureConfig(11, big.NewInt(2), minUndel); err != nil {
+				t.Fatalf("failed to raise minUndelegation: %v", err)
+			}
+			minUndel, _ = ctx.Proposal.MinUndelegation(nil)
+			if minUndel.Cmp(big.NewInt(1)) <= 0 {
+				t.Fatalf("minUndelegation too small after update")
+			}
 		}
 		userKey, _, err := ctx.CreateAndFundAccount(utils.ToWei(50))
 		utils.AssertNoError(t, err, "setup user failed")

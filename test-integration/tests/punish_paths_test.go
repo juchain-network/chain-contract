@@ -11,7 +11,7 @@ import (
 
 func TestG_PunishPaths(t *testing.T) {
 	if ctx == nil {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	// [P-23] Punish Normal (Must be called by Miner)

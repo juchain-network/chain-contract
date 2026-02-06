@@ -13,24 +13,15 @@ import (
 // TestF1_ExitFlow handles P-01 and P-02
 func TestF1_ExitFlow(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	valKey, valAddr, err := createAndRegisterValidator(t, "Exit Validator")
 	utils.AssertNoError(t, err, "failed to setup validator")
 
 	// Ensure the validator is in the active set before testing exit restrictions.
-	for i := 0; i < 3; i++ {
-		active, _ := ctx.Validators.IsValidatorActive(nil, valAddr)
-		if active {
-			break
-		}
-		waitForNextEpochBlock(t)
-		waitBlocks(t, 1)
-	}
-	active, _ := ctx.Validators.IsValidatorActive(nil, valAddr)
-	if !active {
-		t.Skip("validator not active after epoch transition; cannot validate exit restriction deterministically")
+	if !waitForValidatorActive(t, valAddr, 5) {
+		t.Fatalf("validator not active after epoch transition; cannot validate exit restriction deterministically")
 	}
 
 	opts, err := ctx.GetTransactor(valKey)
@@ -65,7 +56,7 @@ func TestF1_ExitFlow(t *testing.T) {
 // TestF2_QuickReEntry handles P-18
 func TestF2_QuickReEntry(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	valKey, valAddr, err := createAndRegisterValidator(t, "ReEntry Validator")
@@ -120,7 +111,7 @@ func TestF2_QuickReEntry(t *testing.T) {
 // TestF3_WithdrawProfits handles P-08 and P-15
 func TestF3_WithdrawProfits(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	proposerKey := ctx.GenesisValidators[0]
@@ -158,7 +149,7 @@ func TestF3_WithdrawProfits(t *testing.T) {
 // TestF4_MiscExit handles P-09, P-05, P-06
 func TestF4_MiscExit(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	t.Run("P-09_MinerOnlyPunish", func(t *testing.T) {
@@ -211,7 +202,7 @@ func TestF4_MiscExit(t *testing.T) {
 // TestF5_RoleChange handles P-19
 func TestF5_RoleChange(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	// 1. Setup Validator
@@ -241,7 +232,7 @@ func TestF5_RoleChange(t *testing.T) {
 // TestF6_DoubleSignWindow handles S-20
 func TestF6_DoubleSignWindow(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	// Validator who just mined a block cannot resign immediately
@@ -260,7 +251,7 @@ func TestF6_DoubleSignWindow(t *testing.T) {
 // TestF7_PunishedRedemption handles P-20
 func TestF7_PunishedRedemption(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	// 1. Setup Validator

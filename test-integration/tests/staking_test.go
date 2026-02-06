@@ -9,11 +9,11 @@ import (
 
 func TestC_StakingFlow(t *testing.T) {
 	if ctx == nil {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	if len(ctx.GenesisValidators) == 0 {
-		t.Skip("No genesis validators configured, cannot run governance tests")
+		t.Fatalf("No genesis validators configured, cannot run governance tests")
 	}
 
 	// 1. Create a new account for the Candidate Validator

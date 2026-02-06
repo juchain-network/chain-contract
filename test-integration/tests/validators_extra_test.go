@@ -11,14 +11,16 @@ import (
 
 func TestI_ValidatorExtras(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	valKey := ctx.GenesisValidators[0]
 	valAddr := common.HexToAddress(ctx.Config.Validators[0].Address)
 	pass, _ := ctx.Proposal.Pass(nil, valAddr)
 	if !pass {
-		t.Skip("validator not authorized for edit tests")
+		if err := passProposalFor(t, valAddr, "V-02b Auth"); err != nil {
+			t.Fatalf("validator not authorized for edit tests: %v", err)
+		}
 	}
 
 	// Description boundary checks (identity, website, email, details)
@@ -67,21 +69,17 @@ func TestI_ValidatorExtras(t *testing.T) {
 			t.Fatalf("expected non-fee withdrawal to fail, got: %v", err)
 		}
 
-		// Zero-profit path (ensure fee key available)
+		// Ensure fee address is a known key (validator address).
+		opts, _ := ctx.GetTransactor(valKey)
+		if tx, err := ctx.Validators.CreateOrEditValidator(opts, valAddr, "Genesis", "", "", "", ""); err == nil {
+			ctx.WaitMined(tx.Hash())
+		} else {
+			t.Fatalf("failed to set fee address for zero-profit check: %v", err)
+		}
+		feeAddr, _, incoming, _, _, _ = ctx.Validators.GetValidatorInfo(nil, valAddr)
 		feeKey := keyForAddress(feeAddr)
 		if feeKey == nil {
-			// Try to reset fee address to a known key (validator address)
-			opts, _ := ctx.GetTransactor(valKey)
-			if tx, err := ctx.Validators.CreateOrEditValidator(opts, valAddr, "Genesis", "", "", "", ""); err == nil {
-				ctx.WaitMined(tx.Hash())
-			} else {
-				t.Logf("failed to reset fee address: %v", err)
-			}
-			feeAddr, _, incoming, _, _, _ = ctx.Validators.GetValidatorInfo(nil, valAddr)
-			feeKey = keyForAddress(feeAddr)
-		}
-		if feeKey == nil {
-			t.Skip("fee address key not available for zero-profit check")
+			t.Fatalf("fee address key not available for zero-profit check")
 		}
 		if incoming.Cmp(big.NewInt(0)) > 0 {
 			// Try a single withdraw to clear profits if cooldown allows.
@@ -104,7 +102,7 @@ func TestI_ValidatorExtras(t *testing.T) {
 				// Cooldown not satisfied; acceptable exception path.
 				return
 			}
-			t.Skipf("cannot withdraw to clear profits: %v", err)
+			t.Fatalf("cannot withdraw to clear profits: %v", err)
 		}
 
 		// No incoming profits; expect an exception (cooldown or zero profits).

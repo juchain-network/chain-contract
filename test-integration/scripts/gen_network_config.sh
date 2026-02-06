@@ -211,6 +211,15 @@ EOF
 done
 
 cat >> "$DATA_DIR/test_config.yaml" <<EOF
+
+validator_rpcs:
+EOF
+for i in $(seq 0 $((NUM_VALIDATORS-1))); do
+  ip="${NODE_IPS[$i]}"
+  echo "  - \"http://${ip}:8545\"" >> "$DATA_DIR/test_config.yaml"
+done
+
+cat >> "$DATA_DIR/test_config.yaml" <<EOF
 test:
   funding_amount: "100000000000000000000" # 100 ETH
 EOF

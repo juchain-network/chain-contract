@@ -40,6 +40,48 @@ func TestMain(m *testing.M) {
 		log.Error("Failed to load config", "err", err)
 		os.Exit(1)
 	}
+	if len(cfg.RPCs) == 0 {
+		log.Error("No RPCs configured in test config", "config", *configPath)
+		os.Exit(1)
+	}
+	if cfg.Funder.PrivateKey == "" || cfg.Funder.Address == "" {
+		log.Error("Funder config missing address or private_key", "config", *configPath)
+		os.Exit(1)
+	}
+	if funderKey, err := crypto.HexToECDSA(cfg.Funder.PrivateKey); err == nil {
+		derived := crypto.PubkeyToAddress(funderKey.PublicKey).Hex()
+		if !strings.EqualFold(derived, cfg.Funder.Address) {
+			log.Error("Funder address does not match private_key", "derived", derived, "config", cfg.Funder.Address)
+			os.Exit(1)
+		}
+	} else {
+		log.Error("Invalid funder private_key", "err", err)
+		os.Exit(1)
+	}
+	if len(cfg.Validators) == 0 {
+		log.Error("No genesis validators configured in test config", "config", *configPath)
+		os.Exit(1)
+	}
+	for i, v := range cfg.Validators {
+		if v.Address == "" || v.PrivateKey == "" {
+			log.Error("Validator config missing address or private_key", "index", i, "config", *configPath)
+			os.Exit(1)
+		}
+		if key, err := crypto.HexToECDSA(v.PrivateKey); err == nil {
+			derived := crypto.PubkeyToAddress(key.PublicKey).Hex()
+			if !strings.EqualFold(derived, v.Address) {
+				log.Error("Validator address does not match private_key", "index", i, "derived", derived, "config", v.Address)
+				os.Exit(1)
+			}
+		} else {
+			log.Error("Invalid validator private_key", "index", i, "err", err)
+			os.Exit(1)
+		}
+	}
+	if len(cfg.ValidatorRPCs) > 0 && len(cfg.ValidatorRPCs) < len(cfg.Validators) {
+		log.Error("validator_rpcs length must cover validators list", "validator_rpcs", len(cfg.ValidatorRPCs), "validators", len(cfg.Validators))
+		os.Exit(1)
+	}
 
 	// Init context
 	c, err := testctx.NewCIContext(cfg)

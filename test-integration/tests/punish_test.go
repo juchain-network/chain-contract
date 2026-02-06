@@ -16,8 +16,9 @@ import (
 
 func TestG_DoubleSign(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
+	ensureMinActiveValidators(t, 3, 2)
 
 	// [P-07] Submit Double Sign Evidence
 	t.Run("P-07_DoubleSignEvidence", func(t *testing.T) {
@@ -131,14 +132,18 @@ func TestG_DoubleSign(t *testing.T) {
 		expectedMin := new(big.Int).Sub(reporterBalBefore, gasCost)
 		expectedMin.Add(expectedMin, rewardAmount)
 		if reporterBalAfter.Cmp(expectedMin) < 0 {
-			t.Logf("reporter balance before=%s after=%s gasCost=%s reward=%s expectedMin=%s",
+			// Re-check at latest after a couple blocks to avoid stale state.
+			waitBlocks(t, 2)
+			reporterBalAfter, _ = ctx.Clients[0].BalanceAt(context.Background(), reporterAddr, nil)
+		}
+		if reporterBalAfter.Cmp(expectedMin) < 0 {
+			t.Fatalf("reporter reward not received: before=%s after=%s gas=%s reward=%s expectedMin=%s",
 				reporterBalBefore.String(),
 				reporterBalAfter.String(),
 				gasCost.String(),
 				rewardAmount.String(),
 				expectedMin.String(),
 			)
-			t.Skip("Reporter reward not received; see bugs.md")
 		}
 	})
 
@@ -259,7 +264,7 @@ func TestG_DoubleSign(t *testing.T) {
 	// [P-23] Multi-Validator Double Sign (same epoch)
 	t.Run("P-23_MultiValidatorDoubleSign", func(t *testing.T) {
 		if len(ctx.GenesisValidators) < 2 {
-			t.Skip("not enough validator keys")
+			t.Fatalf("not enough validator keys")
 		}
 
 		// Avoid epoch boundary blocks
@@ -310,7 +315,7 @@ func TestG_DoubleSign(t *testing.T) {
 			}
 		}
 		if len(targets) < 2 {
-			t.Skip("insufficient distinct validators for multi-double-sign")
+			t.Fatalf("insufficient distinct validators for multi-double-sign")
 		}
 
 		reporterKey, _, err := ctx.CreateAndFundAccount(utils.ToWei(10))

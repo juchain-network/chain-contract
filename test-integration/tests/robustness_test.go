@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"math/big"
 	"testing"
 
@@ -12,19 +11,7 @@ import (
 
 func TestH_Robustness(t *testing.T) {
 	if ctx == nil {
-		t.Skip("Context not initialized")
-	}
-
-	getActiveProposer := func() *ecdsa.PrivateKey {
-		for _, k := range ctx.GenesisValidators {
-			addr := crypto.PubkeyToAddress(k.PublicKey)
-			active, _ := ctx.Validators.IsValidatorActive(nil, addr)
-			info, _ := ctx.Staking.GetValidatorInfo(nil, addr)
-			if active && !info.IsJailed {
-				return k
-			}
-		}
-		return nil
+		t.Fatalf("Context not initialized")
 	}
 
 	// [V-01] Jailed Validator Redistribution
@@ -50,14 +37,14 @@ func TestH_Robustness(t *testing.T) {
 			}
 		}
 		ctx.WaitIfEpochBlock()
-		opts, _ := ctx.GetTransactor(valKey)
-		tx, err := ctx.Staking.ResignValidator(opts)
-		if err != nil {
-			t.Skipf("resign failed: %v", err)
-		}
-		if errW := ctx.WaitMined(tx.Hash()); errW != nil {
-			t.Skipf("resign tx failed: %v", errW)
-		}
+			opts, _ := ctx.GetTransactor(valKey)
+			tx, err := ctx.Staking.ResignValidator(opts)
+			if err != nil {
+				t.Fatalf("resign failed: %v", err)
+			}
+			if errW := ctx.WaitMined(tx.Hash()); errW != nil {
+				t.Fatalf("resign tx failed: %v", errW)
+			}
 
 		t.Log("Waiting for blocks. If V2 mines, rewards should redistribute.")
 		waitBlocks(t, 5)
@@ -92,10 +79,7 @@ func TestH_Robustness(t *testing.T) {
 		userKey, userAddr, err := ctx.CreateAndFundAccount(utils.ToWei(10))
 		utils.AssertNoError(t, err, "setup user failed")
 
-		proposerKey := getActiveProposer()
-		if proposerKey == nil {
-			t.Skip("no active proposer available")
-		}
+		proposerKey := getActiveProposerOrSkip(t, 3)
 		opts, err := ctx.GetTransactor(proposerKey)
 		utils.AssertNoError(t, err, "transactor failed")
 

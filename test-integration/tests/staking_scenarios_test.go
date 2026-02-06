@@ -9,7 +9,7 @@ import (
 
 func TestD_StakingScenarios(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	valKey := ctx.GenesisValidators[0]

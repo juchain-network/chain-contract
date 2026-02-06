@@ -37,7 +37,7 @@ const (
 
 func TestA_SystemConfigSetup(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized or no validators")
+		t.Fatalf("Context not initialized or no validators")
 	}
 
 	// Define target parameters for testing environment
@@ -78,7 +78,7 @@ func TestA_SystemConfigSetup(t *testing.T) {
 
 func TestB_ConfigBoundaryChecks(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	// Wait for any previous cooldown to expire

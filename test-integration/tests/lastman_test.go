@@ -17,11 +17,12 @@ import (
 // This is destructive; keep it at the end of the suite.
 func TestZ_LastManStanding(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) < 3 {
-		t.Skip("Need at least 3 genesis validators")
+		t.Fatalf("Need at least 3 genesis validators")
 	}
+	ensureMinActiveValidators(t, 3, 2)
 	highest, _ := ctx.Validators.GetHighestValidators(nil)
 	if len(highest) <= 1 {
-		t.Skip("validator set already reduced to 1")
+		t.Fatalf("validator set already reduced to 1")
 	}
 
 	pIndex := 0
@@ -56,10 +57,7 @@ func TestZ_LastManStanding(t *testing.T) {
 		return nil, fmt.Errorf("timeout waiting for tx %s", txHash.Hex())
 	}
 	removeByProposal := func(target common.Address, name string) error {
-		proposerKey := getNextProposer(&pIndex)
-		if proposerKey == nil {
-			return fmt.Errorf("no active proposer available")
-		}
+		proposerKey := getNextProposerOrSkip(t, &pIndex)
 		opts, _ := ctx.GetTransactor(proposerKey)
 		opts.Value = nil
 
@@ -92,7 +90,13 @@ func TestZ_LastManStanding(t *testing.T) {
 	v1 := common.HexToAddress(ctx.Config.Validators[1].Address)
 	v2 := common.HexToAddress(ctx.Config.Validators[2].Address)
 	utils.AssertNoError(t, removeByProposal(v1, "G-12 Remove V1"), "remove v1 failed")
+	if !waitForProgress("after removing v1", 20*time.Second) {
+		t.Fatalf("chain stalled after removing validator %s", v1.Hex())
+	}
 	utils.AssertNoError(t, removeByProposal(v2, "G-12 Remove V2"), "remove v2 failed")
+	if !waitForProgress("after removing v2", 20*time.Second) {
+		t.Fatalf("chain stalled after removing validator %s", v2.Hex())
+	}
 
 	highest, _ = ctx.Validators.GetHighestValidators(nil)
 	if len(highest) != 1 {
@@ -101,15 +105,12 @@ func TestZ_LastManStanding(t *testing.T) {
 	// If the chain stalls after reaching a single validator, skip the final removal attempt
 	// to avoid hanging the suite and document the issue separately.
 	if !waitForProgress("reducing to 1 validator", 20*time.Second) {
-		t.Skip("chain stalled after reducing to 1 validator; skipping last-man removal attempt")
+		t.Fatalf("chain stalled after reducing to 1 validator; last-man removal attempt cannot proceed")
 	}
 
 	// Now attempt to remove the last remaining validator.
 	last := common.HexToAddress(ctx.Config.Validators[0].Address)
-	proposerKey := getNextProposer(&pIndex)
-	if proposerKey == nil {
-		t.Fatal("no active proposer available for last man")
-	}
+	proposerKey := getNextProposerOrSkip(t, &pIndex)
 	opts, _ := ctx.GetTransactor(proposerKey)
 	tx, err := ctx.Proposal.CreateProposal(opts, last, false, "G-12 Last Man")
 	if err != nil && strings.Contains(err.Error(), "Proposal creation too frequent") {
@@ -119,7 +120,7 @@ func TestZ_LastManStanding(t *testing.T) {
 	utils.AssertNoError(t, err, "last man proposal failed")
 	receipt, err := waitReceipt(tx.Hash(), 30*time.Second)
 	if err != nil {
-		t.Skipf("last man proposal not mined in time: %v", err)
+		t.Fatalf("last man proposal not mined in time: %v", err)
 	}
 	var propID [32]byte
 	for _, l := range receipt.Logs {
@@ -129,7 +130,7 @@ func TestZ_LastManStanding(t *testing.T) {
 		}
 	}
 	if propID == ([32]byte{}) {
-		t.Skip("missing proposal id for last man")
+		t.Fatalf("missing proposal id for last man")
 	}
 
 	// Cast votes with short waits to avoid hanging if the chain stalls.
@@ -156,7 +157,7 @@ func TestZ_LastManStanding(t *testing.T) {
 			continue
 		}
 		if _, err := waitReceipt(txVote.Hash(), 30*time.Second); err != nil {
-			t.Skipf("last man vote not mined in time: %v", err)
+			t.Fatalf("last man vote not mined in time: %v", err)
 		}
 	}
 

@@ -17,7 +17,7 @@ import (
 // specifically G-04, G-14, G-15 and other edge cases.
 func TestB_Governance_Extended(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	// [G-04] Reject Proposal Flow

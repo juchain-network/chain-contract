@@ -39,6 +39,21 @@ func getNextProposer(pIndex *int) *ecdsa.PrivateKey {
 	return nil
 }
 
+func getNextProposerOrSkip(t *testing.T, pIndex *int) *ecdsa.PrivateKey {
+	if ctx == nil || len(ctx.GenesisValidators) == 0 {
+		t.Fatalf("Context not initialized")
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		if key := getNextProposer(pIndex); key != nil {
+			return key
+		}
+		waitForNextEpochBlock(t)
+		waitBlocks(t, 1)
+	}
+	t.Fatalf("no active proposer available")
+	return nil
+}
+
 func broadcastTx(tx *types.Transaction) {
 	if tx == nil {
 		return
@@ -228,7 +243,7 @@ func setupGovConfig(t *testing.T, pIndex *int) {
 // Test 1: Invalid Voting Logic
 func TestB_Governance_InvalidVoting(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	pIndex := 0
@@ -241,15 +256,12 @@ func TestB_Governance_InvalidVoting(t *testing.T) {
 	}
 	var tx *types.Transaction
 
-	for {
-		proposerKey := getNextProposer(&pIndex)
-		if proposerKey == nil {
-			t.Skip("no active proposer available")
-		}
-		opts, _ := ctx.GetTransactor(proposerKey)
-		tx, err = ctx.Proposal.CreateProposal(opts, candAddr, true, "G-08 Invalid Vote")
-		if err == nil {
-			break
+		for {
+			proposerKey := getNextProposerOrSkip(t, &pIndex)
+			opts, _ := ctx.GetTransactor(proposerKey)
+			tx, err = ctx.Proposal.CreateProposal(opts, candAddr, true, "G-08 Invalid Vote")
+			if err == nil {
+				break
 		}
 		if strings.Contains(err.Error(), "Proposal creation too frequent") {
 			ctx.RefreshNonce(crypto.PubkeyToAddress(proposerKey.PublicKey))
@@ -294,15 +306,12 @@ func TestB_Governance_InvalidVoting(t *testing.T) {
 
 	// Test Expired (Wait for expiry)
 	_, candAddr2, _ := ctx.CreateAndFundAccount(utils.ToWei(1))
-	var tx2 *types.Transaction
-	for {
-		proposerKey := getNextProposer(&pIndex)
-		if proposerKey == nil {
-			t.Skip("no active proposer available")
-		}
-		opts, _ := ctx.GetTransactor(proposerKey)
-		tx2, err = ctx.Proposal.CreateProposal(opts, candAddr2, true, "G-08 Expiry")
-		if err == nil {
+		var tx2 *types.Transaction
+		for {
+			proposerKey := getNextProposerOrSkip(t, &pIndex)
+			opts, _ := ctx.GetTransactor(proposerKey)
+			tx2, err = ctx.Proposal.CreateProposal(opts, candAddr2, true, "G-08 Expiry")
+			if err == nil {
 			break
 		}
 		if strings.Contains(err.Error(), "Proposal creation too frequent") {
@@ -340,7 +349,7 @@ func TestB_Governance_InvalidVoting(t *testing.T) {
 // Test 2: Dynamic Threshold (Removal of Validator)
 func TestB_Governance_DynamicThreshold(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	pIndex := 0
@@ -348,16 +357,13 @@ func TestB_Governance_DynamicThreshold(t *testing.T) {
 
 	// 1. Create Proposal (e.g. Add V5)
 	_, v5Addr, _ := ctx.CreateAndFundAccount(utils.ToWei(1))
-	var txP *types.Transaction
-	var err error
-	for {
-		proposerKey := getNextProposer(&pIndex)
-		if proposerKey == nil {
-			t.Skip("no active proposer available")
-		}
-		opts, _ := ctx.GetTransactor(proposerKey)
-		txP, err = ctx.Proposal.CreateProposal(opts, v5Addr, true, "G-15 Add V5")
-		if err == nil {
+		var txP *types.Transaction
+		var err error
+		for {
+			proposerKey := getNextProposerOrSkip(t, &pIndex)
+			opts, _ := ctx.GetTransactor(proposerKey)
+			txP, err = ctx.Proposal.CreateProposal(opts, v5Addr, true, "G-15 Add V5")
+			if err == nil {
 			break
 		}
 		if strings.Contains(err.Error(), "Proposal creation too frequent") {
@@ -498,7 +504,7 @@ func TestB_Governance_DynamicThreshold(t *testing.T) {
 // Test 3: Nonce Isolation
 func TestB_Governance_NonceIsolation(t *testing.T) {
 	if ctx == nil || len(ctx.GenesisValidators) == 0 {
-		t.Skip("Context not initialized")
+		t.Fatalf("Context not initialized")
 	}
 
 	pIndex := 0
