@@ -334,6 +334,9 @@ contract StakingAdditionalCoverageTest is Test {
         vm.startPrank(VALIDATOR1);
         testStaking.claimValidatorRewards();
         vm.stopPrank();
+
+        // Move to next block to avoid same-block distribute guard
+        vm.roll(block.number + 1);
         
         // Generate more rewards
         vm.startPrank(VALIDATOR1);
@@ -407,6 +410,9 @@ contract StakingAdditionalCoverageTest is Test {
         vm.startPrank(VALIDATOR1);
         testStaking.claimValidatorRewards();
         vm.stopPrank();
+
+        // Move to next block to avoid same-block distribute guard
+        vm.roll(block.number + 1);
         
         // Generate more rewards
         vm.startPrank(VALIDATOR1);
