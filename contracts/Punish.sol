@@ -33,8 +33,7 @@ contract Punish is Params, ReentrancyGuard {
     uint256 public revision;
     uint256[50] private __gap;
 
-    uint256 private constant SECP256K1N_HALF =
-        0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0;
+    uint256 private constant SECP256K1N_HALF = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0;
 
     event LogDecreaseMissedBlocksCounter();
     event LogPunishValidator(address indexed val, uint256 time);
@@ -71,14 +70,14 @@ contract Punish is Params, ReentrancyGuard {
      * @param proposal_ Address of the Proposal contract.
      * @param staking_ Address of the Staking contract.
      */
-    function initialize(
-        address validators_,
-        address proposal_,
-        address staking_
-    ) external onlyNotInitialized {
+    function initialize(address validators_, address proposal_, address staking_) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
         require(proposal_ != address(0), "Invalid proposal address");
-        
+        require(staking_ != address(0), "Invalid staking address");
+        require(validators_ == VALIDATOR_ADDR, "Invalid validators contract address");
+        require(proposal_ == PROPOSAL_ADDR, "Invalid proposal contract address");
+        require(staking_ == STAKING_ADDR, "Invalid staking contract address");
+
         validators = IValidators(validators_);
         proposal = IProposal(proposal_);
         staking = IStaking(staking_);
@@ -328,7 +327,11 @@ contract Punish is Params, ReentrancyGuard {
         uint256 len;
     }
 
-    function _recoverSignerAndNumber(bytes calldata header) private pure returns (uint256 number, address signer, bytes32 headerHash) {
+    function _recoverSignerAndNumber(bytes calldata header)
+        private
+        pure
+        returns (uint256 number, address signer, bytes32 headerHash)
+    {
         bytes memory headerMem = header;
         headerHash = keccak256(headerMem);
 
@@ -427,7 +430,7 @@ contract Punish is Params, ReentrancyGuard {
         uint256 end = listOffset + listLen;
         uint256 count = 0;
         while (offset < end) {
-            (uint256 len,, ,) = _decodeItem(data, offset);
+            (uint256 len,,,) = _decodeItem(data, offset);
             offset += len;
             count++;
         }
@@ -436,13 +439,17 @@ contract Punish is Params, ReentrancyGuard {
         items = new RlpItem[](count);
         offset = listOffset;
         for (uint256 i = 0; i < count; i++) {
-            (uint256 len,, ,) = _decodeItem(data, offset);
+            (uint256 len,,,) = _decodeItem(data, offset);
             items[i] = RlpItem({offset: offset, len: len});
             offset += len;
         }
     }
 
-    function _payloadOffsetLen(bytes memory data, RlpItem memory item) private pure returns (uint256 offset, uint256 len) {
+    function _payloadOffsetLen(bytes memory data, RlpItem memory item)
+        private
+        pure
+        returns (uint256 offset, uint256 len)
+    {
         (, offset, len,) = _decodeItem(data, item.offset);
     }
 
@@ -577,13 +584,11 @@ contract Punish is Params, ReentrancyGuard {
         return _copyBytesSlice(dest, destOffset, src, 0, src.length);
     }
 
-    function _copyBytesSlice(
-        bytes memory dest,
-        uint256 destOffset,
-        bytes memory src,
-        uint256 srcOffset,
-        uint256 len
-    ) private pure returns (uint256) {
+    function _copyBytesSlice(bytes memory dest, uint256 destOffset, bytes memory src, uint256 srcOffset, uint256 len)
+        private
+        pure
+        returns (uint256)
+    {
         require(destOffset + len <= dest.length, "Copy overflow");
         require(srcOffset + len <= src.length, "Copy out of bounds");
         for (uint256 i = 0; i < len; i++) {

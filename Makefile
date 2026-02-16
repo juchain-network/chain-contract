@@ -130,7 +130,7 @@ fmt:
 	@echo "$(YELLOW)Formatting code...$(NC)"
 	forge fmt
 
-# Generate contracts from templates (both production and integration test versions)
+# Generate contracts from templates
 generate-contracts:
 	@echo "$(YELLOW)Generating contracts from templates...$(NC)"
 	node generate-contracts.js

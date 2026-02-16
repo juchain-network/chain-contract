@@ -83,14 +83,11 @@ forge test -vvv
 
 ### **Contract Generation**
 
-Generate production and mock contracts using templates.
+Generate `contracts/Params.sol` from template.
 
 ```bash
-# Generate production contracts
+# Generate contracts
 npm run generate
-
-# Generate mock contracts for testing
-npm run generate:mock
 ```
 
 ### **Genesis Configuration**

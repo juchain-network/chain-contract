@@ -206,7 +206,9 @@ This section covers validation logic for all configuration parameters.
     *   **Expected**: Revert "Exit blocked in doubleSignWindow".
 *   **[S-21] Initialization Protection**
     *   **Steps**: Call `initialize`/`initializeWithValidators` again.
-    *   **Expected**: Revert "Already initialized".
+    *   **Expected**:
+        *   External transaction path: rejected by node with `forbidden system transaction`.
+        *   Direct contract execution path (eth_call/simulation): reverts with `Already initialized`.
 *   **[S-22] Distribute Rewards & Claim Cooldown**
     *   **Steps**: Miner calls `distributeRewards` -> validator claims -> distribute again -> claim before cooldown.
     *   **Expected**: First claim success; second claim reverts "Must wait withdrawProfitPeriod blocks between claims".
@@ -382,22 +384,26 @@ This section covers validation logic for all configuration parameters.
 
 ---
 
-## 6. Public Query APIs (Smoke)
+## 6. Upgrade / Init Security
+*   **[U-01] External Initialize Selector Interception**
+    *   **Steps**: Send normal external tx to system contract `initialize*` selectors.
+    *   **Expected**: Tx rejected at txpool/consensus boundary with `forbidden system transaction`.
+*   **[U-02] External ReinitializeV2 Interception**
+    *   **Steps**: Send normal external tx to `reinitializeV2` on Proposal/Validators/Staking/Punish.
+    *   **Expected**: Tx rejected with `forbidden system transaction`.
+*   **[U-03] Fixed Dependency Address Validation (Contract Layer)**
+    *   **Steps**: Deploy fresh contract instances to non-system addresses; call `initialize*` with wrong dependency addresses.
+    *   **Expected**: Revert with explicit fixed-address errors, e.g. `Invalid ... contract address`.
+*   **[U-04] Punish Staking Parameter Completeness**
+    *   **Steps**: Call fresh `Punish.initialize` with `staking_ = address(0)`.
+    *   **Expected**: Revert `Invalid staking address`.
+
+---
+
+## 7. Public Query APIs (Smoke)
 *   **[Q-01] Core Query Coverage**
     *   **Steps**: Call view getters for proposal/pass/nonces, validator status, staking counts, unbonding counts.
     *   **Expected**: No revert; basic invariants hold (lengths match, counts non-negative).
-
----
-
-## 7. Init & Upgrade Guards
-*   **[U-01] Initialization Guards**
-    *   **Steps**: Call `initialize`/`initializeWithValidators` on already-initialized contracts.
-    *   **Expected**: Revert "Already initialized".
-*   **[U-02] Reinitialize V2**
-    *   **Steps**: Miner calls `reinitializeV2` once; second call should fail.
-    *   **Expected**: `revision` updates; second call reverts "Already reinitialized".
-
----
 
 **Notes**:
 *   Ensure `tools/ci/config.yaml` is correctly configured before execution.

@@ -86,6 +86,7 @@ test-epoch:
 	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestY_UpdateActiveValidatorSet"
 	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestZ_LastManStanding"
 	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestZ_UpgradesAndInitGuards"
+	@$(CI_TOOL) -mode tests $(CI_COMMON_FLAGS) -run "TestZ_SystemInitSecurityGuards"
 
 # Run ALL tests serially with isolated reset per test
 test-all:
@@ -121,7 +122,14 @@ stop:
 clean: stop
 	@echo "🧹 Cleaning data directory..."
 	@if [ -d "$(DATA_DIR)" ]; then \
-		docker run --rm -v $(PWD):/work alpine sh -c "rm -rf /work/$(DATA_DIR)"; \
+		rm -rf "$(DATA_DIR)" 2>/dev/null || true; \
+		if [ -d "$(DATA_DIR)" ]; then \
+			if docker image inspect alpine >/dev/null 2>&1; then \
+				docker run --rm -v $(PWD):/work alpine sh -c "rm -rf /work/$(DATA_DIR)" || true; \
+			else \
+				echo "⚠️  Skip container cleanup: alpine image unavailable"; \
+			fi; \
+		fi; \
 	fi
 	@docker network prune -f
 	@docker image prune -f

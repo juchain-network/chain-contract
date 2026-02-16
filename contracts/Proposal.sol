@@ -126,11 +126,7 @@ contract Proposal is Params, ReentrancyGuard {
 
     event LogCreateProposal(bytes32 indexed id, address indexed proposer, address indexed dst, bool flag, uint256 time);
     event LogCreateConfigProposal(
-        bytes32 indexed id,
-        address indexed proposer,
-        uint256 cid,
-        uint256 newValue,
-        uint256 time
+        bytes32 indexed id, address indexed proposer, uint256 cid, uint256 newValue, uint256 time
     );
     event LogVote(bytes32 indexed id, address indexed voter, bool auth, uint256 time);
     event LogPassProposal(bytes32 indexed id, uint256 time);
@@ -151,12 +147,9 @@ contract Proposal is Params, ReentrancyGuard {
      * @param vals Array of initial validator addresses.
      * @param validators_ Address of the Validators contract.
      */
-    function initialize(
-        address[] calldata vals,
-        address validators_,
-        uint256 epoch_
-    ) external onlyNotInitialized {
+    function initialize(address[] calldata vals, address validators_, uint256 epoch_) external onlyNotInitialized {
         require(validators_ != address(0), "Invalid validators address");
+        require(validators_ == VALIDATOR_ADDR, "Invalid validators contract address");
 
         _initializeEpoch(epoch_);
         validators = IValidators(validators_);
@@ -209,11 +202,7 @@ contract Proposal is Params, ReentrancyGuard {
      * @param details Description of the proposal.
      * @return bytes32 Unique identifier for the created proposal.
      */
-    function createProposal(
-        address dst,
-        bool flag,
-        string calldata details
-    ) external onlyValidator returns (bytes32) {
+    function createProposal(address dst, bool flag, string calldata details) external onlyValidator returns (bytes32) {
         _checkProposalCooldown();
         // Only add additional checks for add proposals
         if (flag) {
@@ -239,10 +228,7 @@ contract Proposal is Params, ReentrancyGuard {
             }
         }
         // Simplified requirement: only check for add proposals, remove proposals can be resubmitted freely
-        require(
-            (!pass[dst] && flag) || !flag,
-            "Can't add an already exist dst"
-        );
+        require((!pass[dst] && flag) || !flag, "Can't add an already exist dst");
 
         // Get current nonce for the proposer
         uint256 currentNonce = proposerNonces[msg.sender];
@@ -256,7 +242,17 @@ contract Proposal is Params, ReentrancyGuard {
         // Increment nonce for the proposer
         proposerNonces[msg.sender]++;
 
-        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, createBlock: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
+        ProposalInfo memory proposal = ProposalInfo({
+            proposer: address(0),
+            createTime: 0,
+            createBlock: 0,
+            proposalType: 0,
+            dst: address(0),
+            flag: false,
+            details: "",
+            cid: 0,
+            newValue: 0
+        });
         proposal.proposer = msg.sender;
         proposal.dst = dst;
         proposal.flag = flag;
@@ -291,7 +287,17 @@ contract Proposal is Params, ReentrancyGuard {
         // Increment nonce for the proposer
         proposerNonces[msg.sender]++;
 
-        ProposalInfo memory proposal = ProposalInfo({proposer: address(0), createTime: 0, createBlock: 0, proposalType: 0, dst: address(0), flag: false, details: "", cid: 0, newValue: 0});
+        ProposalInfo memory proposal = ProposalInfo({
+            proposer: address(0),
+            createTime: 0,
+            createBlock: 0,
+            proposalType: 0,
+            dst: address(0),
+            flag: false,
+            details: "",
+            cid: 0,
+            newValue: 0
+        });
         proposal.proposer = msg.sender;
         proposal.cid = cid;
         proposal.newValue = newValue;

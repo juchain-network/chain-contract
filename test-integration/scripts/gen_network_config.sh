@@ -74,7 +74,7 @@ generate_key() {
 # Generate Keys
 echo "Generating keys..."
 # Funder
-IFS=',' read -r FUNDER_ADDR FUNDER_PRIV FUNDER_PUB <<< $(generate_key "funder-0")
+IFS=',' read -r FUNDER_ADDR FUNDER_PRIV FUNDER_PUB <<< "$(generate_key "funder-0")"
 # Trim any potential whitespace/newlines
 FUNDER_ADDR=$(echo "$FUNDER_ADDR" | tr -d '[:space:]')
 echo "Funder: $FUNDER_ADDR"
@@ -94,7 +94,7 @@ for i in $(seq 0 $((NUM_NODES-1))); do
     mkdir -p "$DATA_DIR/node$i/geth" 
     
     # Node P2P Key
-    IFS=',' read -r NODE_ADDR NODE_PRIV NODE_PUB <<< $(generate_key "node-p2p-$i")
+    IFS=',' read -r NODE_ADDR NODE_PRIV NODE_PUB <<< "$(generate_key "node-p2p-$i")"
     echo "$NODE_PRIV" > "$DATA_DIR/node$i/nodekey"
     
     # Construct Enode URL (use static IPs to avoid DNS resolution issues)
@@ -106,7 +106,7 @@ for i in $(seq 0 $((NUM_NODES-1))); do
     
     if [ $i -lt $NUM_VALIDATORS ]; then
         # Validator keys for 0-2
-        IFS=',' read -r ADDR PRIV PUB <<< $(generate_key "validator-$i")
+        IFS=',' read -r ADDR PRIV PUB <<< "$(generate_key "validator-$i")"
         ADDR=$(echo "$ADDR" | tr -d '[:space:]')
         VAL_ADDRS+=($ADDR)
         VAL_PRIVS+=($PRIV)
@@ -243,9 +243,16 @@ awk '
 ' "$TEST_INT_DIR/docker/docker-compose.yml" > "$DATA_DIR/docker-compose.runtime.yml"
 
 # Ensure runtime compose mounts the base image assets from test-integration/docker.
-sed -i \
-  -e 's|\./juchain|../docker/juchain|g' \
-  -e 's|\./start.sh|../docker/start.sh|g' \
-  "$DATA_DIR/docker-compose.runtime.yml"
+if [ "$(uname -s)" = "Darwin" ]; then
+  sed -i '' \
+    -e 's|\./juchain|../docker/juchain|g' \
+    -e 's|\./start.sh|../docker/start.sh|g' \
+    "$DATA_DIR/docker-compose.runtime.yml"
+else
+  sed -i \
+    -e 's|\./juchain|../docker/juchain|g' \
+    -e 's|\./start.sh|../docker/start.sh|g' \
+    "$DATA_DIR/docker-compose.runtime.yml"
+fi
 
 echo "✅ Configuration generated at $DATA_DIR"

@@ -17,6 +17,7 @@
     "cancunTime": 0,
     "shanghaiTime": 0,
     "posaTime": 0,
+    "fixHeaderTime": 0,
     "congress": {
       "period": 1,
       "epoch": 600

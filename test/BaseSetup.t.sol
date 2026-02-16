@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
@@ -26,18 +25,19 @@ abstract contract BaseSetup is Test {
         // Initialize contracts in correct order
         // 1. Proposal first (needed by others)
         Proposal(PROPOSAL).initialize(initVals, VALIDATORS, TEST_EPOCH);
-        
+
         // 2. Staking with genesis validators (but don't call tryAddValidatorToHighestSet yet)
         // Use initializeWithValidators to automatically register genesis validators in Staking
         // This ensures genesis validators are immediately available without needing to register separately
+        vm.deal(STAKING, uint256(initVals.length) * 1 ether);
         Staking(STAKING).initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initVals, 1000); // 10% commission
-        
+
         // 3. Punish (needs Staking)
         Punish(PUNISH).initialize(VALIDATORS, PROPOSAL, STAKING);
-        
+
         // 4. Validators last (needs all others)
         Validators(VALIDATORS).initialize(initVals, PROPOSAL, PUNISH, STAKING);
-        
+
         // 5. Now that Validators is initialized, add genesis validators to highestValidatorsSet
         // This completes the registration process that was started in initializeWithValidators
         // Must call from STAKING address to satisfy onlyStakingContract modifier

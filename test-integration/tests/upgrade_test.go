@@ -9,12 +9,10 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -75,203 +73,25 @@ func TestZ_UpgradesAndInitGuards(t *testing.T) {
 	})
 
 	t.Run("ReinitializeV2", func(t *testing.T) {
-		waitReceipt := func(client *ethclient.Client, txHash common.Hash, timeout time.Duration) error {
-			if txHash == (common.Hash{}) {
-				return nil
-			}
-			if client == nil {
-				client = ctx.Clients[0]
-			}
-			deadline := time.Now().Add(timeout)
-			for time.Now().Before(deadline) {
-				receipt, err := client.TransactionReceipt(context.Background(), txHash)
-				if err == nil && receipt != nil {
-					if receipt.Status == 0 {
-						return fmt.Errorf("transaction %s reverted", txHash.Hex())
-					}
-					return nil
-				}
-				time.Sleep(1 * time.Second)
-			}
-			return fmt.Errorf("timeout waiting for tx %s", txHash.Hex())
+		if ctx.FunderKey == nil {
+			t.Fatalf("Funder key not initialized")
 		}
-
-		makeTxOpts := func(key *ecdsa.PrivateKey, client *ethclient.Client) *bind.TransactOpts {
-			if client == nil {
-				client = ctx.Clients[0]
-			}
-			opts, err := bind.NewKeyedTransactorWithChainID(key, ctx.ChainID)
-			if err != nil {
-				t.Fatalf("failed to create transactor: %v", err)
-			}
-			addr := crypto.PubkeyToAddress(key.PublicKey)
-			nonce, err := client.PendingNonceAt(context.Background(), addr)
-			if err != nil {
-				t.Fatalf("failed to get nonce for %s: %v", addr.Hex(), err)
-			}
-			opts.Nonce = big.NewInt(int64(nonce))
-			gasPrice, err := client.SuggestGasPrice(context.Background())
-			if err != nil {
-				gasPrice = big.NewInt(1000000000) // 1 gwei fallback
-			}
-			opts.GasPrice = gasPrice
-			return opts
+		cases := []struct {
+			name string
+			addr common.Address
+			meta *bind.MetaData
+		}{
+			{name: "Proposal", addr: testctx.ProposalAddr, meta: contracts.ProposalMetaData},
+			{name: "Validators", addr: testctx.ValidatorsAddr, meta: contracts.ValidatorsMetaData},
+			{name: "Staking", addr: testctx.StakingAddr, meta: contracts.StakingMetaData},
+			{name: "Punish", addr: testctx.PunishAddr, meta: contracts.PunishMetaData},
 		}
-
-		sendLocalReinit := func(client *ethclient.Client, from common.Address, contractAddr common.Address, meta *bind.MetaData) (common.Hash, error) {
-			if client == nil {
-				return common.Hash{}, fmt.Errorf("nil client")
-			}
-			abi, err := meta.GetAbi()
-			if err != nil {
-				return common.Hash{}, err
-			}
-			data, err := abi.Pack("reinitializeV2")
-			if err != nil {
-				return common.Hash{}, err
-			}
-			args := map[string]interface{}{
-				"from":     from,
-				"to":       contractAddr,
-				"gas":      hexutil.Uint64(300000),
-				"gasPrice": (*hexutil.Big)(big.NewInt(1000000000)), // 1 gwei
-				"data":     hexutil.Bytes(data),
-			}
-			var txHash common.Hash
-			if err := client.Client().Call(&txHash, "eth_sendTransaction", args); err != nil {
-				return common.Hash{}, err
-			}
-			return txHash, nil
-		}
-
-		reinit := func(
-			name string,
-			contractAddr common.Address,
-			meta *bind.MetaData,
-			call func(opts *bind.TransactOpts, client *ethclient.Client) (*types.Transaction, error),
-			revision func() (*big.Int, error),
-		) bool {
-			for attempt := 0; attempt < 24; attempt++ {
-				minerKey, minerAddr, minerClient := pickInTurnValidator(t)
-				if minerClient != nil {
-					var cb common.Address
-					if err := minerClient.Client().Call(&cb, "eth_coinbase"); err == nil && cb != minerAddr {
-						t.Fatalf("validator RPC coinbase mismatch: expected %s got %s", minerAddr.Hex(), cb.Hex())
-					}
-				}
-				var (
-					txHash common.Hash
-					err    error
-				)
-				txHash, err = sendLocalReinit(minerClient, minerAddr, contractAddr, meta)
-				if err != nil {
-					msg := err.Error()
-					if strings.Contains(msg, "authentication needed") || strings.Contains(msg, "does not exist") || strings.Contains(msg, "not available") {
-						opts := makeTxOpts(minerKey, minerClient)
-						opts.GasLimit = 300000
-						var tx *types.Transaction
-						tx, err = call(opts, minerClient)
-						if err == nil {
-							txHash = tx.Hash()
-						}
-					}
-				}
-				if err != nil {
-					if strings.Contains(err.Error(), "Already reinitialized") {
-						t.Logf("%s already reinitialized", name)
-						return true
-					}
-					if strings.Contains(err.Error(), "Miner only") {
-						if attempt == 0 {
-							t.Logf("%s reinit rejected by miner-only guard at send time", name)
-						}
-						waitNextBlock()
-						continue
-					}
-					t.Logf("%s reinit attempt %d failed: %v", name, attempt+1, err)
-					waitNextBlock()
-					continue
-				}
-				if err := waitReceipt(minerClient, txHash, 30*time.Second); err != nil {
-					if strings.Contains(err.Error(), "reverted") {
-						if revision != nil {
-							if rev, rerr := revision(); rerr == nil && rev.Cmp(big.NewInt(2)) >= 0 {
-								t.Logf("%s already at revision %s", name, rev.String())
-								return true
-							}
-						}
-						waitNextBlock()
-						continue
-					}
-					t.Logf("%s reinit attempt %d not mined: %v", name, attempt+1, err)
-					waitNextBlock()
-					continue
-				}
-				return true
-			}
-			if meta != nil && contractAddr != (common.Address{}) {
-				if validateOnlyMinerCall(t, contractAddr, meta) {
-					t.Logf("%s miner-only guard validated via eth_call", name)
-				}
-			}
-			if revision != nil {
-				if rev, err := revision(); err == nil && rev.Cmp(big.NewInt(2)) >= 0 {
-					t.Logf("%s already at revision %s", name, rev.String())
-					return true
-				}
-			}
-			t.Fatalf("%s reinitialize not mined by miner after retries", name)
-			return false // unreachable
-		}
-
-		proposalDone := reinit("Proposal", ctx.ProposalAddr, contracts.ProposalMetaData, func(opts *bind.TransactOpts, client *ethclient.Client) (*types.Transaction, error) {
-			prop, err := contracts.NewProposal(ctx.ProposalAddr, client)
-			if err != nil {
-				return nil, err
-			}
-			return prop.ReinitializeV2(opts)
-		}, func() (*big.Int, error) {
-			return ctx.Proposal.Revision(nil)
-		})
-		reinit("Validators", testctx.ValidatorsAddr, contracts.ValidatorsMetaData, func(opts *bind.TransactOpts, client *ethclient.Client) (*types.Transaction, error) {
-			vals, err := contracts.NewValidators(testctx.ValidatorsAddr, client)
-			if err != nil {
-				return nil, err
-			}
-			return vals.ReinitializeV2(opts)
-		}, func() (*big.Int, error) {
-			return ctx.Validators.Revision(nil)
-		})
-		reinit("Staking", testctx.StakingAddr, contracts.StakingMetaData, func(opts *bind.TransactOpts, client *ethclient.Client) (*types.Transaction, error) {
-			stk, err := contracts.NewStaking(testctx.StakingAddr, client)
-			if err != nil {
-				return nil, err
-			}
-			return stk.ReinitializeV2(opts)
-		}, func() (*big.Int, error) {
-			return ctx.Staking.Revision(nil)
-		})
-		reinit("Punish", testctx.PunishAddr, contracts.PunishMetaData, func(opts *bind.TransactOpts, client *ethclient.Client) (*types.Transaction, error) {
-			pun, err := contracts.NewPunish(testctx.PunishAddr, client)
-			if err != nil {
-				return nil, err
-			}
-			return pun.ReinitializeV2(opts)
-		}, func() (*big.Int, error) {
-			return ctx.Punish.Revision(nil)
-		})
-
-		// Second call should fail
-		if !proposalDone {
-			t.Fatalf("proposal reinitialize not executed; cannot verify second call guard")
-		}
-		_, minerAddr, minerClient := pickInTurnValidator(t)
-		txHash, err := sendLocalReinit(minerClient, minerAddr, ctx.ProposalAddr, contracts.ProposalMetaData)
-		if err == nil {
-			err = waitReceipt(minerClient, txHash, 30*time.Second)
-		}
-		if err == nil {
-			t.Fatal("Proposal reinitializeV2 should fail on second call")
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				data := packMethodData(t, tc.meta, "reinitializeV2")
+				expectForbiddenSystemTx(t, ctx.FunderKey, tc.addr, data)
+			})
 		}
 	})
 }
