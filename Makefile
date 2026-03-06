@@ -14,7 +14,7 @@ RED = \033[0;31m
 NC = \033[0m # No Color
 
 # Define all phony targets
-.PHONY: help clean build test fmt security coverage coverage-html gas-test all update version addresses generate-contracts generate-go-client storage-layout test-by-forge test-by-shell test-all anvil-start anvil-stop anvil-status anvil-clean get-system-params load-env
+.PHONY: help clean build test fmt security coverage coverage-html gas-test all update version addresses generate-contracts generate-go-client storage-layout test-by-forge test-by-shell anvil-start anvil-stop anvil-status anvil-clean get-system-params load-env
 
 help:
 	@echo "$(YELLOW)Available targets:$(NC)"
@@ -54,7 +54,6 @@ help:
 	@echo "Usage examples:"
 	@echo "  make build       - Build all contracts"
 	@echo "  make bytecode    - Build contracts and extract bytecode"
-	@echo "  make test-all    - Run comprehensive test suite"
 	@echo "  make clean build - Clean and then build"
 	@echo ""
 
@@ -210,18 +209,3 @@ load-env:
 	else \
 		echo "$(YELLOW)Warning: .env file not found. Using default values.$(NC)"; \
 	fi
-
-# =========================
-# CI / Integration Tests
-# =========================
-
-# Run full CI suite (Docker build + Integration Tests)
-ci:
-	@echo "$(YELLOW)Running Integration CI...$(NC)"
-	@$(MAKE) -C test-integration ci
-
-# Run CI with logging to file
-ci-log:
-	@echo "$(YELLOW)Running Integration CI with logging...$(NC)"
-	@mkdir -p logs
-	@bash -c 'set -o pipefail; $(MAKE) ci 2>&1 | tee logs/ci_$$(date +%Y%m%d_%H%M%S).log'

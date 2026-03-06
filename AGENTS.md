@@ -16,7 +16,7 @@ This document provides context, architectural overview, and operational guidelin
 ## 2. Technology Stack
 
 - **Smart Contracts**: Solidity ^0.8.29 (Foundry framework).
-- **Integration Tests**: Go (using `go-ethereum` bindings) in `test-integration/`.
+- **Integration Tests**: Moved to the standalone `chain-tests` repository.
 - **Infrastructure**: Docker & Docker Compose (for local 4-node cluster orchestration).
 - **Build/Scripts**: Makefile, JavaScript (Genesis generation), Bash.
 - **CLI**: `ju-cli` (Go) for interacting with the chain, located in `tools/`.
@@ -35,18 +35,10 @@ This document provides context, architectural overview, and operational guidelin
 - `lib/`: External dependencies (OpenZeppelin, Forge Std).
 - `foundry.toml`: Foundry configuration.
 
-### Integration Tests (`test-integration/`)
+### End-to-End Tests (External)
 
-This is the primary area for end-to-end testing against a real blockchain network.
-
-- `tests/`: Go test files (`*_test.go`).
-    - `common_test.go`: Shared helpers (`robustDelegate`, `createAndRegisterValidator`).
-    - `exit_test.go`: Tests for validator voluntary exit flows.
-    - `punish_test.go`: Tests for slashing and evidence submission.
-- `internal/context/`: **The Core Test Framework (`CIContext`)**.
-    - `context.go`: Handles `ethclient` connection, **Nonce Management**, **Gas Pricing**, and **Auto-Initialization**.
-- `docker/`: `docker-compose.yml` for the 4-node local cluster.
-- `Makefile`: Entry point for running integration tests (e.g., `make test-punish`).
+End-to-end coverage is maintained in the standalone `chain-tests` repository.
+This repository (`chain-contract`) keeps unit and contract-level tests only.
 
 ### Tools (`tools/`)
 
@@ -106,15 +98,10 @@ Fast logic verification.
 forge test
 ```
 
-### Running Integration Tests (Docker)
+### Running End-to-End Tests
 
-Slow, full-system verification.
-**Warning**: `make test-all` takes a long time. Use specific targets during dev.
-```bash
-cd test-integration
-make test-delegation  # Run delegation suite
-make test-punish      # Run punishment suite (resets network between subtests)
-```
+Use the standalone `chain-tests` repository for full-system verification.
+This repository no longer contains `test-integration/`.
 
 ## 6. Known Issues & Findings
 
@@ -123,7 +110,7 @@ make test-punish      # Run punishment suite (resets network between subtests)
 
 ## 7. Interaction Guidelines for Agents
 
-1.  **Check `CIContext` first**: Before writing raw `go-ethereum` transaction code, check if `CIContext` already provides a helper method.
-2.  **Respect Delays**: In integration tests involving consensus changes, `waitBlocks` is necessary.
-3.  **Logs**: Use `t.Log` or `fmt.Printf` for debugging in Go tests; `console.log` in Solidity.
+1.  **Use Foundry tests for this repo**: Keep contract logic and regression coverage in `test/`.
+2.  **Use `chain-tests` for E2E**: Cross-node/consensus path verification belongs there.
+3.  **Logs**: Use `console.log` in Solidity and normal test assertions/messages in Foundry tests.
 4.  **Formatting**: Always run `forge fmt` after modifying Solidity files.
