@@ -6,14 +6,18 @@ import {Validators} from "../contracts/Validators.sol";
 import {Staking} from "../contracts/Staking.sol";
 
 contract ValidatorsAdditionalTest is BaseSetup {
-    address v1; address v2; address v3;
-    
+    address v1;
+    address v2;
+    address v3;
+
     function setUp() public {
         v1 = makeAddr("v1");
         v2 = makeAddr("v2");
         v3 = makeAddr("v3");
         address[] memory initVals = new address[](3);
-        initVals[0] = v1; initVals[1] = v2; initVals[2] = v3;
+        initVals[0] = v1;
+        initVals[1] = v2;
+        initVals[2] = v3;
         deploySystem(initVals);
     }
 
@@ -27,7 +31,7 @@ contract ValidatorsAdditionalTest is BaseSetup {
         address nonExistent = makeAddr("nonExistent");
         bool isNonActive = Validators(VALIDATORS).isValidatorActive(nonExistent);
         assertFalse(isNonActive, "nonExistent should not be active validator");
-        
+
         // For testing purposes, we can directly test the Staking contract's isValidatorJailed function
         // since isValidatorActive relies on it
         bool isJailed = Staking(STAKING).isValidatorJailed(v1);
@@ -37,13 +41,14 @@ contract ValidatorsAdditionalTest is BaseSetup {
     // Test validateDescription function
     function testValidateDescription() public pure {
         // Test valid description
-        bool isValid = Validators(VALIDATORS).validateDescription(
-            "Test Validator", // moniker - max 70 chars
-            "identity",       // identity - max 3000 chars
-            "https://example.com", // website - max 140 chars
-            "test@example.com",    // email - max 140 chars
-            "Test details"         // details - max 280 chars
-        );
+        bool isValid = Validators(VALIDATORS)
+            .validateDescription(
+                "Test Validator", // moniker - max 70 chars
+                "identity", // identity - max 3000 chars
+                "https://example.com", // website - max 140 chars
+                "test@example.com", // email - max 140 chars
+                "Test details" // details - max 280 chars
+            );
         assertTrue(isValid, "Valid description should pass validation");
     }
 
@@ -51,62 +56,63 @@ contract ValidatorsAdditionalTest is BaseSetup {
     function testValidateDescriptionInvalidInputs() public {
         // Test invalid moniker (too long)
         vm.expectRevert("Invalid moniker length");
-        Validators(VALIDATORS).validateDescription(
-            "aTooLongMonikerThatExceedsSeventyCharactersWhichIsTheMaximumAllowedAndShouldTriggerARevert", // > 70 chars
-            "identity",
-            "https://example.com",
-            "test@example.com",
-            "Test details"
-        );
+        Validators(VALIDATORS)
+            .validateDescription(
+                "aTooLongMonikerThatExceedsSeventyCharactersWhichIsTheMaximumAllowedAndShouldTriggerARevert", // > 70 chars
+                "identity",
+                "https://example.com",
+                "test@example.com",
+                "Test details"
+            );
 
         // Test invalid identity (too long)
         vm.expectRevert("Invalid identity length");
         // Generate a string longer than 3000 characters
         string memory longIdentity = new string(3001);
         bytes memory longIdentityBytes = bytes(longIdentity);
-        for (uint i = 0; i < longIdentityBytes.length; i++) {
+        for (uint256 i = 0; i < longIdentityBytes.length; i++) {
             // casting to 'bytes1' is safe because "x" is a single character
             // forge-lint: disable-next-line(unsafe-typecast)
             longIdentityBytes[i] = bytes1("x");
         }
         longIdentity = string(longIdentityBytes);
-        Validators(VALIDATORS).validateDescription(
-            "Test Validator",
-            longIdentity,
-            "https://example.com",
-            "test@example.com",
-            "Test details"
-        );
+        Validators(VALIDATORS)
+            .validateDescription(
+                "Test Validator", longIdentity, "https://example.com", "test@example.com", "Test details"
+            );
 
         // Test invalid website (too long)
         vm.expectRevert("Invalid website length");
-        Validators(VALIDATORS).validateDescription(
-            "Test Validator",
-            "identity",
-            "https://aVeryLongWebsiteUrlThatExceedsOneHundredAndFortyCharactersWhichIsBeyondTheLimitSetInTheSmartContractCodeAndShouldTriggerARevertWithAppropriateErrorMessage.com",
-            "test@example.com",
-            "Test details"
-        );
+        Validators(VALIDATORS)
+            .validateDescription(
+                "Test Validator",
+                "identity",
+                "https://aVeryLongWebsiteUrlThatExceedsOneHundredAndFortyCharactersWhichIsBeyondTheLimitSetInTheSmartContractCodeAndShouldTriggerARevertWithAppropriateErrorMessage.com",
+                "test@example.com",
+                "Test details"
+            );
 
         // Test invalid email (too long)
         vm.expectRevert("Invalid email length");
-        Validators(VALIDATORS).validateDescription(
-            "Test Validator",
-            "identity",
-            "https://example.com",
-            "aVeryLongEmailAddressThatExceedsOneHundredAndFortyCharactersInTotalWhichGoesBeyondTheLimitDefinedInTheSmartContractCodeAndShouldResultInARevertWithProperErrorMessagingForValidationPurpose@example.com",
-            "test@example.com"
-        );
+        Validators(VALIDATORS)
+            .validateDescription(
+                "Test Validator",
+                "identity",
+                "https://example.com",
+                "aVeryLongEmailAddressThatExceedsOneHundredAndFortyCharactersInTotalWhichGoesBeyondTheLimitDefinedInTheSmartContractCodeAndShouldResultInARevertWithProperErrorMessagingForValidationPurpose@example.com",
+                "test@example.com"
+            );
 
         // Test invalid details (too long)
         vm.expectRevert("Invalid details length");
-        Validators(VALIDATORS).validateDescription(
-            "Test Validator",
-            "identity",
-            "https://example.com",
-            "test@example.com",
-            "aVeryLongDetailsStringThatExceedsTwoHundredAndEightyCharactersWhichIsTheUpperBoundSetInTheSmartContractSourceCodeAndShouldCauseTheFunctionToRevertWithASpecificErrorIndicatingTheNatureOfTheProblemRatherThanSimplyFailingSilentlyWithoutAnyInformativeFeedbackAndTriggersTheRevertCorrectly"
-        );
+        Validators(VALIDATORS)
+            .validateDescription(
+                "Test Validator",
+                "identity",
+                "https://example.com",
+                "test@example.com",
+                "aVeryLongDetailsStringThatExceedsTwoHundredAndEightyCharactersWhichIsTheUpperBoundSetInTheSmartContractSourceCodeAndShouldCauseTheFunctionToRevertWithASpecificErrorIndicatingTheNatureOfTheProblemRatherThanSimplyFailingSilentlyWithoutAnyInformativeFeedbackAndTriggersTheRevertCorrectly"
+            );
     }
 
     // Test getActiveValidators function
@@ -128,7 +134,7 @@ contract ValidatorsAdditionalTest is BaseSetup {
     function testIsTopValidator() public {
         bool isTop = Validators(VALIDATORS).isTopValidator(v1);
         assertTrue(isTop, "v1 should be a top validator");
-        
+
         address nonTop = makeAddr("nonTop");
         bool isNonTop = Validators(VALIDATORS).isTopValidator(nonTop);
         assertFalse(isNonTop, "nonTop should not be a top validator");
@@ -138,19 +144,20 @@ contract ValidatorsAdditionalTest is BaseSetup {
     function testGetValidatorDescription() public {
         // v1 is already a validator from setUp, just edit its description
         vm.prank(v1);
-        Validators(VALIDATORS).createOrEditValidator(
-            payable(v1),
-            "Test Validator",
-            "identity",
-            "https://example.com",
-            "test@example.com",
-            "Test details"
-        );
+        Validators(VALIDATORS)
+            .createOrEditValidator(
+                payable(v1), "Test Validator", "identity", "https://example.com", "test@example.com", "Test details"
+            );
 
         // Now test getting the description
-        (string memory moniker, string memory identity, string memory website, string memory email, string memory details) = 
-            Validators(VALIDATORS).getValidatorDescription(v1);
-        
+        (
+            string memory moniker,
+            string memory identity,
+            string memory website,
+            string memory email,
+            string memory details
+        ) = Validators(VALIDATORS).getValidatorDescription(v1);
+
         assertEq(moniker, "Test Validator", "Moniker should match");
         assertEq(identity, "identity", "Identity should match");
         assertEq(website, "https://example.com", "Website should match");
@@ -179,20 +186,20 @@ contract ValidatorsAdditionalTest is BaseSetup {
         uint256 epoch = Validators(VALIDATORS).epoch();
         uint256 targetBlock = ((block.number / epoch) + 1) * epoch;
         vm.roll(targetBlock);
-        
+
         // Set v1 as coinbase/miner
         vm.coinbase(v1);
-        
+
         // First call should succeed
         address[] memory newSet = Validators(VALIDATORS).getTopValidators();
-        
+
         vm.prank(v1); // v1 is the miner
         Validators(VALIDATORS).updateActiveValidatorSet(newSet, epoch);
-        
+
         // Second call in same block should silently return (not revert)
         vm.prank(v1);
         Validators(VALIDATORS).updateActiveValidatorSet(newSet, epoch);
-        
+
         // Test passed if no revert occurred
     }
 
@@ -205,5 +212,39 @@ contract ValidatorsAdditionalTest is BaseSetup {
         assertEq(stakes[0], 1 ether, "First validator should have 1 ether stake");
         assertEq(stakes[1], 1 ether, "Second validator should have 1 ether stake");
         assertEq(stakes[2], 1 ether, "Third validator should have 1 ether stake");
+    }
+
+    function testGetRewardEligibleValidatorsWithStakesExcludesJailed() public {
+        vm.prank(PUNISH);
+        Staking(STAKING).jailValidator(v2, 100);
+
+        (address[] memory validators, uint256[] memory stakes) =
+            Validators(VALIDATORS).getRewardEligibleValidatorsWithStakes();
+
+        assertEq(validators.length, 2, "Should exclude jailed validator");
+        assertEq(stakes.length, 2, "Should return stakes for non-jailed validators only");
+        assertEq(validators[0], v1, "First eligible validator should be v1");
+        assertEq(validators[1], v3, "Second eligible validator should be v3");
+        assertEq(stakes[0], 1 ether, "v1 should keep full stake");
+        assertEq(stakes[1], 1 ether, "v3 should keep full stake");
+    }
+
+    function testEffectiveTopHelpersTrackLastValidator() public {
+        address burnAddress = makeAddr("burn");
+
+        vm.startPrank(PUNISH);
+        Staking(STAKING).slashValidator(v2, 1 ether, address(0), 0, burnAddress);
+        Staking(STAKING).slashValidator(v3, 1 ether, address(0), 0, burnAddress);
+        vm.stopPrank();
+
+        address[] memory effectiveTopValidators = Validators(VALIDATORS).getEffectiveTopValidators();
+
+        assertEq(effectiveTopValidators.length, 1, "Only one effective top validator should remain");
+        assertEq(effectiveTopValidators[0], v1, "v1 should be the remaining effective top validator");
+        assertEq(Validators(VALIDATORS).getEffectiveTopValidatorCount(), 1, "Effective top validator count should be 1");
+        assertTrue(Validators(VALIDATORS).isLastEffectiveValidator(v1), "v1 should be the last effective validator");
+        assertFalse(Validators(VALIDATORS).isLastEffectiveValidator(v2), "v2 should not be last effective validator");
+        assertFalse(Validators(VALIDATORS).isTopValidator(v2), "v2 should be removed from highest set");
+        assertFalse(Validators(VALIDATORS).isTopValidator(v3), "v3 should be removed from highest set");
     }
 }

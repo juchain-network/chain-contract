@@ -29,6 +29,35 @@ interface IValidators {
     function getVotingValidatorCount() external view returns (uint256);
 
     /**
+     * @dev Get the effective top validators after applying stake-based filtering.
+     * @return Validators currently eligible to enter the next epoch set.
+     */
+    function getEffectiveTopValidators() external view returns (address[] memory);
+
+    /**
+     * @dev Get count of effective top validators.
+     * @return Count of validators returned by getEffectiveTopValidators().
+     */
+    function getEffectiveTopValidatorCount() external view returns (uint256);
+
+    /**
+     * @dev Check whether a validator is the only effective top validator left.
+     * @param validator Address to check.
+     * @return bool Returns true when validator is the sole effective top validator.
+     */
+    function isLastEffectiveValidator(address validator) external view returns (bool);
+
+    /**
+     * @dev Get reward-eligible validators and their total stakes.
+     * @return validators Active validators that are not jailed.
+     * @return totalStakes Total stake amounts for each validator.
+     */
+    function getRewardEligibleValidatorsWithStakes()
+        external
+        view
+        returns (address[] memory validators, uint256[] memory totalStakes);
+
+    /**
      * @dev Checks if an address is an active validator.
      * @param who Address to check.
      * @return bool Returns true if the address is an active validator.

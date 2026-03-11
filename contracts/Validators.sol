@@ -479,6 +479,45 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     }
 
     /**
+     * @dev Get reward-eligible validators with their total stake amounts.
+     * @notice Excludes jailed validators immediately even if they are still present in currentValidatorSet.
+     * @return validators Array of non-jailed validators in currentValidatorSet order
+     * @return totalStakes Array of total stake amounts for each validator (selfStake + totalDelegated)
+     */
+    function getRewardEligibleValidatorsWithStakes()
+        public
+        view
+        returns (address[] memory validators, uint256[] memory totalStakes)
+    {
+        uint256 currentSetLength = currentValidatorSet.length;
+        uint256 eligibleCount = 0;
+
+        for (uint256 i = 0; i < currentSetLength; i++) {
+            if (!staking.isValidatorJailed(currentValidatorSet[i])) {
+                eligibleCount++;
+            }
+        }
+
+        validators = new address[](eligibleCount);
+        totalStakes = new uint256[](eligibleCount);
+
+        uint256 index = 0;
+        for (uint256 i = 0; i < currentSetLength; i++) {
+            address validator = currentValidatorSet[i];
+            if (staking.isValidatorJailed(validator)) {
+                continue;
+            }
+
+            (uint256 selfStake, uint256 totalDelegated,,,,,,,,) = staking.getValidatorInfo(validator);
+            validators[index] = validator;
+            totalStakes[index] = selfStake + totalDelegated;
+            index++;
+        }
+
+        return (validators, totalStakes);
+    }
+
+    /**
      * @dev Get count of active validators
      * @notice Returns count of validators in currentValidatorSet
      * @notice More efficient than getActiveValidators().length as it doesn't create an array
@@ -585,11 +624,33 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Top validators list, sorted by stake in POSA
      */
     function getTopValidators() public view returns (address[] memory) {
-        // Get highest validators set
-        address[] memory highestValidators = highestValidatorsSet;
+        return getEffectiveTopValidators();
+    }
 
-        // Call Staking contract to sort by stake
-        return staking.getTopValidators(highestValidators);
+    /**
+     * @dev Get the effective top validators after stake-based filtering.
+     * @return Top validators list, sorted by stake in POSA
+     */
+    function getEffectiveTopValidators() public view returns (address[] memory) {
+        return staking.getTopValidators(highestValidatorsSet);
+    }
+
+    /**
+     * @dev Get count of effective top validators.
+     * @return Count of validators returned by getEffectiveTopValidators()
+     */
+    function getEffectiveTopValidatorCount() public view returns (uint256) {
+        return getEffectiveTopValidators().length;
+    }
+
+    /**
+     * @dev Check whether validator is the sole effective top validator.
+     * @param validator Validator address to check
+     * @return Whether validator is the only effective top validator left
+     */
+    function isLastEffectiveValidator(address validator) public view returns (bool) {
+        address[] memory effectiveTopValidators = getEffectiveTopValidators();
+        return effectiveTopValidators.length == 1 && effectiveTopValidators[0] == validator;
     }
 
     /**

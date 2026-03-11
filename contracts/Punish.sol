@@ -9,6 +9,8 @@ import {IProposal} from "./IProposal.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract Punish is Params, ReentrancyGuard {
+    uint256 private constant MAX_EXECUTE_PENDING_LIMIT = 5;
+
     struct PunishRecord {
         uint256 missedBlocksCounter;
         uint256 index;
@@ -163,10 +165,9 @@ contract Punish is Params, ReentrancyGuard {
         emit LogPunishValidator(val, block.timestamp);
     }
 
-    function executePending(uint256 limit) external onlyInitialized onlyNotEpoch nonReentrant {
-        if (limit == 0) {
-            return;
-        }
+    function executePending(uint256 limit) external onlyMiner onlyInitialized onlyNotEpoch nonReentrant {
+        require(limit > 0, "Limit must be positive");
+        require(limit <= MAX_EXECUTE_PENDING_LIMIT, "Limit too large");
 
         uint256 processed = 0;
         while (processed < limit && pendingValidators.length > 0) {

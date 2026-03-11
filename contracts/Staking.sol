@@ -20,9 +20,6 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     // Maximum number of unbonding entries per delegator-validator pair
     uint256 public constant MAX_UNBONDING_ENTRIES = 20;
 
-    // Limit for executing pending punishments per block
-    uint256 private constant PENDING_EXECUTION_LIMIT = 5;
-
     struct ValidatorStake {
         uint256 selfStake; // Validator's own stake
         uint256 totalDelegated; // Total delegated to this validator
@@ -95,7 +92,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     mapping(address => uint256) public delegatorValidatorCount;
     // Address => pending payout amount when direct transfer fails
     mapping(address => uint256) public pendingPayouts;
-    uint256[48] private __gap;
+    uint256[50] private __gap;
 
     event ValidatorRegistered(address indexed validator, uint256 selfStake, uint256 commissionRate);
     event CommissionRateUpdated(address indexed validator, uint256 commissionRate);
@@ -374,8 +371,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         totalStaked = totalStaked - amount;
 
         // Instead of transferring funds directly, add them to unbonding like exitValidator and undelegate
-        unbondingDelegations[msg.sender][msg.sender]
-        .push(UnbondingEntry({amount: amount, completionBlock: block.number + proposalContract.unbondingPeriod()}));
+        unbondingDelegations[msg.sender][msg.sender].push(
+            UnbondingEntry({amount: amount, completionBlock: block.number + proposalContract.unbondingPeriod()})
+        );
 
         emit ValidatorStakeDecreased(msg.sender, msg.sender, amount);
     }
@@ -441,8 +439,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         totalStaked = totalStaked - withdrawAmount;
 
         // Instead of transferring funds directly, add them to unbonding like undelegate
-        unbondingDelegations[msg.sender][msg.sender]
-        .push(
+        unbondingDelegations[msg.sender][msg.sender].push(
             UnbondingEntry({amount: withdrawAmount, completionBlock: block.number + proposalContract.unbondingPeriod()})
         );
 
@@ -548,8 +545,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         }
 
         // Add to unbonding
-        unbondingDelegations[msg.sender][validator]
-        .push(UnbondingEntry({amount: amount, completionBlock: block.number + proposalContract.unbondingPeriod()}));
+        unbondingDelegations[msg.sender][validator].push(
+            UnbondingEntry({amount: amount, completionBlock: block.number + proposalContract.unbondingPeriod()})
+        );
 
         // Step 3: Interactions - Send pending rewards last
         if (pending > 0) {
@@ -625,11 +623,6 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
         // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
-
-        // Try to execute pending punishments (similar to Validators contract)
-        if (block.number % proposalContract.epoch() != 0) {
-            try punishContract.executePending(PENDING_EXECUTION_LIMIT) {} catch {}
-        }
 
         // Get block reward from msg.value (consensus layer reads from Proposal contract and passes it here)
         // This avoids duplicate contract calls and saves gas
@@ -795,12 +788,28 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             return (0, 0);
         }
 
-        actualSlash = slashAmount > selfStake ? selfStake : slashAmount;
+        bool isLastEffectiveValidator = validatorsContract.isLastEffectiveValidator(validator);
+        if (isLastEffectiveValidator) {
+            uint256 minValidatorStake = proposalContract.minValidatorStake();
+            if (selfStake <= minValidatorStake) {
+                return (0, 0);
+            }
+
+            uint256 maxSlash = selfStake - minValidatorStake;
+            actualSlash = slashAmount > maxSlash ? maxSlash : slashAmount;
+        } else {
+            actualSlash = slashAmount > selfStake ? selfStake : slashAmount;
+        }
+
+        if (actualSlash == 0) {
+            return (0, 0);
+        }
+
         stake.selfStake = selfStake - actualSlash;
         totalStaked = totalStaked - actualSlash;
 
         // If stake drops to zero, try to remove from highest set to avoid zombies
-        if (stake.selfStake == 0) {
+        if (!isLastEffectiveValidator && stake.selfStake == 0) {
             try validatorsContract.removeFromHighestSet(validator) {} catch {}
         }
 
@@ -910,16 +919,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         }
 
         if (candidateCount == 0) {
-            uint256 fallbackMaxValidators = proposalContract.maxValidators();
-            if (fallbackMaxValidators > CONSENSUS_MAX_VALIDATORS) {
-                fallbackMaxValidators = CONSENSUS_MAX_VALIDATORS;
-            }
-            uint256 fallbackReturnLength = validators.length < fallbackMaxValidators ? validators.length : fallbackMaxValidators;
-            address[] memory fallbackTopValidators = new address[](fallbackReturnLength);
-            for (uint256 i = 0; i < fallbackReturnLength; i++) {
-                fallbackTopValidators[i] = validators[i];
-            }
-            return fallbackTopValidators;
+            return new address[](0);
         }
 
         // Sort by total stake using heap sort for improved performance

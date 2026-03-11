@@ -2340,9 +2340,64 @@ contract StakingTest is Test {
         address[] memory validators = new address[](1);
         validators[0] = VALIDATOR1;
         address[] memory result = Staking(STAKING).getTopValidators(validators);
-        // For zero-stake candidates, fallback returns trimmed input list
-        assertEq(result.length, 1);
-        assertEq(result[0], VALIDATOR1);
+        assertEq(result.length, 0);
+    }
+
+    function testSlashValidatorPreservesMinimumForLastEffectiveValidator() public {
+        vm.deal(VALIDATOR1, MIN_STAKE * 2);
+
+        _setupValidatorPass(VALIDATOR1);
+        vm.prank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE * 2}(COMMISSION_RATE);
+
+        address[] memory topValidatorsBefore = Validators(VALIDATORS).getTopValidators();
+        assertEq(topValidatorsBefore.length, 1);
+        assertEq(topValidatorsBefore[0], VALIDATOR1);
+
+        address burnAddress = makeAddr("burn");
+        vm.prank(PUNISH);
+        (uint256 actualSlash, uint256 actualReward) =
+            Staking(STAKING).slashValidator(VALIDATOR1, MIN_STAKE * 2, DELEGATOR1, 0, burnAddress);
+
+        (uint256 selfStake,,,,,,,,,) = Staking(STAKING).getValidatorInfo(VALIDATOR1);
+        address[] memory topValidatorsAfter = Validators(VALIDATORS).getTopValidators();
+
+        assertEq(actualSlash, MIN_STAKE);
+        assertEq(actualReward, 0);
+        assertEq(selfStake, MIN_STAKE);
+        assertEq(topValidatorsAfter.length, 1);
+        assertEq(topValidatorsAfter[0], VALIDATOR1);
+        assertTrue(Validators(VALIDATORS).isTopValidator(VALIDATOR1));
+    }
+
+    function testSlashValidatorRemovesNonLastEffectiveValidator() public {
+        _setupValidatorPass(VALIDATOR1);
+        vm.prank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+
+        vm.roll(block.number + TEST_EPOCH);
+
+        _setupValidatorPass(VALIDATOR2);
+        vm.prank(VALIDATOR2);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+
+        address[] memory topValidatorsBefore = Validators(VALIDATORS).getTopValidators();
+        assertEq(topValidatorsBefore.length, 2);
+
+        address burnAddress = makeAddr("burn");
+        vm.prank(PUNISH);
+        (uint256 actualSlash, uint256 actualReward) =
+            Staking(STAKING).slashValidator(VALIDATOR2, MIN_STAKE, DELEGATOR1, 0, burnAddress);
+
+        (uint256 selfStake,,,,,,,,,) = Staking(STAKING).getValidatorInfo(VALIDATOR2);
+        address[] memory topValidatorsAfter = Validators(VALIDATORS).getTopValidators();
+
+        assertEq(actualSlash, MIN_STAKE);
+        assertEq(actualReward, 0);
+        assertEq(selfStake, 0);
+        assertEq(topValidatorsAfter.length, 1);
+        assertEq(topValidatorsAfter[0], VALIDATOR1);
+        assertFalse(Validators(VALIDATORS).isTopValidator(VALIDATOR2));
     }
 
     function testInitializeWithValidatorsRequiresPrefunding() public {
@@ -2389,6 +2444,11 @@ contract StakingTest is Test {
     function testSlashQueuesPendingPayoutWhenReceiverRejects() public {
         _setupValidatorPass(VALIDATOR1);
         vm.prank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+
+        vm.roll(block.number + TEST_EPOCH);
+        _setupValidatorPass(VALIDATOR2);
+        vm.prank(VALIDATOR2);
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
 
         RejectingReceiver receiver = new RejectingReceiver();
