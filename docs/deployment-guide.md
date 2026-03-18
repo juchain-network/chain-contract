@@ -4,13 +4,15 @@
 
 JuChain is a high-performance blockchain network built on the Ethereum technology stack, utilizing the JuChain PoSA (Proof of Stake Authority) hybrid consensus mechanism. This document provides a complete deployment, configuration, and operations guide from scratch.
 
+> Note: `ju-cli` and its Go bindings have been extracted into a standalone project. This repository now only contains system contracts, tests, and genesis-related scripts.
+
 ### Core Features
 
 - **🏛️ JuChain PoSA**: Hybrid consensus mechanism combining PoA and PoS
 - **⚡ High Performance**: 1-second block intervals, high TPS processing capability
 - **🔒 Security**: Multi-layer validator management and punishment mechanisms
 - **🏗️ Modularization**: Separation of system contracts and business logic
-- **🛠️ Toolchain**: Complete CLI tools and automation scripts
+- **🛠️ Toolchain**: Contract scripts plus optional external CLI tooling
 
 ## 🏗️ System Architecture
 
@@ -308,8 +310,7 @@ ju-chain/
 │   └── Makefile          # Build scripts
 ├── chain-contract/          # System contract source code
 │   ├── contracts/        # Solidity contract source code
-│   ├── tools/     # CLI tool source code
-│   ├── scripts/          # Automation scripts
+│   ├── script/           # Foundry deployment scripts
 │   ├── foundry.toml      # Foundry configuration
 │   └── package.json      # Node.js dependencies
 └── README.md             # Project description
@@ -368,20 +369,17 @@ node scripts/verify-genesis.js
 echo "✅ Genesis block file generation complete: genesis.json"
 ```
 
-#### 4. Compile Management Tools
+#### 4. Install Management Tools
 
 ```bash
-# 🛠️ Compile Ju CLI tool
-cd chain-contract/tools
-make build
+# 🛠️ Install or build ju-cli from its standalone repository
+# The binary should be available in PATH as `ju-cli`
 
 # ✅ Test tool functionality
-./build/ju-cli version
-./build/ju-cli --help
+ju-cli version
+ju-cli --help
 
-# 🛠️ Compile automation scripts
-chmod +x *.sh
-echo "✅ All tools compiled successfully"
+echo "✅ External management tools are ready"
 ```
 
 ### Build Verification
@@ -397,7 +395,7 @@ echo "=== Verifying System Contracts ==="
 forge test --root ./chain-contract
 
 echo "=== Verifying CLI Tool ==="
-./chain-contract/tools/build/ju-cli --version
+ju-cli --version
 
 echo "=== Verifying Genesis Block ==="
 ./chain/build/bin/geth --datadir temp_test init ./chain-contract/genesis.json
@@ -742,20 +740,9 @@ graph LR
 
 ### Adding New Validators
 
-#### Complete Process (Using Automation Scripts)
+#### Complete Process (External Automation Scripts)
 
-```bash
-# 🤖 Use one-click addition script (recommended)
-cd chain-contract/tools
-./add_validator6.sh
-
-# This script automatically performs the following steps:
-# 1. Create add validator proposal
-# 2. Collect necessary validator votes
-# 3. Execute proposal (add to Validators contract)
-# 4. Register and stake in Staking contract
-# 5. Verify all steps completed
-```
+The previous one-click validator automation scripts were moved together with the standalone `ju-cli` project. Use those scripts from the external tooling repository if you want a managed operational flow; this repository now documents the manual contract-facing process only.
 
 #### Manual Execution Process
 
@@ -776,20 +763,20 @@ echo "Please ensure account balance >= 10000 JU"
 # 📝 Created by existing validator
 PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
-./build/ju-cli proposal create \
+ju-cli proposal create \
   -p $PROPOSER_ADDR \
   -t $NEW_VALIDATOR_ADDR \
   -o add \
   -r http://localhost:8545
 
 # Sign transaction
-./build/ju-cli misc sign \
+ju-cli misc sign \
   -f createProposal.json \
   -k proposer.key \
   -p password.txt
 
 # Send transaction
-./build/ju-cli misc send \
+ju-cli misc send \
   -f createProposal_signed.json \
   -r http://localhost:8545
 
@@ -803,21 +790,21 @@ echo "✅ Proposal created, Proposal ID: [Check transaction receipt]"
 PROPOSAL_ID="0xProposal ID"
 
 # Validator 1 vote
-./build/ju-cli proposal vote \
+ju-cli proposal vote \
   -s "0x970e8128ab834e3eac664312d6e30df9e93cb357" \
   -i $PROPOSAL_ID \
   -a \
   -r http://localhost:8545
 
 # Validator 2 vote
-./build/ju-cli vote_proposal \
+ju-cli vote_proposal \
   -s "0x6e30df9e93cb3578ec64c67c554dddd8d1da2c25" \
   -i $PROPOSAL_ID \
   -a true \
   --rpc_laddr http://localhost:8545
 
 # Validator 3 vote (majority reached)
-./build/ju-cli vote_proposal \
+ju-cli vote_proposal \
   -s "0x3858ffca201b0a7d75fd23bb302c12332c5e4000" \
   -i $PROPOSAL_ID \
   -a true \
@@ -830,7 +817,7 @@ echo "✅ Proposal voting completed, awaiting execution"
 
 ```bash
 # 💰 Register validator in Staking contract
-./build/ju-cli staking validator-register \
+ju-cli staking validator-register \
   -p $NEW_VALIDATOR_ADDR \
   -s 10000 \
   -c 500 \
@@ -863,19 +850,19 @@ echo "✅ New validator node started"
 
 ```bash
 # 📊 Query all active validators
-./build/ju-cli validator list -r http://localhost:8545
+ju-cli validator list -r http://localhost:8545
 
 # 👤 Query specific validator details
-./build/ju-cli validator query \
+ju-cli validator query \
   -a 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   -r http://localhost:8545
 
 # 💰 Query Staking contract information
-./build/ju-cli staking list-top-validators \
+ju-cli staking list-top-validators \
   -r http://localhost:8545
 
 # 🏆 Query specific validator staking information
-./build/ju-cli staking query-validator \
+ju-cli staking query-validator \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   -r http://localhost:8545
 ```
@@ -884,18 +871,18 @@ echo "✅ New validator node started"
 
 ```bash
 # 📈 Validator performance statistics
-./build/ju-cli validator stats \
+ju-cli validator stats \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --blocks 1000 \
   -r http://localhost:8545
 
 # ⚠️ Check validator punishment status
-./build/ju-cli validator punishment-status \
+ju-cli validator punishment-status \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   -r http://localhost:8545
 
 # 💎 Query validator rewards
-./build/ju-cli staking validator-rewards \
+ju-cli staking validator-rewards \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   -r http://localhost:8545
 ```
@@ -909,22 +896,22 @@ echo "✅ New validator node started"
 VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
 # Check withdrawable rewards
-./build/ju-cli validator check-withdrawable \
+ju-cli validator check-withdrawable \
   -a $VALIDATOR_ADDR \
   -r http://localhost:8545
 
 # Create withdrawal transaction
-./build/ju-cli validator withdraw-profits \
+ju-cli validator withdraw-profits \
   -a $VALIDATOR_ADDR \
   -r http://localhost:8545
 
 # Sign and send
-./build/ju-cli misc sign \
+ju-cli misc sign \
   -f withdrawProfits.json \
   -k validator.key \
   -p password.txt
 
-./build/ju-cli misc send \
+ju-cli misc send \
   -f withdrawProfits_signed.json \
   -r http://localhost:8545
 
@@ -948,7 +935,7 @@ echo "✅ Reward withdrawal transaction sent"
 VALIDATOR_ADDR="0xAddress of validator to exit"
 
 # 1. Create removal proposal
-./build/ju-cli proposal create \
+ju-cli proposal create \
   -p $VALIDATOR_ADDR \
   -t $VALIDATOR_ADDR \
   -o remove \
@@ -958,7 +945,7 @@ VALIDATOR_ADDR="0xAddress of validator to exit"
 echo "Waiting for other validators to vote in support of removal proposal"
 
 # 3. Unstake in Staking contract
-./build/ju-cli staking undelegate \
+ju-cli staking undelegate \
   -d $VALIDATOR_ADDR \
   -v $VALIDATOR_ADDR \
   -r http://localhost:8545
@@ -986,7 +973,7 @@ Validators will be automatically penalized when the following situations occur:
 PARAM_INDEX=0      # 0: proposalLastingPeriod
 NEW_VALUE=172800   # 48 hours
 
-./build/ju-cli proposal create-config \
+ju-cli proposal create-config \
   -p $PROPOSER_ADDR \
   -i $PARAM_INDEX \
   -v $NEW_VALUE \
@@ -1056,19 +1043,19 @@ PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 PARAM_INDEX=0
 NEW_VALUE=172800  # 48 hours
 
-./build/ju-cli create-config-proposal \
+ju-cli create-config-proposal \
   -p $PROPOSER_ADDR \
   -i $PARAM_INDEX \
   -v $NEW_VALUE \
   --rpc_laddr http://localhost:8545
 
 # Sign and send configuration proposal
-./build/ju-cli misc sign \
+ju-cli misc sign \
   -f createConfigProposal.json \
   -k proposer.key \
   -p password.txt
 
-./build/ju-cli misc send \
+ju-cli misc send \
   -f createConfigProposal_signed.json \
   -r http://localhost:8545
 
@@ -1079,7 +1066,7 @@ echo "✅ Configuration update proposal created"
 
 ```bash
 # 📊 Query all system parameters
-./build/ju-cli proposal get-params -r http://localhost:8545
+ju-cli proposal get-params -r http://localhost:8545
 
 # 🔍 Query specific parameter
 curl -X POST http://localhost:8545 \
@@ -1103,24 +1090,24 @@ curl -X POST http://localhost:8545 \
 # 💰 Check withdrawable rewards
 VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
-./build/ju-cli staking check-rewards \
+ju-cli staking check-rewards \
   -c $VALIDATOR_ADDR \
   -v $VALIDATOR_ADDR \
   -r http://localhost:8545
 
 # Create reward withdrawal transaction
-./build/ju-cli staking claim-rewards \
+ju-cli staking claim-rewards \
   -c $VALIDATOR_ADDR \
   -v $VALIDATOR_ADDR \
   -r http://localhost:8545
 
 # Sign and send
-./build/ju-cli misc sign \
+ju-cli misc sign \
   -f withdrawRewards.json \
   -k validator.key \
   -p password.txt
 
-./build/ju-cli misc send \
+ju-cli misc send \
   -f withdrawRewards_signed.json \
   -r http://localhost:8545
 ```
@@ -1166,16 +1153,16 @@ curl -X POST http://localhost:8545 \
 
 ```bash
 # 👥 Active validator list
-./build/ju-cli validator list -r http://localhost:8545
+ju-cli validator list -r http://localhost:8545
 
 # 📈 Validator performance statistics
-./build/ju-cli validator performance \
+ju-cli validator performance \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   --blocks 1000 \
   -r http://localhost:8545
 
 # ⚠️ Punishment and imprisonment status
-./build/ju-cli validator punishment-history \
+ju-cli validator punishment-history \
   --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
   -r http://localhost:8545
 ```
@@ -1272,7 +1259,7 @@ send_alert() {
 
 # Check validator status
 check_validators() {
-    local validators=$(./build/ju-cli validators --rpc_laddr $RPC_URL | grep "0x" | wc -l)
+    local validators=$(ju-cli validators --rpc_laddr $RPC_URL | grep "0x" | wc -l)
     echo "$(date): Active validator count:$validators" | tee -a $LOG_FILE
     
     if [ $validators -lt 3 ]; then
@@ -1412,7 +1399,7 @@ sudo ufw allow 8545
 
 ```bash
 # 1. Check validator status
-./build/ju-cli validator-status \
+ju-cli validator-status \
   --address [validator address] \
   --rpc_laddr http://localhost:8545
 
@@ -1425,7 +1412,7 @@ eth.mining
 miner.mining
 
 # 4. Check if validator is in active list
-./build/ju-cli validators --rpc_laddr http://localhost:8545
+ju-cli validators --rpc_laddr http://localhost:8545
 ```
 
 **Solutions**:
@@ -1439,7 +1426,7 @@ miner.setEtherbase("[validator address]")
 miner.start(1)
 
 # Check if punished
-./build/ju-cli punishment-status \
+ju-cli punishment-status \
   --address [validator address] \
   --rpc_laddr http://localhost:8545
 ```
@@ -1463,7 +1450,7 @@ miner.start(1)
 
 # 4. Duplicate voting
 # Solution: Check if already voted
-./build/ju-cli proposal-votes \
+ju-cli proposal-votes \
   --proposal-id [proposal ID] \
   --rpc_laddr http://localhost:8545
 ```
@@ -1477,7 +1464,7 @@ Recovery steps when network becomes stagnant:
 ```bash
 # 1. Collect network status information
 echo "=== Network Diagnosis ==="
-./build/ju-cli network-status --rpc_laddr http://localhost:8545
+ju-cli network-status --rpc_laddr http://localhost:8545
 
 # 2. Restart all validator nodes
 echo "=== Restarting Validators ==="
@@ -1743,7 +1730,6 @@ With this guide, you should be able to:
 
 ### 📖 Related Resources
 
-- [Ju CLI Usage Guide](./ju-cli-guide.md)
 - [Clef External Signer Guide](./clef-external-signer-guide.md)
 - [System Contract API Documentation](../contracts/README.md)
 - [Foundry Development Framework](https://book.getfoundry.sh/)

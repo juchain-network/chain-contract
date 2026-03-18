@@ -1,5 +1,5 @@
 # Ju System Contracts
-This repository contains the system contracts for the Ju blockchain's JPoSA (JPoSA) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and a comprehensive CLI tool for network administration.
+This repository contains the system contracts for the Ju blockchain's JPoSA (JPoSA) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and the scripts needed to build contract artifacts and genesis data.
 
 ## ✨ Features
 
@@ -13,7 +13,6 @@ This repository contains the system contracts for the Ju blockchain's JPoSA (JPo
 
 ```
 chain-contract/
-├── tools/               # Congress JPoSA management CLI tool
 ├── contracts/           # Solidity source code
 ├── script/              # Foundry deployment scripts
 ├── test/                # Foundry test suites
@@ -33,7 +32,6 @@ chain-contract/
 - [**JPoSA Whitepaper (Chinese)**](docs/posa-whitepaper-zh.md) - Chinese version of JPoSA consensus mechanism whitepaper
 - [**JPoSA Technical Specification**](docs/posa-tech-spec.md) - Detailed technical specification of JPoSA consensus mechanism
 - [**Deployment Guide**](docs/deployment-guide.md) - Complete deployment and configuration guide
-- [**Congress CLI Guide**](docs/ju-cli-guide.md) - Complete guide for Congress JPoSA management
 
 
 
@@ -44,8 +42,7 @@ chain-contract/
 1. Compile contracts: `forge build`
 2. Generate contracts: `npm run generate`
 3. Initialize genesis: `npm run init-genesis`
-4. Build CLI tools: `cd congress-cli && make build`
-5. Start chain: `cd ../chain/local-test && ./pm2-init.sh` or `pm2 start ecosystem.config.js`
+4. Start chain: `cd ../chain/local-test && ./pm2-init.sh` or `pm2 start ecosystem.config.js`
 
 
 ## 🌐 Network Information
@@ -125,41 +122,9 @@ forge test --match-contract Punish
 - **Punishment System**: Thresholds, jailing, missed blocks
 - **Reward Distribution**: Fee sharing, profit withdrawal
 
-## 🏛️ Congress JPoSA Management
+## 🏛️ Operational Tooling
 
-### **Validator Operations**
-
-```bash
-# Query all active validators
-./build/ju-cli validator list
-# Query specific validator
-./build/ju-cli validator -a VALIDATOR_ADDRESS
-```
-
-### **Proposal Management**
-
-```bash
-# Create proposal to add new validator
-./build/ju-cli proposal create -p PROPOSER_ADDR -t NEW_VALIDATOR_ADDR -o add
-
-# Sign transaction
-./build/ju-cli misc sign -f createProposal.json -w keyfile -p passwordfile
-
-# Send transaction
-./build/ju-cli misc send -f createProposal_signed.json
-```
-
-
-### **Voting Process**
-
-```bash
-# Vote on proposal
-./build/ju-cli proposal vote -s VOTER_ADDR -i PROPOSAL_ID -a true
-
-# Sign and send vote
-./build/ju-cli misc sign -f voteProposal.json -w keyfile -p passwordfile
-./build/ju-cli misc send -f voteProposal_signed.json
-```
+`ju-cli` and its generated Go bindings have been extracted into a standalone project. This repository now focuses on Solidity contracts, Foundry tests, and genesis-generation scripts.
 
 
 ## 🚀 Quick Start
@@ -189,9 +154,4 @@ npm run init-genesis
 # 6. Generate contract bytecode (if needed)
 npm run build-and-extract
 
-# 7. Build Congress CLI tools
-cd tools && make build
-
-# 8. Test CLI tools
-./build/ju-cli help
 ```

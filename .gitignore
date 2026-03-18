@@ -16,10 +16,6 @@ broadcast
 coverage
 logs/
 test-results/
-tools/ju-cli.exe
-tools/ju-cli
-tools/*.json
-tools/cmd/*.json
 commands.sh
 lcov.info
 coverage*
