@@ -1,1740 +1,685 @@
-# JuChain PoSA Blockchain Deployment and Operations Guide
+# JuChain PoSA Deployment and Operations Guide
 
-## 📋 Overview
+## Scope
 
-JuChain is a high-performance blockchain network built on the Ethereum technology stack, utilizing the JuChain PoSA (Proof of Stake Authority) hybrid consensus mechanism. This document provides a complete deployment, configuration, and operations guide from scratch.
+This guide reflects the current repository layout and the current PoSA implementation.
 
-> Note: `ju-cli` and its Go bindings have been extracted into a standalone project. This repository now only contains system contracts, tests, and genesis-related scripts.
+- this repository contains system contracts, Foundry tests, and genesis-generation scripts
+- `ju-cli` and generated Go bindings have been moved to a standalone project
+- the behavior described here is sourced from the Solidity contracts in `contracts/` and the Congress consensus implementation in `/home/litian/juchain/github/chain/consensus/congress`
 
-### Core Features
+If your external tooling exposes a different command surface, the contract function names and semantics in this document remain the source of truth.
 
-- **🏛️ JuChain PoSA**: Hybrid consensus mechanism combining PoA and PoS
-- **⚡ High Performance**: 1-second block intervals, high TPS processing capability
-- **🔒 Security**: Multi-layer validator management and punishment mechanisms
-- **🏗️ Modularization**: Separation of system contracts and business logic
-- **🛠️ Toolchain**: Contract scripts plus optional external CLI tooling
+## Table of Contents
 
-## 🏗️ System Architecture
+1. [What Gets Deployed](#1-what-gets-deployed)
+2. [Environment Setup and Build](#2-environment-setup-and-build)
+3. [Genesis Generation and Validation](#3-genesis-generation-and-validation)
+4. [Node Deployment and Network Layout](#4-node-deployment-and-network-layout)
+5. [Validator and Governance Operations](#5-validator-and-governance-operations)
+6. [Rewards, Staking, and Withdrawal Operations](#6-rewards-staking-and-withdrawal-operations)
+7. [Monitoring and Day-2 Operations](#7-monitoring-and-day-2-operations)
+8. [Troubleshooting Guide](#8-troubleshooting-guide)
+9. [Contract Interface Summary](#9-contract-interface-summary)
+10. [Best Practices Summary](#10-best-practices-summary)
 
-### Core Component Architecture Diagram
+## 1. What Gets Deployed
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    JuChain Network                          │
-├─────────────────┬─────────────────┬─────────────────────────┤
-│   Geth Client   │     Ju CLI      │    System Contracts     │
-│                 │                 │                         │
-│ • Mining        │ • Validator Mgmt│ • Validators (0xf010)   │
-│ • P2P Network   │ • Proposal Mgmt │ • Punish (0xf011)       │
-│ • JSON-RPC API  │ • Query Tools   │ • Proposal (0xf012)     │
-│ • External Sign │ • Auto Scripts  │ • Staking (0xf013)      │
-└─────────────────┴─────────────────┴─────────────────────────┘
-```
+### 1.1 System Contracts
 
-### System Contract Addresses
+| Contract | Address | Responsibility |
+| --- | --- | --- |
+| `Validators` | `0x000000000000000000000000000000000000F010` | validator-set caches, validator metadata, fee-income accounting |
+| `Punish` | `0x000000000000000000000000000000000000F011` | missed-block punishment and double-sign evidence |
+| `Proposal` | `0x000000000000000000000000000000000000F012` | governance proposals and governable parameters |
+| `Staking` | `0x000000000000000000000000000000000000F013` | validator self-stake, delegation, rewards, unbonding, jail state |
 
-| Contract Name | Address | Function Description |
-|---------|------|----------|
-| **Validators** | `0x000000000000000000000000000000000000f010` | Validator status management, reward distribution |
-| **Punish** | `0x000000000000000000000000000000000000f011` | Validator punishment mechanism, imprisonment handling |
-| **Proposal** | `0x000000000000000000000000000000000000f012` | Governance proposals, voting management |
-| **Staking** | `0x000000000000000000000000000000000000f013` | Staking management, delegation mechanism |
+Historical POA addresses at `0xf000` to `0xf002` still exist in Congress for upgrade compatibility, but new PoSA deployments should use `0xf010` to `0xf013`.
 
-### Network Parameters
+### 1.2 Consensus Parameters
 
-| Parameter | Mainnet | Testnet | Description |
-|------|------|--------|------|
-| **Chain ID** | 210000 | 202599 | Network identifier |
-| **Block Time** | 1 second | 1 second | Average block interval |
-| **Epoch Length** | 86400 blocks | 86400 blocks | Validator rotation period |
-| **Max Validators** | 21 | 21 | Maximum active validator count |
-| **Min Stake** | 10000 JU | 1000 JU | Minimum staking requirement |
-
-## ⚙️ System Configuration Parameters
-
-### JuChain Consensus Parameters
-
-Core consensus parameters configured in the genesis block:
+At genesis, Congress is configured under `config.congress`:
 
 ```json
 {
   "config": {
     "congress": {
-      "period": 1,        // Block interval (seconds)
-      "epoch": 86400,       // Validator rotation period (blocks)
+      "period": 1,
+      "epoch": 86400
     }
   }
 }
 ```
 
-### System Contract Parameter Details
+Meaning:
 
-These parameters are initialized with defaults at deployment (genesis). After initialization, they can be updated via governance proposals (see below); recompilation/genesis updates are only needed if you want different defaults:
+- `period`: target block interval in seconds
+- `epoch`: validator-set rotation period in blocks
 
-| Parameter Name | Default Value | Unit | Description |
-|----------|--------|------|------|
-| `proposalLastingPeriod` | 604800 | Blocks | Proposal validity period (~7 days) |
-| `punishThreshold` | 24 | Blocks | Continuous missed blocks triggering profit confiscation |
-| `removeThreshold` | 48 | Blocks | Continuous missed blocks triggering validator removal |
-| `decreaseRate` | 24 | % | Reduction rate during punishment |
-| `withdrawProfitPeriod` | 86400 | Blocks | Profit withdrawal interval (~24 hours) |
-| `blockReward` | 200000000000000000 | Wei | Block reward amount (0.2 JU) |
-| `unbondingPeriod` | 604800 | Blocks | Unbonding period (7 days) |
-| `validatorUnjailPeriod` | 86400 | Blocks | Validator unjail period (~24 hours) |
-| `minValidatorStake` | 100000000000000000000000 | Wei | Minimum validator staking amount (100,000 JU) |
-| `maxValidators` | 21 | Count | Maximum number of active validators |
-| `minDelegation` | 10000000000000000000 | Wei | Minimum delegation amount (10 JU) |
-| `minUndelegation` | 1000000000000000000 | Wei | Minimum undelegation amount (1 JU) |
-| `doubleSignSlashAmount` | 50000000000000000000000 | Wei | Double-sign slash amount (50,000 JU) |
-| `doubleSignRewardAmount` | 10000000000000000000000 | Wei | Double-sign reporter reward (10,000 JU) |
-| `doubleSignWindow` | 86400 | Blocks | Double-sign evidence window (~24 hours) |
-| `burnAddress` | 0x000000000000000000000000000000000000dEaD | Address | Burn destination for slashed remainder |
-| `commissionUpdateCooldown` | 604800 | Blocks | Commission update cooldown (~7 days) |
-| `baseRewardRatio` | 3000 | BPS | Base reward ratio (30.00%) |
-| `maxCommissionRate` | 6000 | BPS | Maximum commission rate (60.00%) |
-| `proposalCooldown` | 100 | Blocks | Proposal creation cooldown |
+Validator-set changes only become effective at epoch boundaries.
 
-> ⚠️ **Important Reminder**: If you want different **default** parameters at genesis, you must:
->
-> 1. Recompile system contracts (`forge build`)
-> 2. Generate new contract bytecode (`npm run generate`)
-> 3. Update genesis block file (`npm run init-genesis`)
-> 4. Reinitialize all node data directories
->
-> For changes after launch, use governance proposals (see below).
+### 1.3 Repository Boundaries
 
-### Staking Mechanism Parameters
+This repository owns:
 
-JuChain introduces a dual-contract validator management mechanism:
+- Solidity contracts
+- Foundry tests
+- contract bytecode generation
+- genesis generation
 
-```json
-{
-  "staking": {
-    "minStakeAmount": "100000000000000000000000",  // 100000 JU (wei)
-    "maxCommissionRate": 6000,                    // Maximum commission rate 60%
-    "unbondingPeriod": 604800,                    // Unbonding period 7 days (blocks)
-    "maxValidators": 21,                          // Maximum active validator count
-  }
-}
+This repository does not own:
+
+- validator-node binaries
+- long-running node orchestration
+- external CLI wrappers around contract calls
+
+Those parts live in the chain repository and any external tooling repository used by your deployment.
+
+## 2. Environment Setup and Build
+
+### 2.1 Prerequisites
+
+Required tools:
+
+- Node.js and npm
+- Foundry
+- access to the JuChain node software from the chain repository
+
+Recommended checks:
+
+```bash
+node --version
+npm --version
+forge --version
 ```
 
-## 📄 Genesis Block Configuration
+### 2.2 Install Dependencies
 
-### Complete Genesis Block Structure
-
-JuChain's genesis block configuration includes network parameters, system contract deployment, and initial state settings:
-
-```json
-{
-  "config": {
-    "chainId": 202599,
-    "homesteadBlock": 0,
-    "eip150Block": 0,
-    "eip150Hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "eip155Block": 0,
-    "eip158Block": 0,
-    "byzantiumBlock": 0,
-    "constantinopleBlock": 0,
-    "petersburgBlock": 0,
-    "istanbulBlock": 0,
-    "berlinBlock": 0,
-    "londonBlock": 0,
-    "congress": {
-      "period": 3,
-      "epoch": 200
-    }
-  },
-  "difficulty": "0x1",
-  "gasLimit": "0x47b760",
-  "alloc": {
-    "000000000000000000000000000000000000f000": {
-      "balance": "0x0",
-      "code": "0x608060405234801561001057600080fd5b50...",
-      "storage": {}
-    },
-    "000000000000000000000000000000000000f001": {
-      "balance": "0x0",
-      "code": "0x608060405234801561001057600080fd5b50...",
-      "storage": {}
-    },
-    "000000000000000000000000000000000000f002": {
-      "balance": "0x0",
-      "code": "0x608060405234801561001057600080fd5b50...",
-      "storage": {}
-    },
-    "000000000000000000000000000000000000f003": {
-      "balance": "0x0",
-      "code": "0x608060405234801561001057600080fd5b50...",
-      "storage": {}
-    }
-  },
-  "extraData": "0x0000000000000000000000000000000000000000000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266970e8128ab834e3eac664312d6e30df9e93cb3578ec64c67c554dddd8d1da2c256e30df9e93cb3578ec64c67c554dddd8d1da2c256a45ffca201b0a7d75fd23bb302c12332c5e40003d968443d9b72bcef4409b3a2d5e31031390fc826b175474e89094c44da98b954eedeac495271d0f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-  "gasUsed": "0x0",
-  "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "nonce": "0x0",
-  "number": "0x0",
-  "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "timestamp": "0x0"
-}
+```bash
+npm install
 ```
 
-### Key Configuration Explanation
+This installs the JavaScript dependencies used by the local generation scripts.
 
-#### 1. Network Identifier Settings
+### 2.3 Build and Test Contracts
 
-```json
-{
-  "config": {
-    "chainId": 202599,    // JuChain testnet ID
-    "congress": {
-      "period": 1,        // 1-second block interval
-      "epoch": 86400        // Rotate validators every 86400 blocks
-    }
-  }
-}
+```bash
+forge build
+forge test
 ```
 
-#### 2. System Contract Pre-deployment
+Expected outputs:
 
-All system contracts are pre-deployed to fixed addresses in the genesis block:
+- compiled artifacts under `out/`
+- green unit and contract-level tests
 
-- **Contract Bytecode**: Generated through `forge build` compilation
-- **Storage Layout**: Initial state stored in `storage` field
-- **Balance Setting**: System contract initial balance is 0
+### 2.4 Refresh Generated Artifacts and Genesis
 
-#### 3. Initial Validator Setup
+If you modify Solidity source, the expected workflow is:
 
-`extraData` field encoding format:
-
+```bash
+forge build
+npm run generate
+npm run init-genesis
 ```
-extraData = vanity(32 bytes) + validators(20 bytes*N) + signature(65 bytes)
+
+What each step does:
+
+- `forge build` compiles contracts into `out/`
+- `npm run generate` refreshes generated contract artifacts used by the repo scripts
+- `npm run init-genesis` injects compiled bytecode into `genesis.json`
+
+If a local network is already running, wipe node data and re-initialize all nodes after regenerating genesis.
+
+### 2.5 Build Verification Checklist
+
+After building, confirm:
+
+- `out/Proposal.sol/Proposal.json` exists
+- `out/Staking.sol/Staking.json` exists
+- `out/Validators.sol/Validators.json` exists
+- `out/Punish.sol/Punish.json` exists
+- `genesis.json` contains alloc entries for `f010` to `f013`
+
+## 3. Genesis Generation and Validation
+
+### 3.1 Genesis Contract Allocations
+
+The generated genesis must predeploy the four PoSA contracts at:
+
+```text
+0x000000000000000000000000000000000000f010
+0x000000000000000000000000000000000000f011
+0x000000000000000000000000000000000000f012
+0x000000000000000000000000000000000000f013
+```
+
+Do not hand-copy old `0xf000` to `0xf003` examples from legacy POA documents.
+
+### 3.2 `extraData` Format
+
+Genesis validators come from the `extraData` validator list. The field layout is:
+
+```text
+extraData = vanity(32 bytes) + validators(20 bytes * N) + signature(65 bytes)
 ```
 
 Where:
 
-- **vanity**: 32 bytes of padding data (usually 0)
-- **validators**: Initial validator address list (20 bytes each)
-- **signature**: 65-byte signature data (genesis block signature)
+- `vanity` is arbitrary 32-byte padding
+- `validators` is the genesis validator address list
+- `signature` is the genesis block seal placeholder used by the consensus engine
 
-#### 4. Pre-allocated Accounts
+Congress reads those validators as the initial validator set and uses them to bootstrap the PoSA contracts.
 
-```json
-{
-  "alloc": {
-    "f39fd6e51aad88f6f4ce6ab8827279cfffb92266": {
-      "balance": "0x21e19e0c9bab2400000"  // 10000 ETH (for development)
-    },
-    "970e8128ab834e3eac664312d6e30df9e93cb357": {
-      "balance": "0x21e19e0c9bab2400000"  // 10000 ETH (Validator 1)
-    }
-  }
-}
+### 3.3 Initialization Order
+
+At block `1`, Congress initializes contracts in this order:
+
+1. `Proposal.initialize(validators, validatorsAddr, epoch)`
+2. `Staking.initializeWithValidators(validatorsAddr, proposalAddr, punishAddr, validators, commissionRate)`
+3. `Punish.initialize(validatorsAddr, proposalAddr, stakingAddr)`
+4. `Validators.initialize(validators, proposalAddr, punishAddr, stakingAddr)`
+
+This ordering matters because:
+
+- `Proposal` must exist before `Staking` can read parameters
+- `Staking` must exist before `Punish` and `Validators` can reference real stake and jail state
+- `Validators` is initialized last because it references all of the others
+
+### 3.4 Genesis Validator Bootstrap
+
+Bootstrap specifics:
+
+- Congress pre-funds the staking contract with `1 ether` per genesis validator for `initializeWithValidators(...)`
+- genesis validators are registered directly by the bootstrap path
+- genesis validators start with `1 ether` bootstrap self-stake and `1000` bps commission
+- post-launch validator registration still requires `minValidatorStake = 100000 JU` by default
+
+Do not misread the bootstrap amount as the post-launch validator minimum.
+
+### 3.5 Recommended Genesis Validation Checks
+
+Before you initialize nodes from a newly generated genesis, verify:
+
+- chain ID and `config.congress` values are correct
+- alloc contains bytecode at `f010` to `f013`
+- `extraData` contains the intended validator list
+- the initial validator count is non-zero and does not exceed the consensus maximum
+- no old POA contract addresses are being used as current system-contract allocs
+
+## 4. Node Deployment and Network Layout
+
+### 4.1 Deployment Shapes
+
+Common layouts:
+
+1. Single-node development environment
+   - good for local contract validation and simple end-to-end checks
+2. Multi-node validator network
+   - required for realistic epoch rotation, governance, missed-block punishment, and failover testing
+
+### 4.2 Minimum Practical Validator Layout
+
+For multi-validator testing, use enough physical nodes to keep consensus live when one validator is jailed or removed.
+
+Operational rule:
+
+- do not configure more active validators than the physical network can realistically support
+- remember that Congress uses `N/2 + 1` style recent-signer and quorum calculations
+
+### 4.3 Node Configuration Requirements
+
+Your node deployment must ensure:
+
+- all validators start from the same `genesis.json`
+- chain config in the node matches the generated genesis
+- validators can sign blocks with the intended mining account
+- network peers can discover or statically connect to one another
+- RPC is available for contract operations and monitoring
+
+### 4.4 Recommended Validator-Node Settings
+
+Each validator node should have:
+
+- a dedicated data directory
+- a dedicated validator key or external signer
+- RPC enabled on a protected interface
+- mining enabled for the validator address
+- persistent peer connectivity
+
+The exact startup command depends on the chain repository and your runtime environment, but those properties must hold regardless of wrapper scripts.
+
+### 4.5 Account and Signer Management
+
+Recommended approach:
+
+- use one validator account per node
+- keep fee-receiver and validator key responsibilities explicit
+- prefer external signing or hardened key management in production
+- keep validator keystores and passwords separate per node
+
+### 4.6 Network Connectivity
+
+For multi-node deployments, decide on one of:
+
+- static peer lists
+- trusted peer sets
+- controlled peer discovery with firewall rules
+
+Whatever method is used, the validator nodes must have durable connectivity across epoch boundaries. Unstable peer connectivity is one of the fastest ways to create false missed-block punishment.
+
+## 5. Validator and Governance Operations
+
+### 5.1 Validator Lifecycle Overview
+
+The current validator lifecycle is:
+
+```text
+governance approval
+  -> registerValidator
+  -> enters highestValidatorsSet
+  -> next epoch enters currentValidatorSet
+  -> active operation
+  -> resignValidator or punishment
+  -> next epoch leaves currentValidatorSet
+  -> exitValidator
+  -> unbonding
 ```
 
-### Contract Bytecode Generation Process
+### 5.2 Add a Validator
 
-System contract bytecode needs to be generated through the following steps:
+The current validator-admission flow is:
 
-```bash
-# 1. Compile all contracts
-cd chain-contract
-forge build
+1. an active validator creates an add-validator proposal with `Proposal.createProposal(candidate, true, details)`
+2. active non-jailed validators vote with `Proposal.voteProposal(id, true)`
+3. as soon as majority is reached, `Proposal.pass[candidate]` becomes `true`
+4. the candidate calls `Staking.registerValidator(commissionRate)` with `msg.value >= minValidatorStake`
+5. the validator enters `highestValidatorsSet`
+6. the validator becomes active in consensus only at the next epoch transition
 
-# 2. Generate contract deployment code
-npm run generate
+Important details:
 
-# 3. Automatically update genesis block file
-npm run init-genesis
+- proposal majority is `getVotingValidatorCount() / 2 + 1`
+- proposal approval is immediate on majority
+- the candidate must register within `proposalLastingPeriod`
+- `registerValidator(...)` is only allowed on non-epoch blocks
+- `registerValidator(...)` and `unjailValidator(...)` share the "one validator addition per epoch" limit
 
-# 4. Verify genesis block file
-node scripts/verify-genesis.js
+### 5.3 Edit Validator Metadata
+
+Validator descriptive data is updated through:
+
+- `Validators.createOrEditValidator(feeAddr, moniker, identity, website, email, details)`
+
+Requirements:
+
+- caller must be the validator address
+- validator must have governance authorization through `Proposal.pass`
+- metadata field lengths must satisfy the contract validation rules
+
+This operation does not change stake or active-set membership.
+
+### 5.4 Update Commission Rate
+
+Validators change commission through:
+
+- `Staking.updateCommissionRate(newCommissionRate)`
+
+Requirements:
+
+- validator must be registered and valid
+- `newCommissionRate > 0`
+- `newCommissionRate <= maxCommissionRate`
+- cooldown since the previous update must have passed
+
+### 5.5 Remove or Resign a Validator
+
+There are two main removal paths.
+
+Governance removal:
+
+1. create `Proposal.createProposal(candidate, false, details)`
+2. validators vote
+3. majority approval clears `pass[candidate]`
+4. validator is jailed and removed from candidate management paths
+
+Voluntary exit:
+
+1. validator calls `Staking.resignValidator()`
+2. validator is marked jailed for technical exit coordination
+3. validator is removed from `highestValidatorsSet`
+4. validator waits until the next epoch removes it from `currentValidatorSet`
+5. validator calls `Staking.exitValidator()`
+6. principal enters unbonding
+
+Current valid exit names are:
+
+- `decreaseValidatorStake`
+- `resignValidator`
+- `exitValidator`
+
+Do not automate against old names such as `withdrawValidatorStake` or `emergencyExit`.
+
+### 5.6 Re-entry After Jail
+
+A jailed validator does not automatically regain status.
+
+To come back, the validator must:
+
+1. wait until `validatorUnjailPeriod` ends
+2. pass a fresh governance proposal
+3. keep at least `minValidatorStake`
+4. call `Staking.unjailValidator(validator)` on a non-epoch block
+
+The validator re-enters the candidate set immediately but only re-enters the active consensus set after the next epoch rotation.
+
+### 5.7 System Parameter Updates
+
+Governable parameters are changed through:
+
+- `Proposal.createUpdateConfigProposal(cid, newValue)`
+- `Proposal.voteProposal(id, true)`
+
+Operationally important facts:
+
+- validation happens before proposal creation and again on execution
+- the update becomes effective immediately once majority is reached
+- it does not wait until `proposalLastingPeriod` expires
+
+## 6. Rewards, Staking, and Withdrawal Operations
+
+### 6.1 Delegation
+
+Users delegate through:
+
+- `Staking.delegate(validator)` with `msg.value`
+
+Requirements:
+
+- validator must be active and not jailed
+- minimum delegation is `10 JU` by default
+- self-delegation through the public delegation path is rejected
+
+### 6.2 Undelegation
+
+Users undelegate through:
+
+- `Staking.undelegate(validator, amount)`
+
+Requirements:
+
+- amount must be at least `minUndelegation`
+- delegation amount must exist
+- undelegated principal enters an unbonding queue
+
+### 6.3 Validator Self-Stake Changes
+
+Validators can:
+
+- add self-stake with `addValidatorStake()`
+- partially reduce self-stake with `decreaseValidatorStake(amount)`
+
+Important behavior:
+
+- the remaining self-stake after reduction must still satisfy `minValidatorStake`
+- reduced principal is not paid immediately; it moves into the validator's unbonding queue
+
+### 6.4 Principal Withdrawal
+
+After the unbonding period:
+
+- call `Staking.withdrawUnbonded(validator, maxEntries)`
+
+This applies to:
+
+- undelegated principal
+- validator self-stake reduced via `decreaseValidatorStake(...)`
+- validator self-stake exited via `exitValidator()`
+
+### 6.5 Reward Withdrawal
+
+There are three separate reward withdrawal surfaces:
+
+1. validator transaction-fee income
+   - `Validators.withdrawProfits(validator)`
+2. validator coinbase reward share
+   - `Staking.claimValidatorRewards()`
+3. delegator reward share
+   - `Staking.claimRewards(validator)`
+
+Validator reward and profit withdrawals are each rate-limited by `withdrawProfitPeriod` in their respective paths.
+
+### 6.6 Pending Payouts
+
+The staking contract may queue a payment instead of transferring immediately. When that happens, the recipient must later call:
+
+- `Staking.withdrawPendingPayout(recipient)`
+
+Do not assume reward claims or unbond withdrawals are always paid in the same transaction.
+
+### 6.7 Coinbase Reward Formula
+
+Congress computes the actual producer payout as:
+
+```text
+fixedPart    = blockReward * baseRewardRatio / 10000
+weightedPool = blockReward * validatorCount * (10000 - baseRewardRatio) / 10000
+weightedPart = minerStake * weightedPool / totalStake
+actualReward = fixedPart + weightedPart
 ```
 
-> 📝 **Note**: Each time system contract code is modified, the genesis block file must be regenerated and all nodes reinitialized.
-
-## 🚀 Environment Setup and Compilation
-
-### Development Environment Requirements
-
-#### Required Software List
-
-| Software | Minimum Version | Recommended Version | Purpose |
-|------|----------|----------|------|
-| **Go** | 1.23+ | 1.24+ | Compile Geth client |
-| **Node.js** | 18+ | 20+ | Run contract scripts and tools |
-| **Foundry** | 1.2.3+ | Latest | Smart contract development framework |
-| **GCC/G++** | 7+ | 11+ | C++ compiler dependencies |
-| **Git** | 2.30+ | Latest | Version control |
-| **Make** | 4.0+ | Latest | Build tool |
-
-#### Environment Installation
-
-```bash
-# 🔧 Install Foundry (smart contract toolchain)
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
-
-# 🔧 Install Node.js (recommended using nvm)
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-nvm install 20
-nvm use 20
-
-# 🔧 Install Go (macOS example)
-brew install go
-# Or download from official site: https://golang.org/dl/
+Implications:
 
-# 🔧 Verify installation
-go version          # Should show go1.24.x
-node --version      # Should show v20.x.x
-forge --version     # Should show foundry version
-```
+- `blockReward` is a base input, not the guaranteed final payout for every block
+- the producer's stake weight changes the final amount
+- jailed validators are excluded from reward eligibility immediately
 
-### Source Code Acquisition
+## 7. Monitoring and Day-2 Operations
 
-#### Complete Project Structure
+### 7.1 Basic Network Health
 
-```bash
-# 📥 Clone complete project
-git clone <repository-url> ju-chain
-cd ju-chain
+At minimum, monitor:
 
-# 📁 Project structure overview
-ju-chain/
-├── chain/                 # Geth client source code
-│   ├── build/            # Compilation output directory
-│   ├── cmd/              # Command-line tools
-│   ├── consensus/        # Consensus algorithm implementation
-│   │   └── congress/     # Congress PoSA implementation
-│   ├── core/             # Core blockchain logic
-│   ├── eth/              # Ethereum protocol implementation
-│   └── Makefile          # Build scripts
-├── chain-contract/          # System contract source code
-│   ├── contracts/        # Solidity contract source code
-│   ├── script/           # Foundry deployment scripts
-│   ├── foundry.toml      # Foundry configuration
-│   └── package.json      # Node.js dependencies
-└── README.md             # Project description
-```
+- block height growth
+- peer count and peer stability
+- validator nodes' signing and mining status
+- block production cadence relative to `period`
+- epoch-boundary transitions
 
-### Compilation Process
+### 7.2 Contract-Level Health Signals
 
-#### 1. Compile Blockchain Client
+Useful contract reads include:
 
-```bash
-# 🏗️ Compile complete toolchain
-cd chain
-make all
+- `Validators.getActiveValidators()`
+- `Validators.getVotingValidatorCount()`
+- `Validators.getRewardEligibleValidatorsWithStakes()`
+- `Validators.getTopValidators()`
+- `Staking.getValidatorInfo(validator)`
+- `Staking.getValidatorStatus(validator)`
+- `Proposal.pass(validator)`
+- `Proposal.proposals(id)` and `Proposal.results(id)`
 
-# Or compile components separately
-make geth          # Only compile main client
-make bootnode      # Only compile bootstrap node
-make evm          # Only compile EVM tool
+These queries are enough to reconstruct most validator-lifecycle and governance state without external CLI wrappers.
 
-# ✅ Verify compilation results
-ls -la build/bin/
-# Should contain: geth, bootnode, clef, ethkey, etc.
-```
+### 7.3 Epoch-Sensitive Operating Rules
 
-#### 2. Compile System Contracts
+Treat epoch blocks specially.
 
-```bash
-# 🏗️ Compile smart contracts
-cd chain-contract
+Operations blocked on epoch blocks include:
 
-# Install Node.js dependencies
-npm install
+- validator registration
+- governance voting
+- unjail
+- resign
+- exit
+- execution of pending punishments
 
-# Install Foundry dependencies
-forge install
+If an automation flow unexpectedly reverts with an epoch-related message, first check whether the current block number is divisible by `epoch`.
 
-# Compile all contracts
-forge build
+### 7.4 Reward and Punishment Monitoring
 
-# ✅ Verify contract compilation
-ls -la out/
-# Should contain all compiled contract artifacts
-```
+Track these separately:
 
-#### 3. Generate Genesis Block Configuration
+- transaction-fee income in `Validators`
+- validator reward accumulation in `Staking`
+- delegator pending reward state via delegation and `rewardPerShare`
+- missed-block counters and pending punishment queues in `Punish`
+- pending payout balances in `Staking.pendingPayouts`
 
-```bash
-# 🔄 Generate contract deployment code
-npm run generate
+### 7.5 Validator-Set Drift Checks
 
-# 🔄 Update genesis block file
-npm run init-genesis
+At and around epoch boundaries, compare:
 
-# ✅ Verify genesis block
-node scripts/verify-genesis.js
-echo "✅ Genesis block file generation complete: genesis.json"
-```
+- `highestValidatorsSet`
+- `getTopValidators()`
+- `currentValidatorSet`
 
-#### 4. Install Management Tools
+Expected behavior:
 
-```bash
-# 🛠️ Install or build ju-cli from its standalone repository
-# The binary should be available in PATH as `ju-cli`
+- `highestValidatorsSet` changes immediately when validators register, resign, or are removed
+- `getTopValidators()` reflects current ranking among candidates
+- `currentValidatorSet` only changes at epoch rotation
 
-# ✅ Test tool functionality
-ju-cli version
-ju-cli --help
+## 8. Troubleshooting Guide
 
-echo "✅ External management tools are ready"
-```
+### 8.1 Validator Not Producing Blocks
 
-### Build Verification
+Check the following in order:
 
-#### Integrity Check
+1. is the validator in `currentValidatorSet`
+2. is the validator jailed in `Staking`
+3. is the validator key unlocked or external signer available
+4. does the node have stable peer connectivity
+5. is the validator being rejected by Congress because the parent state already marks it jailed
 
-```bash
-# 🔍 Verify all components
-echo "=== Verifying Geth Client ==="
-./chain/build/bin/geth version
+### 8.2 Proposal Creation or Voting Fails
 
-echo "=== Verifying System Contracts ==="
-forge test --root ./chain-contract
+Common causes:
 
-echo "=== Verifying CLI Tool ==="
-ju-cli --version
+- caller is not an active validator
+- proposal cooldown not satisfied
+- proposal already expired
+- duplicate vote attempt
+- transaction sent on an epoch block
 
-echo "=== Verifying Genesis Block ==="
-./chain/build/bin/geth --datadir temp_test init ./chain-contract/genesis.json
-rm -rf temp_test
-
-echo "✅ All components verified successfully"
-```
+### 8.3 `registerValidator` Fails
 
-### Common Compilation Issues
+Common causes:
 
-#### Go Compilation Issues
+- candidate has not passed governance
+- proposal registration window expired
+- insufficient self-stake
+- commission rate exceeds `maxCommissionRate`
+- another validator was already added in the same epoch
+- call was made on an epoch block
 
-**Issue**: `go: cannot find module`
+### 8.4 `resignValidator` or `exitValidator` Fails
 
-```bash
-# Solution: Update Go modules
-cd chain
-go mod download
-go mod tidy
-```
-
-**Issue**: CGO compilation errors
-
-```bash
-# Solution: Install C++ compiler
-# Ubuntu/Debian:
-sudo apt-get install build-essential
-
-# macOS:
-xcode-select --install
-```
-
-#### Foundry Compilation Issues
-
-**Issue**: `forge not found`
-
-```bash
-# Solution: Reinstall Foundry
-curl -L https://foundry.paradigm.xyz | bash
-source ~/.bashrc
-foundryup
-```
-
-**Issue**: Contract dependency errors
-
-```bash
-# Solution: Clean and reinstall
-cd chain-contract
-rm -rf lib/
-forge install
-forge build --force
-```
-
-## 🚀 Node Deployment and Configuration
-
-### Deployment Architecture Selection
-
-#### Single Node Development Environment
-
-Suitable for development testing, quick feature validation:
-
-```bash
-# 🔧 Create development node
-mkdir -p dev-node/data
-cd dev-node
-
-# Initialize genesis block
-../chain/build/bin/geth --datadir data init ../chain-contract/genesis.json
-
-# Start development node (auto-mining)
-../chain/build/bin/geth \
-  --datadir data \
-  --http \
-  --http.addr "0.0.0.0" \
-  --http.port 8545 \
-  --http.api "eth,net,web3,personal,admin,congress" \
-  --mine \
-  --miner.etherbase "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" \
-  --allow-insecure-unlock \
-  --unlock "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" \
-  --password <(echo "") \
-  --console
-```
-
-#### Multi-node Validator Network
-
-Recommended configuration for production environments, multiple validators ensure network security:
-
-```bash
-# 🏗️ Create multi-node network
-for i in {1..5}; do
-  mkdir -p validator$i/data
-  
-  # Initialize each node
-  ./chain/build/bin/geth --datadir validator$i/data init chain-contract/genesis.json
-  
-  # Configure static node connections
-  echo '[
-    "enode://node1@127.0.0.1:30301",
-    "enode://node2@127.0.0.1:30302",
-    "enode://node3@127.0.0.1:30303"
-  ]' > validator$i/data/static-nodes.json
-done
-```
-
-### Node Configuration Details
-
-#### Basic Configuration Parameters
-
-```bash
-# 📋 Standard validator node configuration
-./chain/build/bin/geth \
-  --datadir data \                    # Data directory
-  --port 30303 \                      # P2P listening port
-  --http \                            # Enable HTTP-RPC
-  --http.addr "127.0.0.1" \          # RPC listening address
-  --http.port 8545 \                 # RPC listening port
-  --http.api "eth,net,web3,personal,admin,congress" \  # Enabled APIs
-  --ws \                             # Enable WebSocket
-  --ws.addr "127.0.0.1" \           # WebSocket address
-  --ws.port 8546 \                  # WebSocket port
-  --ws.api "eth,net,web3,congress" \ # WebSocket API
-  --mine \                          # Enable mining
-  --miner.etherbase "0x..." \       # Miner reward address
-  --miner.threads 1 \               # Mining threads
-  --miner.gasprice 1000000000 \     # Minimum gas price
-  --txpool.pricelimit 1000000000 \  # Transaction pool minimum price
-  --maxpeers 50 \                   # Maximum connected nodes
-  --cache 1024 \                    # Cache size (MB)
-  --syncmode "full" \               # Sync mode
-  --gcmode "archive"                # Garbage collection mode
-```
-
-#### Advanced Network Configuration
-
-```bash
-# 🌐 Network discovery configuration
---discovery \                       # Enable node discovery
---bootnodes "enode://..." \        # Bootstrap node list
---nat "extip:External IP" \         # NAT traversal configuration
---netrestrict "192.168.0.0/24" \   # Network restrictions
-
-# 🔒 Security configuration
---allow-insecure-unlock \          # Allow HTTP unlock (development only)
---unlock "0x..." \                 # Auto-unlock account
---password password.txt \          # Password file
---keystore keystore/ \             # Keystore directory
-
-# 📊 Monitoring configuration
---metrics \                        # Enable metrics collection
---metrics.addr "127.0.0.1" \      # Metrics listening address
---metrics.port 6060 \              # Metrics port
---pprof \                          # Enable performance profiling
---pprof.addr "127.0.0.1" \        # Performance profiling address
---pprof.port 6061                  # Performance profiling port
-```
-
-### Validator Account Management
-
-#### Creating Validator Accounts
-
-```bash
-# 🔑 Create new validator account
-./chain/build/bin/geth account new --datadir validator1/data
-# Enter password and record address
-
-# 🔑 Import existing private key
-echo "private key content" > private.key
-./chain/build/bin/geth account import private.key --datadir validator1/data
-rm private.key  # Delete plaintext private key after import
-
-# 📋 View all accounts
-./chain/build/bin/geth account list --datadir validator1/data
-```
-
-#### Account Security Management
-
-```bash
-# 🛡️ Create password file
-echo "your secure password" > validator1/password.txt
-chmod 600 validator1/password.txt
-
-# 🛡️ Configure keystore permissions
-chmod 700 validator1/data/keystore/
-chmod 600 validator1/data/keystore/*
-
-# 🛡️ Use external signer (recommended for production)
-./chain/build/bin/clef \
-  --keystore validator1/data/keystore \
-  --configdir validator1/clef \
-  --chainid 202599 \
-  --http \
-  --http.addr "127.0.0.1" \
-  --http.port 8550
-```
-
-### Network Connection Configuration
-
-#### Static Node Configuration
-
-```json
-// validator1/data/static-nodes.json
-[
-  "enode://node1 public key@IP1:Port1",
-  "enode://node2 public key@IP2:Port2",
-  "enode://node3 public key@IP3:Port3"
-]
-```
-
-#### Trusted Node Configuration
-
-```json
-// validator1/data/trusted-nodes.json
-[
-  "enode://trusted node1@IP1:Port1",
-  "enode://trusted node2@IP2:Port2"
-]
-```
-
-#### Dynamic Node Discovery
-
-```bash
-# 🔍 Add nodes through console
-geth attach validator1/data/geth.ipc
-
-# Execute in console
-admin.addPeer("enode://node public key@IP:Port")
-
-# View connection status
-admin.peers
-net.peerCount
-```
-
-### Startup Script Examples
-
-#### Validator Node Startup Script
-
-```bash
-#!/bin/bash
-# start-validator.sh
-
-set -e
-
-# Configuration variables
-DATADIR="./data"
-VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-PASSWORD_FILE="./password.txt"
-LOG_FILE="./validator.log"
-
-# Check required files
-if [ ! -f "$PASSWORD_FILE" ]; then
-    echo "❌ Password file does not exist: $PASSWORD_FILE"
-    exit 1
-fi
-
-if [ ! -d "$DATADIR/keystore" ]; then
-    echo "❌ Keystore directory does not exist: $DATADIR/keystore"
-    exit 1
-fi
-
-# Start validator node
-echo "🚀 Starting validator node..."
-echo "📍 Validator address: $VALIDATOR_ADDR"
-echo "📁 Data directory: $DATADIR"
-echo "📄 Log file: $LOG_FILE"
-
-./chain/build/bin/geth \
-  --datadir "$DATADIR" \
-  --port 30303 \
-  --http \
-  --http.addr "0.0.0.0" \
-  --http.port 8545 \
-  --http.corsdomain "*" \
-  --http.api "eth,net,web3,personal,admin,congress" \
-  --ws \
-  --ws.addr "0.0.0.0" \
-  --ws.port 8546 \
-  --ws.origins "*" \
-  --ws.api "eth,net,web3,congress" \
-  --mine \
-  --miner.etherbase "$VALIDATOR_ADDR" \
-  --allow-insecure-unlock \
-  --unlock "$VALIDATOR_ADDR" \
-  --password "$PASSWORD_FILE" \
-  --maxpeers 50 \
-  --cache 1024 \
-  --syncmode "full" \
-  --log.file "$LOG_FILE" \
-  --log.level 3 \
-  2>&1 | tee -a "$LOG_FILE"
-```
-
-#### Non-validator Node Startup Script
-
-```bash
-#!/bin/bash
-# start-fullnode.sh
-
-# Full node (not participating in mining)
-./chain/build/bin/geth \
-  --datadir "./data" \
-  --port 30303 \
-  --http \
-  --http.addr "0.0.0.0" \
-  --http.port 8545 \
-  --http.api "eth,net,web3,congress" \
-  --ws \
-  --ws.addr "0.0.0.0" \
-  --ws.port 8546 \
-  --ws.api "eth,net,web3,congress" \
-  --maxpeers 50 \
-  --cache 512 \
-  --syncmode "fast" \
-  --console
-```
-
-## 👥 Validator Management and Governance
-
-### Dual-contract Validator System
-
-JuChain uses an innovative dual-contract validator management mechanism:
-
-| Contract | Address | Main Functions |
-|------|------|----------|
-| **Validators** | 0xf000 | Validator status management, reward distribution, active validator list |
-| **Staking** | 0xf003 | Staking management, delegation mechanism, economic incentives |
-
-### Validator Lifecycle
-
-```mermaid
-graph LR
-    A[Proposal Creation] --> B[Vote Passed]
-    B --> C[Validators Contract Registration]
-    C --> D[Staking Contract Staking]
-    D --> E[Start Validation]
-    E --> F[Reward Distribution]
-    F --> G[Periodic Evaluation]
-    G --> H{Continue?}
-    H -->|Yes| E
-    H -->|No| I[Exit Process]
-```
-
-### Adding New Validators
-
-#### Complete Process (External Automation Scripts)
-
-The previous one-click validator automation scripts were moved together with the standalone `ju-cli` project. Use those scripts from the external tooling repository if you want a managed operational flow; this repository now documents the manual contract-facing process only.
-
-#### Manual Execution Process
-
-**Step 1: Prepare New Validator**
-
-```bash
-# 🔑 Create new validator account
-NEW_VALIDATOR_ADDR="0xNew validator address"
-echo "New validator address: $NEW_VALIDATOR_ADDR"
-
-# Ensure account has sufficient balance for staking
-echo "Please ensure account balance >= 10000 JU"
-```
-
-**Step 2: Create Addition Proposal**
-
-```bash
-# 📝 Created by existing validator
-PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-
-ju-cli proposal create \
-  -p $PROPOSER_ADDR \
-  -t $NEW_VALIDATOR_ADDR \
-  -o add \
-  -r http://localhost:8545
-
-# Sign transaction
-ju-cli misc sign \
-  -f createProposal.json \
-  -k proposer.key \
-  -p password.txt
-
-# Send transaction
-ju-cli misc send \
-  -f createProposal_signed.json \
-  -r http://localhost:8545
-
-echo "✅ Proposal created, Proposal ID: [Check transaction receipt]"
-```
-
-**Step 3: Validator Voting**
-
-```bash
-# 🗳️ Other validators vote in support
-PROPOSAL_ID="0xProposal ID"
-
-# Validator 1 vote
-ju-cli proposal vote \
-  -s "0x970e8128ab834e3eac664312d6e30df9e93cb357" \
-  -i $PROPOSAL_ID \
-  -a \
-  -r http://localhost:8545
-
-# Validator 2 vote
-ju-cli vote_proposal \
-  -s "0x6e30df9e93cb3578ec64c67c554dddd8d1da2c25" \
-  -i $PROPOSAL_ID \
-  -a true \
-  --rpc_laddr http://localhost:8545
-
-# Validator 3 vote (majority reached)
-ju-cli vote_proposal \
-  -s "0x3858ffca201b0a7d75fd23bb302c12332c5e4000" \
-  -i $PROPOSAL_ID \
-  -a true \
-  --rpc_laddr http://localhost:8545
-
-echo "✅ Proposal voting completed, awaiting execution"
-```
-
-**Step 4: Staking Contract Registration**
-
-```bash
-# 💰 Register validator in Staking contract
-ju-cli staking validator-register \
-  -p $NEW_VALIDATOR_ADDR \
-  -s 10000 \
-  -c 500 \
-  -r http://localhost:8545
-
-echo "✅ Validator registered in Staking contract"
-```
-
-**Step 5: Start Validator Node**
-
-```bash
-# 🚀 Start new validator node
-./chain/build/bin/geth \
-  --datadir newvalidator/data \
-  --port 30306 \
-  --http \
-  --http.port 8547 \
-  --mine \
-  --miner.etherbase $NEW_VALIDATOR_ADDR \
-  --unlock $NEW_VALIDATOR_ADDR \
-  --password password.txt \
-  --console
-
-echo "✅ New validator node started"
-```
-
-### Validator Query and Monitoring
-
-#### Basic Query Commands
-
-```bash
-# 📊 Query all active validators
-ju-cli validator list -r http://localhost:8545
-
-# 👤 Query specific validator details
-ju-cli validator query \
-  -a 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  -r http://localhost:8545
-
-# 💰 Query Staking contract information
-ju-cli staking list-top-validators \
-  -r http://localhost:8545
-
-# 🏆 Query specific validator staking information
-ju-cli staking query-validator \
-  --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  -r http://localhost:8545
-```
-
-#### Advanced Monitoring Queries
-
-```bash
-# 📈 Validator performance statistics
-ju-cli validator stats \
-  --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --blocks 1000 \
-  -r http://localhost:8545
-
-# ⚠️ Check validator punishment status
-ju-cli validator punishment-status \
-  --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  -r http://localhost:8545
-
-# 💎 Query validator rewards
-ju-cli staking validator-rewards \
-  --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  -r http://localhost:8545
-```
-
-### Validator Reward Management
-
-#### Reward Withdrawal
-
-```bash
-# 💸 Withdraw validator rewards
-VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-
-# Check withdrawable rewards
-ju-cli validator check-withdrawable \
-  -a $VALIDATOR_ADDR \
-  -r http://localhost:8545
-
-# Create withdrawal transaction
-ju-cli validator withdraw-profits \
-  -a $VALIDATOR_ADDR \
-  -r http://localhost:8545
-
-# Sign and send
-ju-cli misc sign \
-  -f withdrawProfits.json \
-  -k validator.key \
-  -p password.txt
-
-ju-cli misc send \
-  -f withdrawProfits_signed.json \
-  -r http://localhost:8545
-
-echo "✅ Reward withdrawal transaction sent"
-```
-
-#### Reward Distribution Mechanism
-
-| Reward Source | Distribution Method | Description |
-|----------|----------|------|
-| **Transaction Fees** | Distributed by validation ratio | Accumulated in real-time to validator account |
-| **Block Rewards** | Fixed rewards | Base reward for each block |
-| **Delegation Rewards** | Split by commission rate | Rewards from delegated user stakes |
-
-### Validator Removal Process
-
-#### Voluntary Exit
-
-```bash
-# 📤 Validator voluntary exit
-VALIDATOR_ADDR="0xAddress of validator to exit"
-
-# 1. Create removal proposal
-ju-cli proposal create \
-  -p $VALIDATOR_ADDR \
-  -t $VALIDATOR_ADDR \
-  -o remove \
-  -r http://localhost:8545
-
-# 2. Collect votes (requires support from other validators)
-echo "Waiting for other validators to vote in support of removal proposal"
-
-# 3. Unstake in Staking contract
-ju-cli staking undelegate \
-  -d $VALIDATOR_ADDR \
-  -v $VALIDATOR_ADDR \
-  -r http://localhost:8545
-
-echo "✅ Validator exit process initiated"
-```
-
-#### Involuntary Removal (Punishment Mechanism)
-
-Validators will be automatically penalized when the following situations occur:
-
-| Violation | Penalty Measures | Trigger Conditions |
-|----------|----------|----------|
-| **Long-term Offline** | Profit Confiscation | Miss 24 consecutive blocks |
-| **Severe Offline** | Forced Removal | Miss 48 consecutive blocks |
-| **Double Signing** | Large Slash | Sign multiple blocks at same height |
-| **Malicious Behavior** | Permanent Ban | Malicious behavior confirmed by governance vote |
-
-### Governance Proposal System
-
-#### System Parameter Modification
-
-```bash
-# 🔧 Modify system parameter proposal
-PARAM_INDEX=0      # 0: proposalLastingPeriod
-NEW_VALUE=172800   # 48 hours
-
-ju-cli proposal create-config \
-  -p $PROPOSER_ADDR \
-  -i $PARAM_INDEX \
-  -v $NEW_VALUE \
-  -r http://localhost:8545
-
-echo "✅ System parameter modification proposal created"
-```
-
-#### Modifiable System Parameters
-
-| Parameter Index | Parameter Name | Description | Default Value |
-|----------|----------|------|--------|
-| 0 | proposalLastingPeriod | Proposal validity period (1 hour - 30 days) | 604800 blocks (~7 days) |
-| 1 | punishThreshold | Continuous missed blocks triggering profit confiscation | 24 blocks |
-| 2 | removeThreshold | Continuous missed blocks triggering validator removal | 48 blocks |
-| 3 | decreaseRate | Reduction rate during punishment | 24% |
-| 4 | withdrawProfitPeriod | Profit withdrawal interval | 86400 blocks (~24 hours) |
-| 5 | blockReward | Block reward amount | 200000000000000000 wei (0.2 JU) |
-| 6 | unbondingPeriod | Unbonding period | 604800 blocks (7 days) |
-| 7 | validatorUnjailPeriod | Validator unjail period | 86400 blocks (~24 hours) |
-| 8 | minValidatorStake | Minimum validator staking amount | 100000000000000000000000 wei (100,000 JU) |
-| 9 | maxValidators | Maximum number of active validators | 21 |
-| 10 | minDelegation | Minimum delegation amount | 10000000000000000000 wei (10 JU) |
-| 11 | minUndelegation | Minimum undelegation amount | 1000000000000000000 wei (1 JU) |
-| 12 | doubleSignSlashAmount | Double-sign slash amount | 50000000000000000000000 wei (50,000 JU) |
-| 13 | doubleSignRewardAmount | Double-sign reporter reward | 10000000000000000000000 wei (10,000 JU) |
-| 14 | burnAddress | Burn destination for slashed remainder | 0x000000000000000000000000000000000000dEaD |
-| 15 | doubleSignWindow | Double-sign evidence window | 86400 blocks (~24 hours) |
-| 16 | commissionUpdateCooldown | Commission update cooldown | 604800 blocks (~7 days) |
-| 17 | baseRewardRatio | Base reward ratio (0-10000) | 3000 (30.00%) |
-| 18 | maxCommissionRate | Max commission rate (0-10000) | 6000 (60.00%) |
-| 19 | proposalCooldown | Proposal creation cooldown | 100 blocks |
-
-## 🔧 System Configuration Management
-
-### Dynamic Parameter Adjustment
-
-Key system parameters can be adjusted through governance proposals without restarting the network:
-
-#### Create Configuration Update Proposal
-
-```bash
-# 📝 Configuration item parameter explanation
-echo "0: proposalLastingPeriod (Proposal validity period, 1 hour - 30 days)"
-echo "1: punishThreshold (Continuous missed blocks triggering profit confiscation)  "
-echo "2: removeThreshold (Continuous missed blocks triggering validator removal)"
-echo "3: decreaseRate (Reduction rate during punishment, %)"
-echo "4: withdrawProfitPeriod (Profit withdrawal interval, blocks)"
-echo "5: blockReward (Block reward amount, wei)"
-echo "6: unbondingPeriod (Unbonding period, blocks)"
-echo "7: validatorUnjailPeriod (Validator unjail period, blocks)"
-echo "8: minValidatorStake (Minimum validator staking amount, wei)"
-echo "9: maxValidators (Maximum number of active validators)"
-echo "10: minDelegation (Minimum delegation amount, wei)"
-echo "11: minUndelegation (Minimum undelegation amount, wei)"
-echo "12: doubleSignSlashAmount (Double-sign slash amount, wei)"
-echo "13: doubleSignRewardAmount (Double-sign reporter reward, wei)"
-echo "14: burnAddress (Burn destination, address as uint256)"
-echo "15: doubleSignWindow (Double-sign evidence window, blocks)"
-echo "16: commissionUpdateCooldown (Commission update cooldown, blocks)"
-echo "17: baseRewardRatio (Base reward ratio, 0-10000)"
-echo "18: maxCommissionRate (Max commission rate, 0-10000)"
-echo "19: proposalCooldown (Proposal creation cooldown, blocks)"
-
-# Example: Modify proposal validity period to 48 hours
-PROPOSER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-PARAM_INDEX=0
-NEW_VALUE=172800  # 48 hours
-
-ju-cli create-config-proposal \
-  -p $PROPOSER_ADDR \
-  -i $PARAM_INDEX \
-  -v $NEW_VALUE \
-  --rpc_laddr http://localhost:8545
-
-# Sign and send configuration proposal
-ju-cli misc sign \
-  -f createConfigProposal.json \
-  -k proposer.key \
-  -p password.txt
-
-ju-cli misc send \
-  -f createConfigProposal_signed.json \
-  -r http://localhost:8545
-
-echo "✅ Configuration update proposal created"
-```
-
-#### Query Current System Parameters
-
-```bash
-# 📊 Query all system parameters
-ju-cli proposal get-params -r http://localhost:8545
-
-# 🔍 Query specific parameter
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "eth_call",
-    "params": [{
-      "to": "0x000000000000000000000000000000000000f001",
-      "data": "0x5c19a95c"
-    }, "latest"],
-    "id": 1
-  }'
-```
-
-### Reward Distribution Management
-
-#### Validator Reward Withdrawal
-
-```bash
-# 💰 Check withdrawable rewards
-VALIDATOR_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-
-ju-cli staking check-rewards \
-  -c $VALIDATOR_ADDR \
-  -v $VALIDATOR_ADDR \
-  -r http://localhost:8545
-
-# Create reward withdrawal transaction
-ju-cli staking claim-rewards \
-  -c $VALIDATOR_ADDR \
-  -v $VALIDATOR_ADDR \
-  -r http://localhost:8545
-
-# Sign and send
-ju-cli misc sign \
-  -f withdrawRewards.json \
-  -k validator.key \
-  -p password.txt
-
-ju-cli misc send \
-  -f withdrawRewards_signed.json \
-  -r http://localhost:8545
-```
-
-#### Withdrawal Restrictions and Rules
-
-| Restriction Type | Rule | Description |
-|----------|------|------|
-| **Time Interval** | 28800 blocks | Withdraw once approximately every 24 hours |
-| **Permission Verification** | FeeAddr match | Only designated reward address can withdraw |
-| **Status Check** | Not punished | Imprisoned validators cannot withdraw |
-| **Balance Verification** | Greater than 0 | Ensure there is a withdrawable balance |
-
-## 🛠️ System Monitoring and Operations
-
-### Network Health Monitoring
-
-#### Basic Status Check
-
-```bash
-# 🌐 Network connection status
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
-
-# 📊 Block synchronization status
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}'
-
-# 🔗 Latest block information
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-
-# ⛏️ Mining status
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_mining","params":[],"id":1}'
-```
-
-#### Validator-specific Monitoring
-
-```bash
-# 👥 Active validator list
-ju-cli validator list -r http://localhost:8545
-
-# 📈 Validator performance statistics
-ju-cli validator performance \
-  --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  --blocks 1000 \
-  -r http://localhost:8545
-
-# ⚠️ Punishment and imprisonment status
-ju-cli validator punishment-history \
-  --address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  -r http://localhost:8545
-```
-
-### Event Listening and Alerts
-
-#### Key Event Listening
-
-```javascript
-// 📡 Listen for validator change events
-const Web3 = require('web3');
-const web3 = new Web3('ws://localhost:8546');
-
-// Listen for validator additions
-web3.eth.subscribe('logs', {
-    address: '0x000000000000000000000000000000000000f000',
-    topics: ['0x...'] // LogCreateValidator event signature
-}).on('data', log => {
-    console.log('🎉 New validator added:', log);
-    // Send alert notification
-});
-
-// Listen for proposal creation
-web3.eth.subscribe('logs', {
-    address: '0x000000000000000000000000000000000000f002',
-    topics: ['0x...'] // LogCreateProposal event signature
-}).on('data', log => {
-    console.log('📝 New proposal created:', log);
-    // Notify relevant validators to vote
-});
-
-// Listen for punishment events
-web3.eth.subscribe('logs', {
-    address: '0x000000000000000000000000000000000000f001',
-    topics: ['0x...'] // LogPunishValidator event signature
-}).on('data', log => {
-    console.log('⚠️ Validator punished:', log);
-    // Send emergency alert
-});
-```
-
-#### Automated Monitoring Script
-
-```bash
-#!/bin/bash
-# monitor.sh - JuChain network monitoring script
-
-set -e
-
-# Configuration parameters
-RPC_URL="http://localhost:8545"
-ALERT_WEBHOOK="https://hooks.slack.com/your-webhook"
-LOG_FILE="./monitor.log"
-
-# Get network status
-get_network_status() {
-    local peer_count=$(curl -s -X POST $RPC_URL \
-        -H "Content-Type: application/json" \
-        -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' \
-        | jq -r '.result' | xargs printf "%d\n")
-    
-    local block_number=$(curl -s -X POST $RPC_URL \
-        -H "Content-Type: application/json" \
-        -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-        | jq -r '.result' | xargs printf "%d\n")
-    
-    local mining=$(curl -s -X POST $RPC_URL \
-        -H "Content-Type: application/json" \
-        -d '{"jsonrpc":"2.0","method":"eth_mining","params":[],"id":1}' \
-        | jq -r '.result')
-    
-    echo "$(date): Connected peers:$peer_count, Block height:$block_number, Mining status:$mining" | tee -a $LOG_FILE
-    
-    # Alert check
-    if [ $peer_count -lt 3 ]; then
-        send_alert "⚠️ Warning: Too few connected peers ($peer_count)"
-    fi
-    
-    if [ "$mining" != "true" ]; then
-        send_alert "🚨 Emergency: Node stopped mining"
-    fi
-}
-
-# Send alert
-send_alert() {
-    local message="$1"
-    echo "$(date): ALERT - $message" | tee -a $LOG_FILE
-    
-    # Send to Slack/Discord, etc.
-    curl -X POST $ALERT_WEBHOOK \
-        -H "Content-Type: application/json" \
-        -d "{\"text\":\"$message\"}" 2>/dev/null || true
-}
-
-# Check validator status
-check_validators() {
-    local validators=$(ju-cli validators --rpc_laddr $RPC_URL | grep "0x" | wc -l)
-    echo "$(date): Active validator count:$validators" | tee -a $LOG_FILE
-    
-    if [ $validators -lt 3 ]; then
-        send_alert "🚨 Critical: Insufficient active validators ($validators)"
-    fi
-}
-
-# Main monitoring loop
-main() {
-    echo "🚀 Starting JuChain network monitoring..." | tee -a $LOG_FILE
-    
-    while true; do
-        get_network_status
-        check_validators
-        echo "---" | tee -a $LOG_FILE
-        sleep 60  # Check every minute
-    done
-}
-
-# Start monitoring
-main
-```
-
-### Performance Optimization Recommendations
-
-#### Node Performance Tuning
-
-```bash
-# 💾 Memory optimization
---cache 2048 \              # Increase cache to 2GB
---cache.database 75 \       # Database cache ratio
---cache.trie 25 \          # Trie cache ratio
-
-# 🌐 Network optimization
---maxpeers 100 \           # Increase maximum connections
---netrestrict "10.0.0.0/8" \ # Restrict network range
-
-# 💿 Storage optimization
---gcmode "archive" \       # Archive mode retains history
---syncmode "fast" \        # Fast sync mode
---snapshot                 # Enable snapshot acceleration
-```
-
-#### Database Maintenance
-
-```bash
-# 🧹 Database compression
-./chain/build/bin/geth removedb --datadir ./data
-./chain/build/bin/geth --datadir ./data init genesis.json
-
-# 📊 Database statistics
-./chain/build/bin/geth --datadir ./data db stat
-
-# 🔧 Database repair
-./chain/build/bin/geth --datadir ./data db check
-```
-
-## 🛠️ Troubleshooting Guide
-
-### Common Problem Diagnosis
-
-#### Node Fails to Start
-
-**Symptoms**: Node fails to start or exits immediately
-
-**Diagnosis Steps**:
-
-```bash
-# 1. Check data directory permissions
-ls -la data/
-chmod 755 data/
-chmod 600 data/keystore/*
-
-# 2. Verify genesis block configuration
-./chain/build/bin/geth --datadir temp init genesis.json
-
-# 3. Check port occupancy
-netstat -tulpn | grep :30303
-netstat -tulpn | grep :8545
-
-# 4. View detailed error logs
-./chain/build/bin/geth --datadir data --verbosity 5
-```
-
-**Common Solutions**:
-
-| Error Message | Cause | Solution |
-|----------|------|----------|
-| `permission denied` | Permission issue | `chmod 755 data/` |
-| `port already in use` | Port conflict | Change port or stop conflicting process |
-| `invalid genesis` | Genesis block error | Regenerate genesis block file |
-| `account unlock failed` | Incorrect account password | Check password file |
-
-#### Network Connection Issues
-
-**Symptoms**: Node cannot connect to other nodes
-
-**Diagnosis Steps**:
-
-```bash
-# 1. Check network connections
-admin.peers              # View connected nodes
-net.peerCount           # Connection count
-admin.nodeInfo          # This node's information
-
-# 2. Test network reachability
-ping [target node IP]
-telnet [target node IP] [port]
-
-# 3. Check firewall settings
-sudo ufw status
-sudo iptables -L
-```
-
-**Solutions**:
-
-```bash
-# Manually add node
-admin.addPeer("enode://...")
-
-# Configure static nodes
-echo '[
-  "enode://node1@ip1:port1",
-  "enode://node2@ip2:port2"
-]' > data/static-nodes.json
-
-# Open firewall ports
-sudo ufw allow 30303
-sudo ufw allow 8545
-```
-
-#### Validator Not Producing Blocks
-
-**Symptoms**: Validator node is running but not producing blocks
-
-**Diagnosis Steps**:
-
-```bash
-# 1. Check validator status
-ju-cli validator-status \
-  --address [validator address] \
-  --rpc_laddr http://localhost:8545
-
-# 2. Check account unlock
-personal.listWallets
-eth.accounts
-
-# 3. Check mining status
-eth.mining
-miner.mining
-
-# 4. Check if validator is in active list
-ju-cli validators --rpc_laddr http://localhost:8545
-```
-
-**Solutions**:
-
-```bash
-# Unlock validator account
-personal.unlockAccount("[validator address]", "password", 0)
-
-# Start mining
-miner.setEtherbase("[validator address]")
-miner.start(1)
-
-# Check if punished
-ju-cli punishment-status \
-  --address [validator address] \
-  --rpc_laddr http://localhost:8545
-```
-
-#### Proposal Voting Failure
-
-**Symptoms**: Proposal creation or voting transaction fails
-
-**Common Causes and Solutions**:
-
-```bash
-# 1. Insufficient gas fees
-# Solution: Increase gas limit and gas price
---gas 500000 --gasprice 20000000000
-
-# 2. Insufficient account balance
-# Solution: Ensure account has sufficient JU tokens
-
-# 3. Proposal expired
-# Solution: Check proposal validity period, recreate proposal
-
-# 4. Duplicate voting
-# Solution: Check if already voted
-ju-cli proposal-votes \
-  --proposal-id [proposal ID] \
-  --rpc_laddr http://localhost:8545
-```
-
-### Emergency Recovery Procedures
-
-#### Network Stagnation Recovery
-
-Recovery steps when network becomes stagnant:
-
-```bash
-# 1. Collect network status information
-echo "=== Network Diagnosis ==="
-ju-cli network-status --rpc_laddr http://localhost:8545
-
-# 2. Restart all validator nodes
-echo "=== Restarting Validators ==="
-systemctl restart juchain-validator
-
-# 3. Monitor recovery
-echo "=== Monitoring Recovery ==="
-watch -n 5 'curl -s -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}" \
-  | jq -r ".result" | xargs printf "%d\n"'
-```
-
-#### Data Recovery
-
-```bash
-# 1. Backup current data
-cp -r data/ data_backup_$(date +%Y%m%d_%H%M%S)
-
-# 2. Restore from snapshot
-wget [snapshot download link]
-tar -xzf snapshot.tar.gz -C data/
-
-# 3. Resynchronize
-./chain/build/bin/geth --datadir data --syncmode "fast"
-```
-
-## 📚 Contract Interface Details
-
-### Validators Contract Interface
-
-#### Core Management Functions
-
-```solidity
-// Create or edit validator information
-function createOrEditValidator(
-    address payable feeAddr,    // Reward address
-    string calldata moniker,    // Validator name
-    string calldata identity,   // Identity identifier  
-    string calldata website,    // Official website
-    string calldata email,      // Contact email
-    string calldata details     // Detailed description
-) external;
-
-// Withdraw validator profits
-function withdrawProfits(address validator) external;
-
-// Get active validator list
-function getActiveValidators() external view returns (address[] memory);
-
-// Get validator detailed information
-function getValidatorInfo(address val) external view returns (
-    address feeAddr,
-    uint256 status,
-    uint256 accumulatedRewards,
-    uint256 totalJailedHB,
-    uint256 lastWithdrawProfitsBlock
-);
-```
-
-### Proposal Contract Interface
-
-#### Proposal Management Functions
-
-```solidity
-// Create proposal for adding/removing validators
-function createProposal(
-    address dst,              // Target validator address
-    bool flag,               // true: Add, false: Remove
-    string calldata details  // Proposal description
-) external returns (bytes32);
-
-// Create proposal for updating configuration parameters
-function createUpdateConfigProposal(
-    uint256 cid,           // Configuration parameter ID
-    uint256 newValue       // New parameter value
-) external returns (bytes32);
-
-// Vote on a proposal
-function voteProposal(
-    bytes32 id,    // Proposal ID
-    bool auth      // true: Support, false: Oppose
-) external returns (bool);
-
-// Check if a proposal passed for a validator
-function pass(address validator) external view returns (bool);
-
-// Check if a proposal is valid for staking registration
-function isProposalValidForStaking(address validator) external view returns (bool);
-```
-
-### Staking Contract Interface
-
-#### Staking Management Functions
-
-```solidity
-// Register validator and stake
-function registerValidator(uint256 commissionRate) external payable;
-
-// Add more self-stake to existing validator
-function addValidatorStake() external payable;
-
-// Delegate stake to a validator
-function delegate(address validator) external payable;
-
-// Undelegate stake from a validator
-function undelegate(address validator, uint256 amount) external;
-
-// Complete unbonding and withdraw tokens
-function withdrawUnbonded(address validator, uint256 maxEntries) external;
-
-// Get validator staking information
-function getValidatorInfo(address validator) external view returns (
-    uint256 selfStake,
-    uint256 totalDelegated,
-    uint256 commissionRate,
-    uint256 accumulatedRewards,
-    bool isJailed,
-    uint256 jailUntilBlock,
-    uint256 totalClaimedRewards,
-    uint256 lastClaimBlock
-);
-```
-
-#### Reward Management Functions
-
-```solidity
-// Claim pending rewards for delegators
-function claimRewards(address validator) external;
-
-// Claim accumulated rewards for validators
-function claimValidatorRewards() external;
-```
-
-## 📋 Best Practices Summary
-
-### Deployment Checklist
-
-#### Pre-deployment Preparation
-
-- [ ] **Environment Configuration**: Go 1.23+, Node.js 20+, Foundry installed
-- [ ] **Source Compilation**: All components compiled successfully, no errors
-- [ ] **Genesis Block**: Generated correct genesis block file
-- [ ] **Network Planning**: Reasonable node IP and port allocation
-- [ ] **Security Configuration**: Private key management, firewall settings
-
-#### Node Startup Check
-
-- [ ] **Data Initialization**: Genesis block initialized successfully
-- [ ] **Account Management**: Validator accounts created and unlocked
-- [ ] **Network Connections**: Nodes can communicate normally
-- [ ] **Mining Status**: Validator nodes producing blocks normally
-- [ ] **Contract Functionality**: System contract calls working properly
-
-#### Operations Monitoring
-
-- [ ] **Performance Monitoring**: CPU, memory, disk usage
-- [ ] **Network Monitoring**: Connected node count, network latency
-- [ ] **Business Monitoring**: Block production speed, transaction processing
-- [ ] **Alert Mechanisms**: Timely notifications for abnormal situations
-- [ ] **Backup Strategy**: Regular data backups
-
-### Security Recommendations
-
-#### Network Security
-
-```bash
-# 🔒 Firewall configuration
-sudo ufw enable
-sudo ufw allow ssh
-sudo ufw allow 30303/tcp  # P2P port
-sudo ufw allow from [trusted IP] to any port 8545  # RPC access restriction
-
-# 🔐 TLS configuration
-# Configure TLS certificates for RPC interfaces
-./chain/build/bin/geth \
-  --http.corsdomain "*" \
-  --http.vhosts "*" \
-  --ws.origins "*" \
-  --rpc.enabledeprecatedpersonal
-```
-
-#### Key Management
-
-```bash
-# 🗝️ Use hardware wallet or external signer
-./chain/build/bin/clef \
-  --keystore /secure/keystore \
-  --chainid 202599 \
-  --http
-
-# 🛡️ Keystore file permission settings
-chmod 700 keystore/
-chmod 600 keystore/*
-chown validator:validator keystore/
-```
-
-### Performance Optimization
-
-#### Hardware Recommendations
-
-| Component | Minimum Configuration | Recommended Configuration | Description |
-|------|----------|----------|------|
-| **CPU** | 4 cores | 8 cores+ | Multithreading processing |
-| **Memory** | 8GB | 16GB+ | Large cache improves performance |
-| **Storage** | 100GB SSD | 500GB NVMe | Fast I/O is critical |
-| **Network** | 100Mbps | 1Gbps+ | Stable network connection |
-
-#### Software Tuning
-
-```bash
-# 📈 System optimization
-echo "* soft nofile 65536" >> /etc/security/limits.conf
-echo "* hard nofile 65536" >> /etc/security/limits.conf
-
-# 🚀 Geth optimization parameters
---cache 2048 \
---cache.database 75 \
---cache.snapshot 25 \
---maxpeers 100 \
---txpool.globalslots 10000 \
---txpool.globalqueue 5000
-```
-
-## 🎯 Summary
-
-JuChain blockchain network achieves high performance and high security through the following key components:
-
-### 🏛️ Technical Architecture Advantages
-
-1. **JuChain PoSA Consensus**: Combines advantages of PoA and PoS to achieve fast block production and economic security
-2. **Dual-contract System**: Clear division of labor between Validators and Staking contracts with complete functionality
-3. **Governance Mechanism**: Comprehensive proposal voting system supporting dynamic parameter adjustment
-4. **Punishment Mechanism**: Multi-level punishment ensures honest validator behavior
-
-### 🛠️ Complete Operations Tools
-
-1. **JuChain CLI**: Feature-rich command-line management tool
-2. **Automation Scripts**: One-click deployment and validator management
-3. **Monitoring System**: Real-time network status and performance monitoring
-4. **Fault Recovery**: Complete fault diagnosis and recovery procedures
-
-### 📈 Scalable Design
-
-1. **Modular Architecture**: Independent components for easy upgrades and maintenance
-2. **Adjustable Parameters**: Key parameters support governance adjustment
-3. **Compatibility**: Fully compatible with Ethereum ecosystem
-4. **Upgradability**: Supports hard fork upgrade mechanisms
-
-### 🎯 Applicable Scenarios
-
-- **Enterprise Consortium Chains**: Multi-party validator consortium networks
-- **DeFi Applications**: High-performance decentralized finance platforms  
-- **NFT Platforms**: Fast-confirmation digital asset transactions
-- **Game Applications**: Low-latency on-chain gaming experiences
-
-With this guide, you should be able to:
-
-✅ **Successfully Deploy**: Complete JuChain network environment  
-✅ **Proficiently Manage**: Validator addition/removal and maintenance  
-✅ **Monitor Operations**: Network status and performance monitoring  
-✅ **Handle Faults**: Diagnosis and resolution of common issues  
-
-### 📖 Related Resources
-
-- [Clef External Signer Guide](./clef-external-signer-guide.md)
-- [System Contract API Documentation](../contracts/README.md)
-- [Foundry Development Framework](https://book.getfoundry.sh/)
-- [Go-Ethereum Documentation](https://geth.ethereum.org/docs/)
-
----
-
-*🚀 Congratulations! You have completed the full deployment and configuration of the JuChain blockchain network. If you encounter issues, please refer to the troubleshooting section or contact the technical support team.*
+Common causes:
+
+- validator is still within the `doubleSignWindow` since its last active block
+- another validator already resigned in the same epoch
+- validator is still present in `currentValidatorSet`
+- call was made on an epoch block
+
+### 8.5 `unjailValidator` Fails
+
+Common causes:
+
+- jail period not complete
+- fresh governance proposal not passed
+- self-stake below `minValidatorStake`
+- another validator was already added in the current epoch
+- call was made on an epoch block
+
+### 8.6 Reward Looks Wrong
+
+Check the reward surface first:
+
+- is the difference in transaction-fee income or coinbase reward
+- was the validator jailed and therefore excluded from reward eligibility
+- did the validator hit `punishThreshold` and lose fee-income eligibility
+- is the balance queued in `pendingPayouts`
+- is the validator still waiting for `withdrawProfitPeriod`
+
+### 8.7 Epoch Validator Set Mismatch
+
+If the chain rejects an epoch header for validator mismatch:
+
+1. compare `header.Extra` validators with `Validators.getTopValidators()` at the parent state
+2. verify no local node is using a different genesis or chain config
+3. verify all nodes agree on the PoSA upgrade time and system contract addresses
+
+### 8.8 Double-Sign Evidence Rejected
+
+Common causes:
+
+- headers are for different heights
+- headers are identical
+- signer recovery does not match
+- evidence is outside `doubleSignWindow`
+- target validator no longer exists
+- call was made on an epoch block
+
+## 9. Contract Interface Summary
+
+### 9.1 Proposal
+
+High-value operational functions:
+
+- `createProposal(address dst, bool flag, string details)`
+- `createUpdateConfigProposal(uint256 cid, uint256 newValue)`
+- `voteProposal(bytes32 id, bool auth)`
+- `isProposalValidForStaking(address validator)`
+- `pass(address validator)`
+
+### 9.2 Staking
+
+High-value operational functions:
+
+- `registerValidator(uint256 commissionRate)`
+- `addValidatorStake()`
+- `decreaseValidatorStake(uint256 amount)`
+- `resignValidator()`
+- `exitValidator()`
+- `delegate(address validator)`
+- `undelegate(address validator, uint256 amount)`
+- `withdrawUnbonded(address validator, uint256 maxEntries)`
+- `claimRewards(address validator)`
+- `claimValidatorRewards()`
+- `withdrawPendingPayout(address payable recipient)`
+- `unjailValidator(address validator)`
+- `getValidatorInfo(address validator)`
+
+### 9.3 Validators
+
+High-value operational functions:
+
+- `createOrEditValidator(...)`
+- `withdrawProfits(address validator)`
+- `getActiveValidators()`
+- `getActiveValidatorCount()`
+- `getVotingValidatorCount()`
+- `getRewardEligibleValidatorsWithStakes()`
+- `getTopValidators()`
+- `isValidatorActive(address validator)`
+- `isValidatorJailed(address validator)`
+
+### 9.4 Punish
+
+System and evidence functions:
+
+- `punish(address val)`
+- `executePending(uint256 limit)`
+- `submitDoubleSignEvidence(bytes header1, bytes header2)`
+- `decreaseMissedBlocksCounter(uint256 epoch)`
+
+## 10. Best Practices Summary
+
+- treat `blockReward` as a formula input, not a fixed payout promise
+- treat `currentValidatorSet` as an epoch cache, not the only source of effective validator status
+- separate fee-income accounting from coinbase reward accounting in monitoring and operations
+- avoid sending validator-management transactions on epoch blocks
+- regenerate genesis whenever contract bytecode changes
+- never restore old `ju-cli` or legacy POA flows into current operational runbooks without verifying them against the current contracts

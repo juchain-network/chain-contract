@@ -1,403 +1,395 @@
-# JPoSA Consensus Mechanism Whitepaper
+# JPoSA Consensus Whitepaper
 
 ## Abstract
 
-JPoSA (Juchain Proof of Stake Authority) is an innovative hybrid consensus mechanism that combines the advantages of PoS (Proof of Stake) and PoA (Proof of Authority). This mechanism aims to provide security and fairness for decentralized networks while ensuring high performance and fast transaction confirmation.
+JPoSA is JuChain's Proof of Stake Authority design. It combines stake-based validator competition with explicit on-chain governance authorization.
 
-The core of the JPoSA consensus mechanism lies in selecting block producers through economic incentives and governance mechanisms, while utilizing an established authority verification system to ensure network security. This two-layer mechanism preserves the efficiency of traditional PoA while introducing the decentralization characteristics and economic incentives of PoS.
+The system is not a plain PoS validator auction and not a plain PoA allowlist:
+
+- stake decides ranking and reward weight
+- governance decides who is allowed to enter or re-enter the validator pool
+- Congress consensus applies validator-set changes only at epoch boundaries
+
+This document summarizes the current behavior of the PoSA system contracts and the Congress consensus engine.
 
 ## Core Highlights
 
-### 1. Hybrid Consensus Mechanism
-- Combines the advantages of PoS proof-of-stake and PoA proof-of-authority
-- Selects validators based on staking weight while maintaining the stability of authority validators
-- Achieves a balance between decentralization and high performance
+### 1. Hybrid Consensus
 
-### 2. Economic Incentive Model
-- Validators and delegators share block rewards
-- Validators can set commission rates, with a default of 10%, extracting a certain percentage from total rewards as miner commissions
-- Remaining rewards are distributed to validators and their delegators based on staking weight
+JPoSA combines the main benefits of PoS and PoA:
 
-### 3. Dynamic Validator Set
-- Automatically updates the validator list based on staking weight
-- Supports up to MAX_VALIDATORS active validators (governable parameter, default: 21)
-- Minimum validator staking requirement: MIN_VALIDATOR_STAKE (governable parameter, default: 100,000 JU)
+- PoS-style competition through self-stake plus delegation
+- PoA-style admission control through governance proposals
+- epoch-based validator-set updates for operational stability
 
-### 4. Governance System
-- Proposal governance mechanism supports protocol upgrades and parameter adjustments
-- Validators participate in network governance decisions- Punishment mechanism prevents malicious behavior
+### 2. Governed Validator Admission
 
-### 5. Security Mechanisms
-- Sets unbonding period to prevent sudden exits
-- Punishment mechanism targets bad behavior
-- Double-sign evidence slashing with reporter reward and burn
-- Re-entry attack protection and parameter validation
+Becoming a validator after genesis requires two distinct steps:
+
+1. governance approval
+2. staking registration
+
+This means stake alone is not enough to join the validator pool.
+
+### 3. Dual Reward Channels
+
+JPoSA separates:
+
+- transaction-fee income
+- coinbase reward
+
+The transaction-fee path is handled by `Validators`, while the coinbase reward is computed by Congress and distributed through `Staking`.
+
+### 4. Dynamic but Predictable Validator Set
+
+The validator set is dynamic, but not every state change affects consensus immediately.
+
+- candidate ranking changes when stake changes
+- effective block production changes at epoch boundaries
+- jailed validators lose key privileges immediately even before the epoch cache rotates
+
+### 5. Governance-Tunable Economics
+
+Core parameters such as block reward input, punishment thresholds, unbonding period, validator caps, commission caps, and slash amounts are governable without redeploying the system contracts.
 
 ## Governance Mechanism
 
-The JPoSA consensus mechanism adopts an advanced governance model to ensure the democracy and transparency of network decisions. This governance system consists of four core components:
+JPoSA governance is implemented through four cooperating subsystems.
 
 ### Proposal System
-The proposal system is the core of the governance mechanism, allowing validators to propose and vote on important network changes:
 
-1. **Validator Proposals**
-   - Adding or removing validator qualifications requires governance proposals
-   - New validators must receive majority approval from existing validators
-   - Proposal passing threshold: more than half of active validators agree
+The proposal system is the entry point for network policy decisions.
 
-2. **System Configuration Proposals**
-   - Parameter adjustments, such as punishment thresholds, unbonding periods, etc.
-   - Block reward amount adjustments
-   - Other protocol-level changes
+It supports two proposal types:
+
+1. validator proposals
+   - add or remove validator authorization
+2. configuration proposals
+   - update governable protocol parameters
+
+Voting rules:
+
+- only active non-jailed validators vote
+- threshold is more than half of the voting validator count
+- proposal results finalize immediately once majority is reached
+- proposal results do not wait until expiry to take effect
+
+`proposalLastingPeriod` still matters, but as:
+
+- the voting expiry window
+- the registration window for an approved new validator
 
 ### Validator System
-The validator management system is responsible for maintaining the status of the current validator set:
 
-- Managing the active validator list
-- Distributing transaction fee income
-- Maintaining basic validator information
+The validator system maintains the validator-set views used by the network.
+
+It tracks:
+
+- the epoch-effective active set
+- the candidate cache used for ranking
+- validator fee addresses and metadata
+- transaction-fee income balances
+
+This makes `Validators` the operational bridge between governance, staking state, and the consensus engine.
 
 ### Staking System
-The staking system manages all equity-related functions:
 
-- Validator self-staking management
-- User delegation staking processing
-- Reward distribution mechanism
-- Punishment execution
+The staking system manages all stake-related economic state:
+
+- validator self-stake
+- delegation
+- undelegation and unbonding
+- validator and delegator reward accounting
+- jail status
+
+It is also where validators:
+
+- register after governance approval
+- resign
+- exit
+- unjail
 
 ### Punish System
-The punishment system monitors validator behavior and executes corresponding penalties:
 
-- Tracking validators' missed block situations
-- Implementing punishment measures when thresholds are reached
-- Automatically jailing jailed validators
-- Double-sign evidence slashing (jail + slash), reporter rewarded, remainder burned
+The punishment system enforces liveness and safety rules.
 
-The governance mechanism achieves decentralized network management through the collaborative work of these four systems, ensuring that all major decisions are fully discussed and voted on by the validator community.
+It:
+
+- tracks missed-block counters
+- removes fee-income eligibility at the lower threshold
+- jails and removes validators at the higher threshold
+- processes double-sign evidence
+- decays missed-block counters at epoch boundaries
+
+Together, these four systems provide governance, economic incentives, and operational enforcement without collapsing all logic into one contract.
 
 ## Economic Model
 
-The JPoSA consensus mechanism adopts a sustainable economic model that incentivizes validators and delegators to actively participate in network maintenance through reasonable reward distribution.
+JPoSA uses an incentive model built around stake participation, validator performance, and governance-tunable parameters.
 
-### Block Rewards
-The network incentivizes validators to maintain network security and process transactions through block rewards. The quantity of block rewards can be adjusted through governance proposals:
+### Reward Sources
 
-- **Basic Block Reward**: Each block generates 0.2 JU reward (sample value, adjustable through governance)
-- **Block Reward Parameter**: `blockReward` is a base parameter; actualReward per block is computed by consensus (see formula below)
-- **Expected Daily Issuance**: ≈ blockReward × blocks/day (assuming round-robin block production)
-- **Expected Annual Issuance**: ≈ blockReward × blocks/day × 365 (approximate)
+There are two distinct reward sources:
 
-### Reward Distribution Mechanism
-Block rewards are distributed in two parts:
+1. transaction-fee income
+   - routed through `Validators`
+   - accrues to the producer unless the producer is jailed
+2. coinbase reward
+   - computed by Congress
+   - distributed through `Staking`
 
-1. **Transaction Fee Distribution** (100%)
-   - If producer is not jailed, fees go to the block-producing validator
-   - If producer is jailed, fees are redistributed to other non-jailed validators
+This separation matters operationally because the two balances have different accounting and withdrawal paths.
 
-2. **Block Reward Distribution** (Proportional Distribution)
-   - Block-producing validators can set commission rates, extracting a percentage from actualReward as commissions (default 10%)
-   - The remaining portion is distributed to validators and their delegators based on staking weight
+### Coinbase Reward Formula
 
-### Staking Yield
-Staking yield depends on the network's total staking volume and transaction activity levels:
+The governable parameter `blockReward` is a base input, not a guaranteed fixed payout for every block.
 
-- **Validator Self-Staking Income** = Personal share of block rewards + Transaction fee share + Delegator commissions
-- **Delegator Income** = Reward share obtained based on delegated amount, validator's total staking, and validator's commission rate
+Congress computes the actual producer reward as:
 
-Assuming the network has 100,000,000 JU total staking and an annual inflation rate of 3%, the annualized yield is approximately 5-6%, depending specifically on the validator's commission rate and network usage.
+```text
+fixedPart    = blockReward * baseRewardRatio / 10000
+weightedPool = blockReward * validatorCount * (10000 - baseRewardRatio) / 10000
+weightedPart = minerStake * weightedPool / totalStake
+actualReward = fixedPart + weightedPart
+```
 
-### Inflation Control
-The JPoSA mechanism controls inflation through a variable annual issuance rate:
+This means:
 
-- Annual issuance rate: Approximately 3%
-- Inflation rate dynamically adjusts with network total token supply growth
-- Partial inflation impact offset through transaction fee burning
+- each reward-eligible producer gets a fixed component
+- the rest depends on stake weight among reward-eligible validators
 
-This inflation model ensures the network has sufficient incentives to maintain secure operation while avoiding excessive dilution of token holders' equity.
+### Reward Distribution Inside Staking
+
+Once Congress computes `actualReward`, the staking contract splits it into:
+
+- validator commission
+- validator self-stake share
+- delegator share
+
+If a validator has no delegators, the delegator portion is retained by the validator.
+
+### Reward Eligibility
+
+Reward eligibility excludes jailed validators immediately, even if the epoch-effective set has not yet rotated.
+
+This prevents a jailed validator from continuing to benefit from block rewards solely because it still appears in the current epoch cache.
+
+### Liquidity and Payout Semantics
+
+JPoSA uses delayed principal withdrawal and fault-tolerant payout semantics.
+
+- undelegated principal enters unbonding
+- exited validator stake also enters unbonding
+- reward claims and principal withdrawals may be queued if immediate transfer is not possible
+
+This means a successful claim may create a pending payout instead of always transferring funds in the same transaction.
 
 ## Miner (Validator) Role
 
-In the JPoSA network, miners are called "validators" and are responsible for producing new blocks and maintaining network security. Becoming a validator requires meeting strict conditions and going through a governance process.
+In JPoSA, miners are validators. They produce blocks, participate in governance, and maintain validator service quality.
 
 ### Process to Become a Validator
 
-1. **Proposal Stage**
-   - Addition of new validators must be proposed by existing validators (or applicants)
-   - Proposals need to receive voting support from more than half of active validators
+After genesis, the validator path is:
 
-2. **Staking Stage**
-   - After proposal passes, applicants must complete staking registration within 7 days
-   - Minimum self-staking requirement: MIN_VALIDATOR_STAKE (governable parameter, default: 100,000 JU)
-   - Set commission rate (0-100%, default 10%, adjustable according to personal strategy)
+1. proposal stage
+   - an active validator creates an add-validator proposal
+   - active non-jailed validators vote
+2. registration stage
+   - once majority is reached, the candidate is authorized
+   - the candidate calls `registerValidator(...)` within the proposal validity window
+   - the candidate provides at least the minimum validator self-stake
+3. activation stage
+   - the validator enters the candidate set immediately
+   - the validator enters the active consensus set at the next epoch
 
-3. **Activation Stage**
-   - After staking is completed, wait for the next cycle (approximately 24 hours)
-   - The system selects the top MAX_VALIDATORS validators based on staking weight
-   - Officially begin block production and receive rewards### Validator Core Functions
+Current default thresholds:
 
-1. **Block Production**
-   - Produce new blocks in rotation order
-   - Verify and package transactions
-   - Maintain network security and stability
+- minimum validator self-stake: `100000 JU`
+- maximum active validators: `21`
 
-2. **Staking Management**
-   - Increase self-staking to improve ranking
-   - Adjust commission rates to attract delegators
-   - Reduce staking when necessary (must meet minimum requirements)
+### Validator Core Responsibilities
 
-3. **Reward Withdrawal**
-   - Regularly withdraw block rewards and commissions
-   - Rewards include block rewards and transaction fee shares
+Validators are responsible for:
 
-4. **Delegation Management**
-   - View delegator information and support
-   - Maintain good service to attract more delegations
+- producing blocks in the Congress turn-taking schedule
+- staying online and synchronized
+- participating in governance votes
+- maintaining competitive stake and delegation
+- managing their commission rate and fee address
 
 ### Validator Responsibilities and Risks
 
-1. **Online Time**
-   - Must keep nodes continuously online and synchronized
-   - Missing block production will be punished
+Validators face several operational and economic risks:
 
-2. **Punishment Mechanism**
-   - Over 24 blocks, suspend transaction fee income and forfeit transaction fees, distributed to other validators; base reward only comes from blocks they actually produce
-   - Over 48 blocks, jailed and removed from validator set; after jail is recorded in parent state, consensus rejects their blocks, and they are removed at next epoch (re-proposal required)
-   - Epoch cycle is 24 hours
+1. missed blocks
+   - first threshold removes fee-income eligibility
+   - second threshold causes jail and validator removal
+2. double signing
+   - causes jail and stake slashing
+3. delayed exit
+   - validators cannot exit directly from the active set
+4. governance dependency
+   - re-entry after punishment requires a fresh proposal
 
-3. **Exit Mechanism**
-   - Reduce staking: As long as minimum staking quantity is met, can reduce anytime
-   - Exit mechanism: Active validators in current epoch are not allowed to exit, must first request exit application, wait until next epoch, will be removed from active validator list, then can exit
-   - Staking refund: After validator exits, staking needs to wait 7 days before unlocking and returning
+### Validator Exit and Return
 
-Validators play a crucial role in the network, serving as both infrastructure maintainers and important participants in the governance system.
+Voluntary exit is staged:
+
+1. `resignValidator()`
+2. wait until the next epoch removes the validator from the active set
+3. `exitValidator()`
+4. wait through unbonding to recover principal
+
+Return from jail is also staged:
+
+1. serve the jail period
+2. regain governance approval
+3. satisfy the minimum self-stake requirement
+4. call `unjailValidator(...)`
+5. wait for the next epoch to become active again
 
 ## User (Delegator) Role
 
-Ordinary users can participate in network maintenance and earn rewards by delegating JU tokens to validators. These users are called "delegators".
+Delegators support validators economically and share in the validator reward flow.
 
 ### Delegation Functions
 
-1. **Selecting Validators**
-   - Choose suitable validators based on their historical performance, commission rates, and reputation
-   - Can delegate tokens to multiple validators to diversify risk
-   - Minimum delegation amount: 1 JU
+Delegators can:
 
-2. **Delegation Staking**
-   - Send JU tokens to selected validator addresses for delegation
-   - Delegated amounts are immediately counted toward the validator's total staking weight
-   - Delegators share the validator's rewards based on staking proportion
+- choose active validators to support
+- delegate JU to one or more validators
+- claim their share of staking rewards
+- undelegate and later withdraw principal after unbonding
 
-3. **Reward Withdrawal**
-   - Regularly withdraw delegation earnings
-   - Rewards include the portion belonging to oneself from block rewards after commission
-   - Reward withdrawal requires no unbonding period and can be withdrawn anytime
+Current default thresholds:
+
+- minimum delegation: `10 JU`
+- minimum undelegation: `1 JU`
 
 ### Unbonding and Withdrawal
 
-1. **Delegation Unbonding**
-   - After initiating an unbonding request, delegated amounts enter a 7-day unbonding period
-   - During the unbonding period (unbonded portion) corresponding rewards will not be received
-   - Principal can be withdrawn after unbonding period ends
+Delegated principal is not instantly liquid once undelegated.
 
-2. **Fund Withdrawal**
-   - Principal can be withdrawn after unbonding period expires
-   - Withdrawal operations are completed instantly with no additional delay
+The path is:
 
-### Delegation Strategy Recommendations
+1. `undelegate(...)`
+2. principal enters unbonding
+3. `withdrawUnbonded(...)` after the unbonding period
 
-1. **Diversified Delegation**
-   - Don't delegate all tokens to a single validator
-   - Diversify delegation among 3-5 well-performing validators
+Reward withdrawals are separate from principal withdrawals and do not require the same unbonding path, although payout may still be queued if direct transfer fails.
 
-2. **Monitor Validator Performance**
-   - Regularly check validators' online time and reward distribution situations
-   - Timely replace poorly performing validators
+### Delegation Strategy Considerations
 
-3. **Commission Rate Considerations**
-   - Low commission rate validators can bring higher returns
-   - But also need to consider service quality, not just commission rates
+Delegators should evaluate validators on:
 
-The delegator mechanism enables users who don't have the conditions to run validator nodes to participate in network maintenance and earn rewards, greatly enhancing the network's degree of decentralization and user participation.
+- uptime and block production quality
+- governance participation
+- commission rate
+- history of punishment
+- stake depth and long-term stability
+
+Delegation is not only a yield choice; it also influences validator ranking and the composition of the future active set.
 
 ## Governance Committee Role
 
-The governance committee of the JPoSA network consists of all active validators and they are the core participants in network governance decisions.
+The governance committee is the set of active non-jailed validators in the current epoch.
 
 ### Governance Responsibilities
 
-1. **Proposal Review**
-   - Review and evaluate submitted various proposals
-   - Analyze the impact of proposals on network security and performance
-   - Vote on whether proposals should pass
+The committee is responsible for:
 
-2. **Parameter Adjustment**
-   - Adjust key parameters according to network development needs
-   - Balance degree of decentralization and network performance
-   - Control inflation rate and reward distribution mechanism
-
-3. **Validator Management**
-   - Review qualifications of new validators
-   - Make penalty decisions for jailed validators
-   - Maintain quality of validator set
+- approving or rejecting validator entry and return
+- removing validators when necessary through governance
+- updating economic and operational parameters
+- maintaining validator-set quality and network safety
 
 ### Proposal Types
 
-1. **Validator-Related Proposals**
-   - Adding new validators
-   - Removing unqualified validators
+The committee votes on:
 
-2. **System Parameter Proposals**
-   - Adjusting punishment thresholds
-   - Modifying unbonding period duration
-   - Updating block reward amounts
-   - Adjusting commission rate caps
+1. validator admission and removal proposals
+2. parameter update proposals
+
+Parameter updates cover:
+
+- proposal timing
+- punishment thresholds
+- reward inputs
+- unbonding and unjail periods
+- validator caps and minimums
+- commission caps and cooldowns
+- slash and reporter-reward amounts
 
 ### Voting Mechanism
 
-1. **Voting Threshold**
-   - All proposals (including ordinary proposals and major changes): Require agreement from more than half of active validators
+The current voting mechanism has four properties:
 
-2. **Voting Period**
-   - Default proposal validity period is 7 days
-   - Can vote anytime during validity period
-   - Vote results are tallied after expiration
+- only active non-jailed validators vote
+- threshold is more than half of the voting validator count
+- majority finalizes immediately
+- voting is disallowed on epoch blocks
 
-3. **Voting Weight**
-   - Each active validator has equal one vote
-   - Voting weights are not allocated based on staking volume
-   - Ensures equality of governance power
-
-The governance committee mechanism ensures that important network decisions are made jointly by validators who actually maintain network security, embodying the concept of true decentralized governance.
+This gives JPoSA a governance process that is decisive but still bounded by the active validator set.
 
 ## Governable Parameters
 
-The JPoSA network provides rich governable parameters, allowing validators to adjust according to network development needs:
+The current governable parameter set can be understood in four groups.
 
 ### Time-Related Parameters
 
-1. **Proposal Validity Period** (proposalLastingPeriod)
-   - Range: 3,600 blocks (approximately 1 hour) to 2,592,000 blocks (approximately 30 days)
-   - Default value: 604,800 blocks (approximately 7 days)
-   - Used to control proposal voting cycles
-
-2. **Unbonding Period** (unbondingPeriod)
-   - Default value: 604,800 blocks (approximately 7 days)
-   - Controls locking time for delegated funds and staked funds
-   - Affects fund liquidity
-
-3. **Validator Unjail Period** (validatorUnjailPeriod)
-   - Default value: 86,400 blocks (approximately 24 hours)
-   - Time required for jailed validators to return to normal state
-
-4. **Commission Update Cooldown** (commissionUpdateCooldown)
-   - Default value: 604,800 blocks (approximately 7 days)
-   - Minimum interval between validator commission rate updates
-
-5. **Proposal Cooldown** (proposalCooldown)
-   - Default value: 100 blocks
-   - Minimum interval between proposals created by the same validator
+- `proposalLastingPeriod = 604800` blocks
+- `withdrawProfitPeriod = 86400` blocks
+- `unbondingPeriod = 604800` blocks
+- `validatorUnjailPeriod = 86400` blocks
+- `doubleSignWindow = 86400` blocks
+- `commissionUpdateCooldown = 604800` blocks
+- `proposalCooldown = 100` blocks
 
 ### Punishment-Related Parameters
 
-1. **Punishment Threshold** (punishThreshold)
-   - Default value: 24 blocks
-   - Income suspension for validators when this threshold is reached
-
-2. **Removal Threshold** (removeThreshold)
-   - Default value: 48 blocks
-   - Jailing and removal of validators when this threshold is reached
-
-3. **Decrease Rate** (decreaseRate)
-   - Default value: 24
-   - Controls punishment counter reduction ratio, used to mitigate punishments for jailed validators, reducing punished blocks by removeThreshold/decreaseRate per epoch
-
-4. **Validator Unjail Period** (validatorUnjailPeriod)
-   - Default value: 86,400 blocks (approximately 24 hours)
-   - Time required for jailed validators to return to normal state after removal, only after this time can validators reapply to join the validator set
-
-5. **Double-Sign Slash Amount** (doubleSignSlashAmount)
-   - Default value: 50,000 JU
-   - Absolute slash applied to validator self-stake upon double-sign evidence
-
-6. **Double-Sign Reporter Reward** (doubleSignRewardAmount)
-   - Default value: 10,000 JU
-   - Reward paid to the evidence reporter (<= slash amount)
-
-7. **Double-Sign Evidence Window** (doubleSignWindow)
-   - Default value: 86,400 blocks (approximately 24 hours)
-   - Evidence must be submitted within this window
-
-8. **Burn Address** (burnAddress)
-   - Default value: `0x000000000000000000000000000000000000dEaD`
-   - Receives the slashed remainder after reporter reward
+- `punishThreshold = 24`
+- `removeThreshold = 48`
+- `decreaseRate = 24`
+- `doubleSignSlashAmount = 50000 JU`
+- `doubleSignRewardAmount = 10000 JU`
+- `burnAddress = 0x000000000000000000000000000000000000dEaD`
 
 ### Reward-Related Parameters
 
-1. **Profit Withdrawal Cycle** (withdrawProfitPeriod)
-   - Controls minimum interval for validators to withdraw transaction fees
-   - Default value: 86,400 blocks (approximately 24 hours)
+- `blockReward = 0.2 JU`
+- `baseRewardRatio = 3000` bps
+- `maxCommissionRate = 6000` bps
 
-2. **Block Reward** (blockReward)
-   - Base reward parameter used by consensus to compute actualReward per block
-   - actualReward = blockReward * baseRatio/10000
-                  + blockReward * (10000 - baseRatio)/10000
-                    * validatorCount * (minerStake / totalStake)
-   - Default value: 0.2 JU
+### Validator and Delegation Parameters
 
-3. **Base Reward Ratio** (baseRewardRatio)
-   - Default value: 3000 (30.00%)
-   - Base reward ratio used for reward distribution (0-10000)
+- `minValidatorStake = 100000 JU`
+- `maxValidators = 21`
+- `minDelegation = 10 JU`
+- `minUndelegation = 1 JU`
 
-4. **Max Commission Rate** (maxCommissionRate)
-   - Default value: 6000 (60.00%)
-   - Upper bound for validator commission rates (0-10000)
-
-5. **Commission Rate Base** (COMMISSION_RATE_BASE)
-   - Used to calculate validator commission rates
-   - 10000 represents 100%
-
-### Technical Parameters
-
-1. **Maximum Validator Count** (maxValidators)
-   - Upper limit of simultaneously active validators in the network
-   - Default value: 21
-
-2. **Minimum Validator Stake** (minValidatorStake)
-   - Minimum staking amount required to become a validator
-   - Default value: 100,000 JU
-   - Ensures validators have sufficient economic incentives to maintain network security
-
-3. **Minimum Delegation** (minDelegation)
-   - Minimum delegation amount per delegator
-   - Default value: 10 JU
-
-4. **Minimum Undelegation** (minUndelegation)
-   - Minimum undelegation amount per delegator
-   - Default value: 1 JU
-
-All parameter adjustments require governance proposals and sufficient votes to take effect, ensuring transparency and security of network parameter changes.
+These parameters let the network tune validator economics and operational safety without redeploying the system contracts.
 
 ## Summary
 
-The JPoSA consensus mechanism successfully combines the advantages of PoS and PoA through innovative hybrid design, providing blockchain networks with high performance, high security, and good decentralization characteristics.
-
 ### Core Values
 
-1. **Balance Between Decentralization and Performance**
-   - Select validators based on staking weight to enhance degree of decentralization
-   - Maintain PoA efficiency to ensure fast transaction confirmation
+JPoSA is built around three core values:
 
-2. **Sustainable Economic Model**
-   - Reasonable reward distribution mechanism incentivizes all parties to actively participate
-   - 3% annual issuance rate balances incentives and inflation control
-   - Delegation mechanism allows ordinary users to participate in network maintenance and benefit
+1. controlled decentralization
+   - stake matters, but entry is governed
+2. deterministic operation
+   - consensus uses parent-state validator selection and epoch-based activation
+3. operational resilience
+   - punishment, reward exclusion, and pending payout mechanics handle adverse conditions explicitly
 
-3. **Sound Governance System**
-   - Governance committee composed of validators who actually maintain the network
-   - Transparent proposal and voting mechanisms
-   - Rich adjustable parameters adapt to network development needs
+### Why the Design Matters
 
-4. **Strong Security Assurance**
-   - Multi-layer security protection mechanisms
-   - Sound punishment system constrains validator behavior
-   - 7-day unbonding period prevents malicious exits
+The result is a validator model that:
+
+- keeps PoA-style admission control
+- adds PoS-style delegation and stake-weighted competition
+- exposes major policy levers through governance
+- separates candidate ranking from epoch-effective participation
+
+That combination is the defining characteristic of JuChain PoSA.
