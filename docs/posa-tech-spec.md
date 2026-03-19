@@ -8,8 +8,8 @@ This document describes the current JuChain PoSA implementation as defined by:
 - `contracts/Staking.sol`
 - `contracts/Validators.sol`
 - `contracts/Punish.sol`
-- `/home/litian/juchain/github/chain/consensus/congress/congress.go`
-- `/home/litian/juchain/github/chain/consensus/congress/snapshot.go`
+- `../chain/consensus/congress/congress.go`
+- `../chain/consensus/congress/snapshot.go`
 
 It intentionally replaces earlier POA-era and early-PoSA descriptions where behavior has changed.
 
