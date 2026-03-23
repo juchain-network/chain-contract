@@ -645,6 +645,14 @@ Double-sign evidence path:
 6. remaining slash amount is sent to `burnAddress`
 7. validator is removed through `Validators.removeValidator(...)`
 
+In the current PoSA design, direct slashing is intentionally limited to validator `selfStake`.
+Delegated principal and already-unbonding principal are not slashed by this path.
+This means validator economics are deliberately asymmetric:
+
+- validator receives higher upside through commission, self-stake reward share, and fee income
+- validator also carries the direct slash risk
+- delegators share reward flow and stake-weight support, but do not take direct principal slash
+
 ### 5.9 Rejoin After Punishment
 
 To rejoin after jail or governance removal:
@@ -708,6 +716,8 @@ Delegation accounting uses:
 - `rewardPerShare`
 
 This lets the system update delegator reward entitlement without iterating through every delegator on every block reward.
+It also reflects the current risk model: delegation increases validator weight and reward-sharing capacity, but direct
+slash remains on validator self-stake rather than delegator principal.
 
 ### 6.5 Validator Set Updates
 

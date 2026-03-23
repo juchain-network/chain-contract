@@ -401,6 +401,11 @@ Requirements:
 - minimum delegation is `10 JU` by default
 - self-delegation through the public delegation path is rejected
 
+Operational note:
+
+- delegation increases validator ranking weight and reward-sharing capacity
+- delegation does not give the delegator direct governance voting rights
+
 ### 6.2 Undelegation
 
 Users undelegate through:
@@ -436,6 +441,9 @@ This applies to:
 - undelegated principal
 - validator self-stake reduced via `decreaseValidatorStake(...)`
 - validator self-stake exited via `exitValidator()`
+
+Already-unbonding principal remains withdrawable after the waiting period and is not directly slashed by the current
+validator punishment path.
 
 ### 6.5 Reward Withdrawal
 
@@ -477,6 +485,18 @@ Implications:
 - `blockReward` is a base input, not the guaranteed final payout for every block
 - the producer's stake weight changes the final amount
 - jailed validators are excluded from reward eligibility immediately
+
+### 6.8 Current Risk Allocation Model
+
+The current PoSA economics are intentionally asymmetric:
+
+- validators are the high-upside / high-risk role
+- validators earn commission, self-stake reward share, and transaction-fee income
+- direct slashing applies to validator `selfStake`
+- delegated principal and already-unbonding principal are not directly slashed by the current punishment path
+
+This does not make delegators risk-free. Delegators still bear indirect risk through validator underperformance,
+jailing or removal, reward interruption, and unbonding time cost.
 
 ## 7. Monitoring and Day-2 Operations
 
@@ -683,6 +703,7 @@ System and evidence functions:
 - treat `blockReward` as a formula input, not a fixed payout promise
 - treat `currentValidatorSet` as an epoch cache, not the only source of effective validator status
 - separate fee-income accounting from coinbase reward accounting in monitoring and operations
+- document clearly that delegation boosts validator ranking, while direct slash remains on validator self-stake
 - avoid sending validator-management transactions on epoch blocks
 - regenerate genesis whenever contract bytecode changes
 - never restore old `ju-cli` or legacy POA flows into current operational runbooks without verifying them against the current contracts

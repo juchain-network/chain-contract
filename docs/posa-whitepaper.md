@@ -232,6 +232,13 @@ Validators face several operational and economic risks:
 4. governance dependency
    - re-entry after punishment requires a fresh proposal
 
+This is an intentional high-upside / high-risk role in the current PoSA model:
+
+- validators earn commission
+- validators keep the validator share of self-stake rewards
+- validators receive transaction-fee income through the validator fee address
+- direct slash risk falls on validator self-stake
+
 ### Validator Exit and Return
 
 Voluntary exit is staged:
@@ -252,6 +259,8 @@ Return from jail is also staged:
 ## User (Delegator) Role
 
 Delegators support validators economically and share in the validator reward flow.
+In the current PoSA design, delegators share upside but do not take direct slash on delegated principal or already
+unbonding principal.
 
 ### Delegation Functions
 
@@ -290,6 +299,8 @@ Delegators should evaluate validators on:
 - stake depth and long-term stability
 
 Delegation is not only a yield choice; it also influences validator ranking and the composition of the future active set.
+Delegators still carry indirect risk through validator underperformance, jailing, removal, missed reward opportunity,
+and the time cost of unbonding, even though direct slashing is borne by validators rather than delegators.
 
 ## Governance Committee Role
 
