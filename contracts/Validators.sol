@@ -266,21 +266,20 @@ contract Validators is Params, ReentrancyGuard, IValidators {
 
         address val = msg.sender;
         uint256 hb = msg.value;
+        uint256 minValidatorStake = proposal.minValidatorStake();
 
         // Check if validator exists (has staked) from Staking contract
         // Note: This branch should be unreachable in normal operation
         // as block producers must be validators according to consensus rules
         // This check is added for code robustness
-        if (!this.isValidatorExist(val)) {
+        (uint256 selfStake,,,, bool isJailed,,,, bool isRegistered,) = staking.getValidatorInfo(val);
+        if (!isRegistered) {
             return;
         }
 
-        // Check if the block producer is jailed
-        if (staking.isValidatorJailed(val)) {
-            // If jailed, distribute reward to other active validators (excluding the jailed producer)
+        if (isJailed || selfStake < minValidatorStake) {
             addProfitsToActiveValidators(hb, val);
         } else {
-            // If not jailed, reward goes directly to the block producer
             validatorInfo[val].aacIncoming = validatorInfo[val].aacIncoming + hb;
         }
 
@@ -425,11 +424,10 @@ contract Validators is Params, ReentrancyGuard, IValidators {
 
         // Calculate status from Staking contract for backward compatibility
         Status calculatedStatus;
-        // Check if validator has staked
+        uint256 minValidatorStake = proposal.minValidatorStake();
         (uint256 selfStake,,,,,,,, bool isRegistered,) = staking.getValidatorInfo(val);
 
-        // Check if validator is not registered or has no stake
-        if (!isRegistered || selfStake == 0) {
+        if (!isRegistered || selfStake < minValidatorStake) {
             calculatedStatus = Status.NotExist;
         } else if (staking.isValidatorJailed(val)) {
             calculatedStatus = Status.Jailed;
@@ -499,9 +497,12 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     {
         uint256 currentSetLength = currentValidatorSet.length;
         uint256 eligibleCount = 0;
+        uint256 minValidatorStake = proposal.minValidatorStake();
 
         for (uint256 i = 0; i < currentSetLength; i++) {
-            if (!staking.isValidatorJailed(currentValidatorSet[i])) {
+            (uint256 selfStake,,,, bool isJailed,,,, bool isRegistered,) =
+                staking.getValidatorInfo(currentValidatorSet[i]);
+            if (isRegistered && !isJailed && selfStake >= minValidatorStake) {
                 eligibleCount++;
             }
         }
@@ -512,11 +513,12 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         uint256 index = 0;
         for (uint256 i = 0; i < currentSetLength; i++) {
             address validator = currentValidatorSet[i];
-            if (staking.isValidatorJailed(validator)) {
+            (uint256 selfStake, uint256 totalDelegated,,, bool isJailed,,,, bool isRegistered,) =
+                staking.getValidatorInfo(validator);
+            if (!isRegistered || isJailed || selfStake < minValidatorStake) {
                 continue;
             }
 
-            (uint256 selfStake, uint256 totalDelegated,,,,,,,,) = staking.getValidatorInfo(validator);
             validators[index] = validator;
             totalStakes[index] = selfStake + totalDelegated;
             index++;
@@ -546,9 +548,11 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     function getVotingValidatorCount() public view returns (uint256) {
         uint256 currentSetLength = currentValidatorSet.length;
         uint256 count = 0;
+        uint256 minValidatorStake = proposal.minValidatorStake();
         for (uint256 i = 0; i < currentSetLength; i++) {
             address validator = currentValidatorSet[i];
-            if (!staking.isValidatorJailed(validator)) {
+            (uint256 selfStake,,,, bool isJailed,,,, bool isRegistered,) = staking.getValidatorInfo(validator);
+            if (isRegistered && !isJailed && selfStake >= minValidatorStake) {
                 count++;
             }
         }
@@ -594,10 +598,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             return false;
         }
 
-        // Check if validator is jailed
-        // Jailed validators can still be in currentValidatorSet until next epoch
-        // but should not be considered active for most purposes
-        return !staking.isValidatorJailed(validator);
+        uint256 minValidatorStake = proposal.minValidatorStake();
+        (uint256 selfStake,,,, bool isJailed,,,, bool isRegistered,) = staking.getValidatorInfo(validator);
+        return isRegistered && !isJailed && selfStake >= minValidatorStake;
     }
 
     /**
@@ -788,16 +791,17 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         }
 
         uint256 currentSetLength = currentValidatorSet.length;
+        uint256 minValidatorStake = proposal.minValidatorStake();
 
-        // Cache jailed status for all validators in a single pass
-        bool[] memory isJailed = new bool[](currentSetLength);
+        bool[] memory isEligible = new bool[](currentSetLength);
         uint256 validValidatorCount = 0;
 
         for (uint256 i = 0; i < currentSetLength; i++) {
             address val = currentValidatorSet[i];
-            bool jailed = staking.isValidatorJailed(val);
-            isJailed[i] = jailed;
-            if (val != punishedVal && !jailed) {
+            (uint256 selfStake,,,, bool isJailed,,,, bool isRegistered,) = staking.getValidatorInfo(val);
+            bool eligible = val != punishedVal && isRegistered && !isJailed && selfStake >= minValidatorStake;
+            isEligible[i] = eligible;
+            if (eligible) {
                 validValidatorCount++;
             }
         }
@@ -814,10 +818,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         uint256 per = totalReward / validValidatorCount;
         uint256 remainder = totalReward % validValidatorCount;
 
-        // Distribute rewards using cached jailed status
         for (uint256 i = 0; i < currentSetLength; i++) {
             address val = currentValidatorSet[i];
-            if (val != punishedVal && !isJailed[i]) {
+            if (isEligible[i]) {
                 uint256 reward = per;
                 if (remainder > 0) {
                     reward += 1;

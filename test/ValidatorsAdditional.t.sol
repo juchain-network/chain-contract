@@ -4,6 +4,7 @@ pragma solidity ^0.8.29;
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Validators} from "../contracts/Validators.sol";
 import {Staking} from "../contracts/Staking.sol";
+import {Proposal} from "../contracts/Proposal.sol";
 
 contract ValidatorsAdditionalTest is BaseSetup {
     address v1;
@@ -206,15 +207,16 @@ contract ValidatorsAdditionalTest is BaseSetup {
     // Test getActiveValidatorsWithStakes function
     function testGetActiveValidatorsWithStakes() public view {
         (address[] memory validators, uint256[] memory stakes) = Validators(VALIDATORS).getActiveValidatorsWithStakes();
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         assertEq(validators.length, 3, "Should have 3 validators");
         assertEq(stakes.length, 3, "Should have 3 stakes");
-        // All genesis validators have 1 ether stake by default (as set in BaseSetup)
-        assertEq(stakes[0], 1 ether, "First validator should have 1 ether stake");
-        assertEq(stakes[1], 1 ether, "Second validator should have 1 ether stake");
-        assertEq(stakes[2], 1 ether, "Third validator should have 1 ether stake");
+        assertEq(stakes[0], minStake, "First validator should have min validator stake");
+        assertEq(stakes[1], minStake, "Second validator should have min validator stake");
+        assertEq(stakes[2], minStake, "Third validator should have min validator stake");
     }
 
     function testGetRewardEligibleValidatorsWithStakesExcludesJailed() public {
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
         vm.prank(PUNISH);
         Staking(STAKING).jailValidator(v2, 100);
 
@@ -225,16 +227,17 @@ contract ValidatorsAdditionalTest is BaseSetup {
         assertEq(stakes.length, 2, "Should return stakes for non-jailed validators only");
         assertEq(validators[0], v1, "First eligible validator should be v1");
         assertEq(validators[1], v3, "Second eligible validator should be v3");
-        assertEq(stakes[0], 1 ether, "v1 should keep full stake");
-        assertEq(stakes[1], 1 ether, "v3 should keep full stake");
+        assertEq(stakes[0], minStake, "v1 should keep full stake");
+        assertEq(stakes[1], minStake, "v3 should keep full stake");
     }
 
     function testEffectiveTopHelpersTrackLastValidator() public {
         address burnAddress = makeAddr("burn");
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
 
         vm.startPrank(PUNISH);
-        Staking(STAKING).slashValidator(v2, 1 ether, address(0), 0, burnAddress);
-        Staking(STAKING).slashValidator(v3, 1 ether, address(0), 0, burnAddress);
+        Staking(STAKING).slashValidator(v2, minStake, address(0), 0, burnAddress);
+        Staking(STAKING).slashValidator(v3, minStake, address(0), 0, burnAddress);
         vm.stopPrank();
 
         address[] memory effectiveTopValidators = Validators(VALIDATORS).getEffectiveTopValidators();
@@ -246,5 +249,35 @@ contract ValidatorsAdditionalTest is BaseSetup {
         assertFalse(Validators(VALIDATORS).isLastEffectiveValidator(v2), "v2 should not be last effective validator");
         assertFalse(Validators(VALIDATORS).isTopValidator(v2), "v2 should be removed from highest set");
         assertFalse(Validators(VALIDATORS).isTopValidator(v3), "v3 should be removed from highest set");
+    }
+
+    function testBootstrapValidatorsMeetMinStakeForValidatorActions() public {
+        uint256 newCommissionRate = 2000;
+        uint256 minDelegation = Proposal(PROPOSAL).minDelegation();
+        address delegator = makeAddr("delegator");
+        vm.deal(delegator, minDelegation);
+
+        vm.prank(v1);
+        Staking(STAKING).updateCommissionRate(newCommissionRate);
+
+        (,, uint256 commissionRate,,,,,,,) = Staking(STAKING).getValidatorInfo(v1);
+        assertEq(commissionRate, newCommissionRate, "bootstrap validator should be able to update commission");
+
+        vm.prank(delegator);
+        Staking(STAKING).delegate{value: minDelegation}(v1);
+
+        (uint256 delegatedAmount,) = Staking(STAKING).getDelegationInfo(delegator, v1);
+        assertEq(delegatedAmount, minDelegation, "bootstrap validator should accept delegation");
+    }
+
+    function testVotingValidatorCountExcludesBelowMinStakeValidators() public {
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
+        address burnAddress = makeAddr("burn");
+
+        vm.prank(PUNISH);
+        Staking(STAKING).slashValidator(v2, minStake, address(0), 0, burnAddress);
+
+        assertEq(Validators(VALIDATORS).getVotingValidatorCount(), 2, "below-min validator should not count for voting");
+        assertFalse(Validators(VALIDATORS).isValidatorActive(v2), "below-min validator should not be active");
     }
 }

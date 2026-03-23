@@ -17,8 +17,24 @@ const CONTRACT_ADDRESSES = {
   Staking: "0x000000000000000000000000000000000000f013",
 };
 
-// Initial validator information (3 validators, meeting minimum validator requirement)
+// Initial validator information for the local genesis template.
 const INITIAL_VALIDATORS = ["0x70997970C51812dc3A010C7d01b50e0d17dc79C8"];
+
+function readDefaultMinValidatorStake() {
+  const proposalSourcePath = path.join(__dirname, "contracts", "Proposal.sol");
+  const proposalSource = fs.readFileSync(proposalSourcePath, "utf8");
+  const match = proposalSource.match(
+    /DEFAULT_MIN_VALIDATOR_STAKE\s*=\s*([0-9_]+)\s*ether/,
+  );
+  if (!match) {
+    throw new Error("Unable to parse DEFAULT_MIN_VALIDATOR_STAKE from Proposal.sol");
+  }
+  return BigInt(match[1].replaceAll("_", "")) * 10n ** 18n;
+}
+
+function formatJu(wei) {
+  return `${wei / 10n ** 18n} JU`;
+}
 
 // Read contract bytecode
 function getContractBytecode(contractName) {
@@ -102,6 +118,7 @@ function generateExtraData() {
 function updateGenesisFile() {
   // const genesisPath = path.join(__dirname, '..', 'chain', 'genesis.json');
   const genesisPath = path.join(__dirname, "genesis.json");
+  const minValidatorStake = readDefaultMinValidatorStake();
 
   try {
     // Read existing Genesis file
@@ -165,7 +182,7 @@ function updateGenesisFile() {
     console.log(
       `👥 Preset Validators: ${INITIAL_VALIDATORS.length} validators`,
     );
-    console.log(`💰 Stake per Validator: 10,000 JU`);
+    console.log(`💰 Bootstrap Stake Floor: ${formatJu(minValidatorStake)}`);
     console.log(`🆔 Chain ID: ${genesis.config.chainId}`);
 
     console.log("\n👥 Initial Validator List:");
@@ -208,6 +225,7 @@ function verifyContracts() {
 // Main function
 function main() {
   console.log("🚀 Congress Consensus Configuration Tool\n");
+  const minValidatorStake = readDefaultMinValidatorStake();
 
   // Verify contract compilation status
   if (verifyContracts()) {
@@ -222,9 +240,11 @@ function main() {
     );
     console.log("\n📋 Important Notes:");
     console.log(
-      "   ✅ Genesis block includes staking information for 3 preset validators",
+      `   ✅ extraData includes ${INITIAL_VALIDATORS.length} preset validator(s) for local genesis`,
     );
-    console.log("   ✅ Each validator has staked 10,000 JU tokens");
+    console.log(
+      `   ✅ Congress bootstrap will pre-fund Staking with ${formatJu(minValidatorStake)} per genesis validator after Proposal initialization`,
+    );
     console.log(
       "   ✅ JPoSA consensus will work normally, no manual validator registration needed",
     );
@@ -232,7 +252,7 @@ function main() {
       "   ✅ Validator voting and staking operations can be performed directly",
     );
     console.log(
-      "   ✅ Validator count meets minimum requirement (MIN_VALIDATORS = 3)",
+      "   ✅ Contract-side validator validity is gated by minValidatorStake",
     );
   }
 }

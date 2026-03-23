@@ -439,7 +439,7 @@ contract StakingTest is Test {
         // Test initializeWithValidators with zero address
         address[] memory initialValidators = new address[](1);
         initialValidators[0] = address(0);
-        vm.deal(address(staking), 1 ether);
+        vm.deal(address(staking), MIN_STAKE);
 
         vm.expectRevert("Invalid validator address");
         staking.initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initialValidators, COMMISSION_RATE);
@@ -452,7 +452,7 @@ contract StakingTest is Test {
         // Try to initialize with validators but with zero validators address
         address[] memory initialValidators = new address[](1);
         initialValidators[0] = address(0);
-        vm.deal(address(staking), 1 ether);
+        vm.deal(address(staking), MIN_STAKE);
 
         vm.expectRevert("Invalid validator address");
         staking.initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initialValidators, COMMISSION_RATE);
@@ -2408,11 +2408,11 @@ contract StakingTest is Test {
         vm.expectRevert("Insufficient initial stake funding");
         newStaking.initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initialValidators, COMMISSION_RATE);
 
-        vm.deal(address(newStaking), 1 ether);
+        vm.deal(address(newStaking), MIN_STAKE);
         newStaking.initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initialValidators, COMMISSION_RATE);
 
         (uint256 selfStake,,,,,,,, bool isRegistered,) = newStaking.getValidatorInfo(VALIDATOR1);
-        assertEq(selfStake, 1 ether);
+        assertEq(selfStake, MIN_STAKE);
         assertTrue(isRegistered);
     }
 

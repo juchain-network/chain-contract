@@ -4,8 +4,82 @@
 // Check system contract initialization status and validator details
 const { Web3 } = require('web3');
 
+const JU = 10n ** 18n;
+
+const CONTRACTS = {
+    Validators: '0x000000000000000000000000000000000000f010',
+    Punish: '0x000000000000000000000000000000000000f011',
+    Proposal: '0x000000000000000000000000000000000000f012',
+    Staking: '0x000000000000000000000000000000000000f013'
+};
+
+const proposalAbi = [
+    {
+        inputs: [],
+        name: 'minValidatorStake',
+        outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function'
+    }
+];
+
+const stakingAbi = [
+    {
+        inputs: [],
+        name: 'getValidatorCount',
+        outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function'
+    },
+    {
+        inputs: [],
+        name: 'totalStaked',
+        outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function'
+    },
+    {
+        inputs: [{ internalType: 'address', name: 'validator', type: 'address' }],
+        name: 'getValidatorInfo',
+        outputs: [
+            { internalType: 'uint256', name: 'selfStake', type: 'uint256' },
+            { internalType: 'uint256', name: 'totalDelegated', type: 'uint256' },
+            { internalType: 'uint256', name: 'commissionRate', type: 'uint256' },
+            { internalType: 'uint256', name: 'accumulatedRewards', type: 'uint256' },
+            { internalType: 'bool', name: 'isJailed', type: 'bool' },
+            { internalType: 'uint256', name: 'jailUntilBlock', type: 'uint256' },
+            { internalType: 'uint256', name: 'totalClaimedRewards', type: 'uint256' },
+            { internalType: 'uint256', name: 'lastClaimBlock', type: 'uint256' },
+            { internalType: 'bool', name: 'isRegistered', type: 'bool' },
+            { internalType: 'uint256', name: 'totalRewards', type: 'uint256' }
+        ],
+        stateMutability: 'view',
+        type: 'function'
+    }
+];
+
+const validatorsAbi = [
+    {
+        inputs: [],
+        name: 'getTopValidators',
+        outputs: [{ internalType: 'address[]', name: '', type: 'address[]' }],
+        stateMutability: 'view',
+        type: 'function'
+    },
+    {
+        inputs: [],
+        name: 'getActiveValidators',
+        outputs: [{ internalType: 'address[]', name: '', type: 'address[]' }],
+        stateMutability: 'view',
+        type: 'function'
+    }
+];
+
 async function checkSystemStatus() {
     const web3 = new Web3('http://localhost:8545');
+    const proposal = new web3.eth.Contract(proposalAbi, CONTRACTS.Proposal);
+    const staking = new web3.eth.Contract(stakingAbi, CONTRACTS.Staking);
+    const validatorsContract = new web3.eth.Contract(validatorsAbi, CONTRACTS.Validators);
     
     console.log('🔍 JPoSA System Status Comprehensive Checker\n');
     console.log('='.repeat(80));
@@ -25,19 +99,13 @@ async function checkSystemStatus() {
     console.log('🏛️  System Contract Status Check');
     console.log('-'.repeat(40));
     
-    const contracts = {
-        'Validators': '0x000000000000000000000000000000000000f000',
-        'Punish': '0x000000000000000000000000000000000000f001', 
-        'Proposal': '0x000000000000000000000000000000000000f002',
-        'Staking': '0x000000000000000000000000000000000000f003'
-    };
-    
     let allInitialized = true;
-    let stakingAddress = contracts['Staking'];
+    let stakingAddress = CONTRACTS['Staking'];
     let validatorCount = 0;
     let totalStaked = BigInt(0);
+    let minValidatorStake = 0n;
     
-    for (const [name, address] of Object.entries(contracts)) {
+    for (const [name, address] of Object.entries(CONTRACTS)) {
         console.log(`📋 ${name} Contract (${address}):`);
         
         // Check if contract code exists
@@ -63,51 +131,19 @@ async function checkSystemStatus() {
         if (name === 'Staking' && isInitialized) {
             console.log('   📊 Detailed Status:');
             
-            // Check allValidators array length (slot 4)
-            const arrayLengthSlot = await web3.eth.getStorageAt(address, '0x4');
-            validatorCount = parseInt(arrayLengthSlot, 16);
+            validatorCount = Number(await staking.methods.getValidatorCount().call());
             console.log(`      Validator Count: ${validatorCount}`);
             
-            // Check totalStaked (slot 6)
-            const totalStakedSlot = await web3.eth.getStorageAt(address, '0x6');
-            totalStaked = BigInt(totalStakedSlot);
-            console.log(`      Total Staked: ${totalStaked / BigInt('1000000000000000000')} JU`);
+            totalStaked = BigInt(await staking.methods.totalStaked().call());
+            console.log(`      Total Staked: ${totalStaked / JU} JU`);
             
-            // Check MIN_VALIDATOR_STAKE
-            try {
-                const minStakeData = '0x9c2a2259'; // MIN_VALIDATOR_STAKE()
-                const minStakeResult = await web3.eth.call({ to: address, data: minStakeData });
-                const minStake = BigInt(minStakeResult);
-                console.log(`      Minimum Stake Requirement: ${minStake / BigInt('1000000000000000000')} JU`);
-            } catch (error) {
-                console.log(`      Minimum Stake Requirement: Unable to fetch`);
-            }
+            minValidatorStake = BigInt(await proposal.methods.minValidatorStake().call());
+            console.log(`      Minimum Stake Requirement: ${minValidatorStake / JU} JU`);
             
             // Test getTopValidators method
             try {
-                const getTopValidatorsData = '0x93a5b1b6' + // getTopValidators(uint256)
-                    '0000000000000000000000000000000000000000000000000000000000000015'; // 21
-                
-                const result = await web3.eth.call({
-                    to: address,
-                    data: getTopValidatorsData
-                });
-                
-                if (result && result !== '0x') {
-                    // Parse result
-                    const resultData = result.slice(2);
-                    const offset = parseInt(resultData.slice(0, 64), 16);
-                    const lengthStart = offset * 2;
-                    const topValidatorCount = parseInt(resultData.slice(lengthStart, lengthStart + 64), 16);
-                    console.log(`      ✅ getTopValidators returned ${topValidatorCount} validators`);
-                    
-                    if (topValidatorCount !== validatorCount) {
-                        console.log(`      ⚠️  Return count mismatch with storage count (${topValidatorCount} vs ${validatorCount})`);
-                    }
-                } else {
-                    console.log(`      ❌ getTopValidators call failed`);
-                    allInitialized = false;
-                }
+                const topValidators = await validatorsContract.methods.getTopValidators().call();
+                console.log(`      ✅ getTopValidators returned ${topValidators.length} validators`);
             } catch (error) {
                 console.log(`      ❌ getTopValidators execution error: ${error.message}`);
                 allInitialized = false;
@@ -122,68 +158,44 @@ async function checkSystemStatus() {
         console.log('👥 Validator Detailed Status Check');
         console.log('-'.repeat(40));
         
-        const validators = [
-            '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-            '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-            '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
-            '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
-            '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65',
-            '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc', // Validator 6
-            '0x50C554aC9c134491818fa6f21d504f2AE5BD9c26'  // Validator 7
-        ];
+        const validators = await validatorsContract.methods.getActiveValidators().call();
         
         let qualifiedValidators = 0;
         
-        for (let i = 0; i < Math.min(validators.length, validatorCount); i++) {
+        for (let i = 0; i < validators.length; i++) {
             const validator = validators[i];
             console.log(`👤 Validator ${i + 1}: ${validator}`);
             
             try {
-                // Call getValidatorInfo method
-                const getValidatorInfoData = '0xaa735578' + // getValidatorInfo(address)
-                    validator.slice(2).padStart(64, '0');
+                const info = await staking.methods.getValidatorInfo(validator).call();
+                const selfStake = BigInt(info.selfStake);
+                const totalDelegated = BigInt(info.totalDelegated);
+                const commissionRate = BigInt(info.commissionRate);
+                const isJailed = info.isJailed;
+                const jailUntilBlock = BigInt(info.jailUntilBlock);
+                const isRegistered = info.isRegistered;
+
+                console.log(`   Stake Info:`);
+                console.log(`     selfStake: ${selfStake / JU} JU`);
+                console.log(`     totalDelegated: ${totalDelegated / JU} JU`);
+                console.log(`     commissionRate: ${commissionRate} (${Number(commissionRate) / 100}%)`);
+                console.log(`   Status Info:`);
+                console.log(`     isRegistered: ${isRegistered}`);
+                console.log(`     isJailed: ${isJailed}`);
+                console.log(`     jailUntilBlock: ${jailUntilBlock}`);
                 
-                const result = await web3.eth.call({
-                    to: stakingAddress,
-                    data: getValidatorInfoData
-                });
+                const meetsStakeRequirement = selfStake >= minValidatorStake;
+                const meetsJailRequirement = !isJailed || BigInt(blockNumber) >= jailUntilBlock;
                 
-                if (result && result !== '0x') {
-                    const resultData = result.slice(2);
-                    
-                    // Parse return data (5 return values)
-                    const selfStake = BigInt('0x' + resultData.slice(0, 64));
-                    const totalDelegated = BigInt('0x' + resultData.slice(64, 128));
-                    const commissionRate = BigInt('0x' + resultData.slice(128, 192));
-                    const isJailed = BigInt('0x' + resultData.slice(192, 256)) !== BigInt(0);
-                    const jailUntilBlock = BigInt('0x' + resultData.slice(256, 320));
-                    
-                    console.log(`   Stake Info:`);
-                    console.log(`     selfStake: ${selfStake / BigInt('1000000000000000000')} JU`);
-                    console.log(`     totalDelegated: ${totalDelegated / BigInt('1000000000000000000')} JU`);
-                    console.log(`     commissionRate: ${commissionRate} (${Number(commissionRate) / 100}%)`);
-                    console.log(`   Status Info:`);
-                    console.log(`     isJailed: ${isJailed}`);
-                    console.log(`     jailUntilBlock: ${jailUntilBlock}`);
-                    
-                    // Check if requirements are met
-                    const MIN_VALIDATOR_STAKE = BigInt('10000000000000000000000'); // 10,000 JU
-                    const meetsStakeRequirement = selfStake >= MIN_VALIDATOR_STAKE;
-                    const meetsJailRequirement = !isJailed || BigInt(blockNumber) >= jailUntilBlock;
-                    
-                    console.log(`   Compliance Check:`);
-                    console.log(`     ${meetsStakeRequirement ? '✅' : '❌'} Stake Requirement: ${selfStake / BigInt('1000000000000000000')} >= ${MIN_VALIDATOR_STAKE / BigInt('1000000000000000000')} JU`);
-                    console.log(`     ${meetsJailRequirement ? '✅' : '❌'} Jail Status: ${!isJailed ? 'Not jailed' : `Jailed until block ${jailUntilBlock}`}`);
-                    
-                    const isQualified = meetsStakeRequirement && meetsJailRequirement;
-                    console.log(`   📊 Overall Status: ${isQualified ? '✅ Qualified' : '❌ Not Qualified'}`);
-                    
-                    if (isQualified) {
-                        qualifiedValidators++;
-                    }
-                    
-                } else {
-                    console.log(`   ❌ Unable to get validator info`);
+                console.log(`   Compliance Check:`);
+                console.log(`     ${meetsStakeRequirement ? '✅' : '❌'} Stake Requirement: ${selfStake / JU} >= ${minValidatorStake / JU} JU`);
+                console.log(`     ${meetsJailRequirement ? '✅' : '❌'} Jail Status: ${!isJailed ? 'Not jailed' : `Jailed until block ${jailUntilBlock}`}`);
+                
+                const isQualified = isRegistered && meetsStakeRequirement && meetsJailRequirement;
+                console.log(`   📊 Overall Status: ${isQualified ? '✅ Qualified' : '❌ Not Qualified'}`);
+                
+                if (isQualified) {
+                    qualifiedValidators++;
                 }
                 
             } catch (error) {
@@ -199,15 +211,11 @@ async function checkSystemStatus() {
         console.log(`   📋 System Contracts: ${allInitialized ? '✅ All Normal' : '❌ Issues Found'}`);
         console.log(`   👥 Registered Validators: ${validatorCount} validators`);
         console.log(`   ✅ Qualified Validators: ${qualifiedValidators} validators`);
-        console.log(`   💰 Total Staked: ${totalStaked / BigInt('1000000000000000000')} JU`);
+        console.log(`   💰 Total Staked: ${totalStaked / JU} JU`);
         console.log(`   📊 Current Block: ${blockNumber}`);
         
-        // MIN_VALIDATORS is now 3 (changed from 5)
-        const MIN_VALIDATORS = 3;
-        if (allInitialized && qualifiedValidators >= MIN_VALIDATORS) {
-            console.log(`   🚀 JPoSA Consensus Status: ✅ System Running Normally (${qualifiedValidators} >= ${MIN_VALIDATORS})`);
-        } else if (allInitialized && qualifiedValidators > 0 && qualifiedValidators < MIN_VALIDATORS) {
-            console.log(`   ⚠️  JPoSA Consensus Status: ⚠️  Insufficient Validators (${qualifiedValidators} < ${MIN_VALIDATORS})`);
+        if (allInitialized && qualifiedValidators > 0) {
+            console.log(`   🚀 JPoSA Consensus Status: ✅ At least one qualified validator is active (${qualifiedValidators})`);
         } else if (allInitialized && qualifiedValidators === 0) {
             console.log(`   ⚠️  JPoSA Consensus Status: ❌ No Qualified Validators`);
         } else {

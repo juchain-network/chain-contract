@@ -101,10 +101,10 @@ The code uses several similar-looking concepts that must not be confused.
 | --- | --- | --- |
 | authorized validator | `Proposal.pass` | governance has approved the validator |
 | registered validator | `Staking.validatorStakes[validator].isRegistered` | the validator has a stake record |
-| top validator | `Validators.getTopValidators()` | candidate selected by stake ranking from `highestValidatorsSet` |
-| active validator | `Validators.isValidatorActive()` | in `currentValidatorSet` and not jailed |
-| voting validator | `Validators.getVotingValidatorCount()` | active for governance counting; jailed validators excluded immediately |
-| reward-eligible validator | `Validators.getRewardEligibleValidatorsWithStakes()` | eligible for coinbase reward calculation; jailed validators excluded immediately |
+| top validator | `Validators.getTopValidators()` | candidate selected by stake ranking from `highestValidatorsSet`; requires `isRegistered && selfStake >= minValidatorStake` |
+| active validator | `Validators.isValidatorActive()` | in `currentValidatorSet`, registered, not jailed, and `selfStake >= minValidatorStake` |
+| voting validator | `Validators.getVotingValidatorCount()` | governance-counted validator; jailed or below-min-stake validators are excluded immediately |
+| reward-eligible validator | `Validators.getRewardEligibleValidatorsWithStakes()` | coinbase-reward-eligible validator; jailed or below-min-stake validators are excluded immediately |
 
 ## 2. Contract Responsibilities
 
@@ -176,7 +176,7 @@ Configuration proposals support `cid = 0` to `19` and become effective immediate
 
 1. Genesis bootstrap
    - `initializeWithValidators(...)` pre-registers genesis validators
-   - each genesis validator receives `1 ether` bootstrap self-stake
+   - each genesis validator receives `Proposal.minValidatorStake()` bootstrap self-stake
 2. Validator lifecycle
    - `registerValidator(commissionRate)`
    - `addValidatorStake()`
@@ -836,7 +836,7 @@ Block N+1 onward
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |
-| `minValidatorStake` | `100000 ether` | post-launch minimum validator self-stake |
+| `minValidatorStake` | `100000 ether` | minimum validator self-stake; genesis bootstrap uses the same floor at initialization time |
 | `maxValidators` | `21` | cap for effective top validators |
 | `minDelegation` | `10 ether` | minimum delegation amount |
 | `minUndelegation` | `1 ether` | minimum undelegation amount |
@@ -899,6 +899,12 @@ Immediately after jailing:
 - voting eligibility is removed
 - coinbase reward eligibility is removed
 - block production is rejected by Congress when parent state already shows the jail
+
+Immediately after dropping below `minValidatorStake`:
+
+- top-validator ranking eligibility is removed
+- contract-side active / voting / reward-eligible checks return false
+- reward sharing skips that validator
 
 What lags is the cache view, not the privilege checks that matter for safety.
 

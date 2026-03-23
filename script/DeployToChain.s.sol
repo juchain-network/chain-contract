@@ -14,11 +14,11 @@ import {Staking} from "../contracts/Staking.sol";
 contract DeployToChainScript is Script {
     // System contract addresses - deployed to deterministic addresses using CREATE2
     bytes32 constant SALT = keccak256("SYS_CONTRACT_V1");
-    
+
     // Events
     event SystemDeployed(address validators, address proposal, address punish, address staking);
     event SystemInitialized(address[] validators);
-    
+
     function setUp() public {}
 
     /**
@@ -27,43 +27,43 @@ contract DeployToChainScript is Script {
     function run() external {
         // Support multiple private key environment variables
         uint256 deployerPrivateKey = vm.envOr("CHAIN_PRIVATE_KEY", vm.envOr("PRIVATE_KEY", uint256(0)));
-        
+
         // If no private key is provided, use the default anvil private key
         if (deployerPrivateKey == 0) {
             deployerPrivateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
             console.log("Warning: Using default anvil private key");
         }
-        
+
         // Set transaction parameters - handle gas issues
         vm.txGasPrice(1000000007); // use current gas price
-        
+
         vm.startBroadcast(deployerPrivateKey);
-        
+
         console.log("=== Starting Chain Deployment ===");
         console.log("Deployer:", vm.addr(deployerPrivateKey));
         console.log("Chain ID:", block.chainid);
         console.log("Gas Price:", tx.gasprice);
-        
+
         // Deploy all contracts to deterministic addresses
         (address validators, address proposal, address punish, address staking) = deployAllContracts();
-        
+
         // Create initial validator array
         address[] memory initialValidators = createInitialValidators();
-        
+
         // Initialize contracts
         initializeContracts(validators, proposal, punish, staking, initialValidators);
-        
+
         vm.stopBroadcast();
-        
+
         // Validators are now pre-registered during Staking initialization
         console.log("=== Validators pre-registered during Staking initialization ===");
-        
+
         // Emit deployment completion event
         emit SystemDeployed(validators, proposal, punish, staking);
-        
+
         console.log("=== Chain Deployment Complete ===");
         logDeploymentSummary(validators, proposal, punish, staking);
-        
+
         // Check system status
         checkAndLogSystemStatus(validators, proposal, punish, staking);
     }
@@ -71,17 +71,15 @@ contract DeployToChainScript is Script {
     /**
      * @dev Deploy all contracts (using regular deployment instead of CREATE2)
      */
-    function deployAllContracts() internal returns (
-        address validators,
-        address proposal, 
-        address punish,
-        address staking
-    ) {
+    function deployAllContracts()
+        internal
+        returns (address validators, address proposal, address punish, address staking)
+    {
         console.log("Deploying contracts...");
         console.log("Current chain ID:", block.chainid);
         console.log("Deployer address:", msg.sender);
         console.log("Deployer balance:", msg.sender.balance);
-        
+
         // Deploy Validators
         console.log("Deploying Validators...");
         Validators validatorsContract = new Validators();
@@ -115,15 +113,15 @@ contract DeployToChainScript is Script {
     function deployWithCreate2(bytes memory bytecode, bytes32 salt) internal returns (address) {
         console.log("Deploying with CREATE2, bytecode length:", bytecode.length);
         console.log("Salt:", vm.toString(salt));
-        
+
         address deployed;
         assembly {
             deployed := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
         }
-        
+
         console.log("CREATE2 result:", deployed);
         require(deployed != address(0), "Failed to deploy contract with CREATE2");
-        
+
         // Verify deployment
         uint256 size;
         assembly {
@@ -131,7 +129,7 @@ contract DeployToChainScript is Script {
         }
         console.log("Deployed contract code size:", size);
         require(size > 0, "Contract deployment failed - no code");
-        
+
         return deployed;
     }
 
@@ -193,22 +191,22 @@ contract DeployToChainScript is Script {
      * @dev Initialize all contracts - using actually deployed contract addresses
      */
     function initializeContracts(
-        address validators, 
-        address proposal, 
+        address validators,
+        address proposal,
         address punish,
         address staking,
         address[] memory initialValidators
     ) internal {
         console.log("Initializing contracts with actual deployed addresses...");
-        
+
         console.log("Deployed contract addresses:");
         console.log("  Validators:", validators);
         console.log("  Proposal:", proposal);
         console.log("  Punish:", punish);
         console.log("  Staking:", staking);
-        
+
         // Correctly initialize contracts according to dependency relationships
-        
+
         uint256 epoch = vm.envOr("EPOCH_DURATION", uint256(600));
 
         // 1. First initialize Proposal (Staking needs Proposal address)
@@ -219,7 +217,8 @@ contract DeployToChainScript is Script {
         // 2. Initialize Staking (pass in validators, proposal addresses and initial validators, directly pre-register)
         console.log("Initializing Staking with pre-registered validators...");
         uint256 defaultCommissionRate = 500; // 5% commission rate
-        Staking(staking).initializeWithValidators(validators, proposal, punish, initialValidators, defaultCommissionRate);
+        Staking(staking)
+            .initializeWithValidators(validators, proposal, punish, initialValidators, defaultCommissionRate);
         console.log("Staking initialized with", initialValidators.length, "pre-registered validators");
         console.log("Default commission rate: 5%"); // 5% commission rate
 
@@ -240,67 +239,67 @@ contract DeployToChainScript is Script {
     }
 
     /**
-     * @dev Automatically register validators to Staking contract and stake 10000 JU
+     * @dev Automatically register validators to Staking contract and stake minValidatorStake
      * Note: This is a demo function for test environment
      */
     function registerValidatorsToStaking(address staking, address[] memory validators) internal {
-        uint256 stakeAmount = 10000 ether; // 10000 JU
+        address proposalAddress = address(Staking(staking).proposalContract());
+        uint256 stakeAmount = Proposal(proposalAddress).minValidatorStake();
         uint256 commissionRate = 500; // 5% commission rate (500/10000 = 5%)
-        
+
         console.log("Registering validators to Staking contract");
         console.log("Validator count:", validators.length);
+        console.log("Proposal contract:", proposalAddress);
         console.log("Stake amount:", stakeAmount / 1 ether);
         console.log("Commission rate:", commissionRate);
-        
+
         for (uint256 i = 0; i < validators.length; i++) {
             address validator = validators[i];
             console.log("Registering validator:", validator);
-            
+
             // Set sufficient balance for validator address
             vm.deal(validator, stakeAmount + 10 ether); // Extra ETH for gas
-            
+
             // Simulate validator self-registration (test environment)
             vm.prank(validator);
             Staking(staking).registerValidator{value: stakeAmount}(commissionRate);
-            
+
             console.log("Validator registered successfully");
         }
-        
+
         console.log("=== All validators registered to Staking contract ===");
     }
 
     /**
      * @dev Check and log system status
      */
-    function checkAndLogSystemStatus(
-        address validators,
-        address proposal,
-        address punish,
-        address staking
-    ) internal view {
+    function checkAndLogSystemStatus(address validators, address proposal, address punish, address staking)
+        internal
+        view
+    {
         console.log("=== System Status Check ===");
-        
+
         // Check active validators
         address[] memory active = Validators(validators).getActiveValidators();
         console.log("Active validators count:", active.length);
-        for (uint i = 0; i < active.length && i < 5; i++) {
+        for (uint256 i = 0; i < active.length && i < 5; i++) {
             console.log("Validator", i, ":", active[i]);
         }
-        
+
         // Check proposal configuration
         uint256 period = Proposal(proposal).proposalLastingPeriod();
         console.log("Proposal lasting period:", period);
-        
+
         // Note: receiverAddr and increasePeriod have been removed, token inflation is no longer supported
-        
+
         // Check punishment contract status
         uint256 punishValidatorsLen = Punish(punish).getPunishValidatorsLen();
         console.log("Punish validators count:", punishValidatorsLen);
-        
+
         // Check staking contract status
         uint256 totalStaked = Staking(staking).totalStaked();
         console.log("Total staked:", totalStaked);
-        
+
         // Check validator count in staking contract
         uint256 validatorCount = Staking(staking).getValidatorCount();
         console.log("Staking validator count:", validatorCount);
@@ -309,12 +308,7 @@ contract DeployToChainScript is Script {
     /**
      * @dev Log deployment summary
      */
-    function logDeploymentSummary(
-        address validators,
-        address proposal,
-        address punish,
-        address staking
-    ) internal pure {
+    function logDeploymentSummary(address validators, address proposal, address punish, address staking) internal pure {
         console.log("System contracts deployed at addresses:");
         console.log("  Validators:", validators);
         console.log("  Proposal:", proposal);
@@ -326,14 +320,7 @@ contract DeployToChainScript is Script {
      * @dev Get precomputed contract address
      */
     function getComputedAddress(bytes memory bytecode, bytes32 salt) public view returns (address) {
-        bytes32 hash = keccak256(
-            abi.encodePacked(
-                bytes1(0xff),
-                address(this),
-                salt,
-                keccak256(bytecode)
-            )
-        );
+        bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(bytecode)));
         return address(uint160(uint256(hash)));
     }
 }

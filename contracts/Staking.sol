@@ -225,15 +225,15 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         require(commissionRate > 0, "Commission rate must be greater than 0");
         require(commissionRate <= COMMISSION_RATE_BASE, "Commission rate exceeds maximum allowed");
 
-        // Genesis validators use a fixed initial stake
-        uint256 initialStake = 1 ether;
-        uint256 requiredInitialStake = initialStake * initialValidators.length;
-        require(address(this).balance >= requiredInitialStake, "Insufficient initial stake funding");
-
         validatorsContract = IValidators(validators_);
         proposalContract = IProposal(proposal_);
         punishContract = IPunish(punish_);
         _initializeEpoch(proposalContract.epoch());
+
+        // Genesis validators bootstrap with the same self-stake floor enforced elsewhere.
+        uint256 initialStake = proposalContract.minValidatorStake();
+        uint256 requiredInitialStake = initialStake * initialValidators.length;
+        require(address(this).balance >= requiredInitialStake, "Insufficient initial stake funding");
 
         // Pre-register all initial validators with default stake
         // This automatically performs the same logic as registerValidator for genesis validators
@@ -645,10 +645,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             return; // Validator doesn't exist, silently return
         }
 
-        // Note: We don't check selfStake >= MIN_VALIDATOR_STAKE here because:
-        // 1. Validators in active set cannot exit (emergencyExit() rejects them)
-        // 2. Validators cannot reduce stake below MIN_VALIDATOR_STAKE (withdrawValidatorStake() requires remainingStake >= MIN_VALIDATOR_STAKE)
-        // 3. If validator can produce a block, they must be in active set and have sufficient stake
+        if (stake.selfStake < proposalContract.minValidatorStake()) {
+            return;
+        }
 
         uint256 totalStake = stake.selfStake + stake.totalDelegated;
 
@@ -902,16 +901,14 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         uint256[] memory totalStakes = new uint256[](validators.length);
         uint256 candidateCount = 0;
 
-        // Cache the minimum validator stake outside the loop
-        // uint256 minValidatorStake = proposalContract.minValidatorStake();
+        uint256 minValidatorStake = proposalContract.minValidatorStake();
 
         // Collect validators and their total stakes for sorting
         for (uint256 i = 0; i < validators.length; i++) {
             address validator = validators[i];
             ValidatorStake storage stake = validatorStakes[validator];
 
-            // Only include validators with self-stake > 0 (allows genesis validators with stake < minValidatorStake)
-            if (stake.selfStake > 0) {
+            if (stake.isRegistered && stake.selfStake >= minValidatorStake) {
                 candidateValidators[candidateCount] = validator;
                 totalStakes[candidateCount] = stake.selfStake + stake.totalDelegated;
                 candidateCount++;

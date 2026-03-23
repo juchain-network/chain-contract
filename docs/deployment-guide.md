@@ -191,12 +191,13 @@ This ordering matters because:
 
 Bootstrap specifics:
 
-- Congress pre-funds the staking contract with `1 ether` per genesis validator for `initializeWithValidators(...)`
+- Congress initializes `Proposal` first, reads `Proposal.minValidatorStake()`, and pre-funds the staking contract with that amount per genesis validator for `initializeWithValidators(...)`
 - genesis validators are registered directly by the bootstrap path
-- genesis validators start with `1 ether` bootstrap self-stake and `1000` bps commission
-- post-launch validator registration still requires `minValidatorStake = 100000 JU` by default
+- genesis validators start with `minValidatorStake` bootstrap self-stake and `1000` bps commission
+- with current defaults this means `100000 JU` per genesis validator
+- validators below the current `minValidatorStake` are excluded from top-validator ranking and from contract-side active / voting / reward eligibility
 
-Do not misread the bootstrap amount as the post-launch validator minimum.
+Bootstrap stake and validator minimum are intentionally aligned at initialization time.
 
 ### 3.5 Recommended Genesis Validation Checks
 

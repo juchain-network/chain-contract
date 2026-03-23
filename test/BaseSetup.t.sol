@@ -25,11 +25,12 @@ abstract contract BaseSetup is Test {
         // Initialize contracts in correct order
         // 1. Proposal first (needed by others)
         Proposal(PROPOSAL).initialize(initVals, VALIDATORS, TEST_EPOCH);
+        uint256 minValidatorStake = Proposal(PROPOSAL).minValidatorStake();
 
         // 2. Staking with genesis validators (but don't call tryAddValidatorToHighestSet yet)
         // Use initializeWithValidators to automatically register genesis validators in Staking
         // This ensures genesis validators are immediately available without needing to register separately
-        vm.deal(STAKING, uint256(initVals.length) * 1 ether);
+        vm.deal(STAKING, uint256(initVals.length) * minValidatorStake);
         Staking(STAKING).initializeWithValidators(VALIDATORS, PROPOSAL, PUNISH, initVals, 1000); // 10% commission
 
         // 3. Punish (needs Staking)
@@ -45,9 +46,5 @@ abstract contract BaseSetup is Test {
             vm.prank(STAKING);
             Validators(VALIDATORS).tryAddValidatorToHighestSet(initVals[i]);
         }
-
-        // Align minValidatorStake with genesis default (1 ether) for tests relying on getTopValidators
-        // Slot 60 per storage layout (ReentrancyGuard uses unstructured storage)
-        vm.store(PROPOSAL, bytes32(uint256(60)), bytes32(uint256(1 ether)));
     }
 }
