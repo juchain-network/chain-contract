@@ -262,6 +262,7 @@ Other important storage:
 1. Validator metadata
    - `createOrEditValidator(...)`
    - stores fee address and descriptive metadata
+   - callable by a proposal-authorized candidate or any existing registered validator
 2. Set management
    - `currentValidatorSet` is the epoch-effective set
    - `highestValidatorsSet` is the candidate cache
@@ -429,6 +430,8 @@ Other important storage:
    - if the producer is jailed, redistributes the fee reward to other active non-jailed validators
    - otherwise adds the amount to `validatorInfo[val].aacIncoming`
 3. The validator's fee address later withdraws this accumulated income through `Validators.withdrawProfits(validator)`.
+   If the current fee address cannot receive ETH, the validator may rotate `feeAddr` via
+   `Validators.createOrEditValidator(...)` and retry the withdrawal.
 
 ### 3.5 Coinbase Reward Flow
 
@@ -659,6 +662,10 @@ Validator operational metadata is updated separately from stake and validator-se
 
 - `Validators.createOrEditValidator(...)` updates fee address and descriptive fields
 - `Staking.updateCommissionRate(newCommissionRate)` updates commission subject to `commissionUpdateCooldown`
+
+`createOrEditValidator(...)` is available both to proposal-authorized pre-registration candidates and to existing
+registered validators whose `pass` flag has later been cleared, so fee-income withdrawal can still be recovered by
+changing `feeAddr`.
 
 These changes do not require epoch rotation.
 

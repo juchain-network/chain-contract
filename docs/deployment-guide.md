@@ -315,7 +315,7 @@ Validator descriptive data is updated through:
 Requirements:
 
 - caller must be the validator address
-- validator must have governance authorization through `Proposal.pass`
+- validator must either have governance authorization through `Proposal.pass` or already exist as a registered validator
 - metadata field lengths must satisfy the contract validation rules
 
 This operation does not change stake or active-set membership.
@@ -449,6 +449,9 @@ There are three separate reward withdrawal surfaces:
    - `Staking.claimRewards(validator)`
 
 Validator reward and profit withdrawals are each rate-limited by `withdrawProfitPeriod` in their respective paths.
+If a validator fee address is misconfigured or cannot receive ETH, the validator can rotate `feeAddr` through
+`Validators.createOrEditValidator(...)` and then retry `withdrawProfits(...)`, even after `pass` has been cleared, as
+long as the validator still exists in `Staking`.
 
 ### 6.6 Pending Payouts
 

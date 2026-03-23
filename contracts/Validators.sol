@@ -151,6 +151,8 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @param email Validator's email address.
      * @param details Additional details about the validator.
      * @return bool Returns true if the operation was successful.
+     * @notice New candidates may call after governance authorization.
+     * @notice Existing registered validators may continue to update feeAddr/metadata even after pass is cleared.
      */
     function createOrEditValidator(
         address payable feeAddr,
@@ -163,7 +165,13 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         require(feeAddr != address(0), "Invalid fee address");
         require(validateDescription(moniker, identity, website, email, details), "Invalid description");
         address payable validator = payable(msg.sender);
-        require(proposal.pass(validator), "You must be authorized first");
+
+        bool canEdit = proposal.pass(validator);
+        if (!canEdit) {
+            (,,,,,,,, bool isRegistered,) = staking.getValidatorInfo(validator);
+            canEdit = isRegistered;
+        }
+        require(canEdit, "You must be authorized or an existing validator");
 
         if (validatorInfo[validator].feeAddr != feeAddr) {
             validatorInfo[validator].feeAddr = feeAddr;
