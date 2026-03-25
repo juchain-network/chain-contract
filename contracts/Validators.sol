@@ -577,6 +577,47 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     }
 
     /**
+     * @dev Gets the stored pending signer rotation for a validator.
+     * @param validator Validator cold address.
+     * @return signer Pending signer hot address.
+     * @return effectiveBlock Checkpoint block after which the pending signer becomes runtime-effective.
+     * @return pending True when the pending record is still stored consistently on-chain.
+     * @notice `pending` reflects stored state, not whether the rotation is still future-dated.
+     */
+    function getPendingValidatorSigner(address validator)
+        public
+        view
+        returns (address signer, uint256 effectiveBlock, bool pending)
+    {
+        return _getPendingSignerRecordByValidator(validator);
+    }
+
+    /**
+     * @dev Gets the stored pending signer rotation by pending signer address.
+     * @param signer Pending signer hot address.
+     * @return validator Validator cold address that reserved the signer.
+     * @return effectiveBlock Checkpoint block after which the pending signer becomes runtime-effective.
+     * @return pending True when the pending record is still stored consistently on-chain.
+     * @notice `pending` reflects stored state, not whether the rotation is still future-dated.
+     */
+    function getPendingValidatorBySigner(address signer)
+        public
+        view
+        returns (address validator, uint256 effectiveBlock, bool pending)
+    {
+        validator = pendingSignerValidators[signer];
+        if (validator == address(0)) {
+            return (address(0), 0, false);
+        }
+        (address storedSigner, uint256 storedEffectiveBlock, bool storedPending) =
+            _getPendingSignerRecordByValidator(validator);
+        if (!storedPending || storedSigner != signer) {
+            return (address(0), 0, false);
+        }
+        return (validator, storedEffectiveBlock, true);
+    }
+
+    /**
      * @dev Resolves a signer to the validator that has historically owned it.
      * @param signer Signer hot address.
      * @return validator Validator cold address, or zero if signer has never become effective.
@@ -991,6 +1032,22 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         }
 
         return address(0);
+    }
+
+    function _getPendingSignerRecordByValidator(address validator)
+        internal
+        view
+        returns (address signer, uint256 effectiveBlock, bool pending)
+    {
+        signer = pendingValidatorSigners[validator];
+        effectiveBlock = pendingSignerEpochs[validator];
+        if (signer == address(0) || effectiveBlock == 0) {
+            return (address(0), 0, false);
+        }
+        if (pendingSignerValidators[signer] != validator) {
+            return (address(0), 0, false);
+        }
+        return (signer, effectiveBlock, true);
     }
 
     function _resolveSignerSet(address[] memory validators) internal view returns (address[] memory signers) {

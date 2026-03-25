@@ -605,6 +605,8 @@ Signer-aware queries that are useful in separated cold/hot deployments:
 
 - `Validators.getValidatorSigner(validator)`
 - `Validators.getValidatorBySigner(signer)`
+- `Validators.getPendingValidatorSigner(validator)`
+- `Validators.getPendingValidatorBySigner(signer)`
 - `Validators.getActiveSigners()`
 - `Validators.getTopSigners()`
 - `Validators.getTopSignersForEpochTransition()`
@@ -634,6 +636,14 @@ Track these separately:
 - delegator pending reward state via delegation and `rewardPerShare`
 - missed-block counters and pending punishment queues in `Punish`
 - pending payout balances in `Staking.pendingPayouts`
+- pending signer rotations through `getPendingValidatorSigner(...)` / `getPendingValidatorBySigner(...)`
+
+For the pending signer getters:
+
+- `pending = true` means the delayed-rotation record is still stored consistently on-chain
+- it does not guarantee the record is still future-dated; a due record may remain observable until a sync or cleanup
+  path executes
+- use `effectiveBlock` together with the current block height to distinguish “scheduled” from “already due”
 
 ### 7.5 Validator-Set Drift Checks
 
@@ -662,11 +672,13 @@ Check the following in order:
 
 1. is the validator in `currentValidatorSet`
 2. does `Validators.getValidatorSigner(validator)` return the signer hot address you expect
-3. is that signer present in the effective signer set (`getActiveSigners()` / epoch `header.Extra`)
-4. is the validator jailed in `Staking`
-5. is the signer hot key unlocked or external signer available
-6. does the node have stable peer connectivity
-7. is the validator being rejected by Congress because the parent state already marks it jailed
+3. if a rotation was recently scheduled, does `Validators.getPendingValidatorSigner(validator)` show the expected
+   pending signer and `effectiveBlock`
+4. is that signer present in the effective signer set (`getActiveSigners()` / epoch `header.Extra`)
+5. is the validator jailed in `Staking`
+6. is the signer hot key unlocked or external signer available
+7. does the node have stable peer connectivity
+8. is the validator being rejected by Congress because the parent state already marks it jailed
 
 ### 8.2 Proposal Creation or Voting Fails
 
@@ -778,6 +790,8 @@ High-value operational functions:
 - `withdrawProfits(address validator)`
 - `getValidatorSigner(address validator)`
 - `getValidatorBySigner(address signer)`
+- `getPendingValidatorSigner(address validator)`
+- `getPendingValidatorBySigner(address signer)`
 - `getActiveSigners()`
 - `getActiveValidators()`
 - `getActiveValidatorCount()`

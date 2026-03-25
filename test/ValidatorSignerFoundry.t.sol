@@ -213,6 +213,63 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
         assertEq(incoming, 2 ether);
     }
 
+    function testPendingSignerGettersExposeStoredRotationRecord() public {
+        address newSigner = vm.addr(0x20A);
+
+        vm.prank(v1);
+        Validators(VALIDATORS).createOrEditValidator(payable(v1), newSigner, "", "", "", "", "");
+
+        (address pendingSigner, uint256 effectiveBlock, bool pending) =
+            Validators(VALIDATORS).getPendingValidatorSigner(v1);
+        assertEq(pendingSigner, newSigner);
+        assertEq(effectiveBlock, 10);
+        assertTrue(pending);
+
+        (address pendingValidator, uint256 reverseEffectiveBlock, bool reversePending) =
+            Validators(VALIDATORS).getPendingValidatorBySigner(newSigner);
+        assertEq(pendingValidator, v1);
+        assertEq(reverseEffectiveBlock, 10);
+        assertTrue(reversePending);
+    }
+
+    function testPendingSignerGettersRemainVisibleAfterDueUntilSyncAndThenClear() public {
+        address newSigner = vm.addr(0x20B);
+
+        vm.prank(v1);
+        Validators(VALIDATORS).createOrEditValidator(payable(v1), newSigner, "", "", "", "", "");
+
+        vm.roll(11);
+
+        assertEq(Validators(VALIDATORS).getValidatorSigner(v1), newSigner);
+
+        (address pendingSignerBefore, uint256 effectiveBlockBefore, bool pendingBefore) =
+            Validators(VALIDATORS).getPendingValidatorSigner(v1);
+        assertEq(pendingSignerBefore, newSigner);
+        assertEq(effectiveBlockBefore, 10);
+        assertTrue(pendingBefore);
+
+        (address pendingValidatorBefore, uint256 reverseEffectiveBlockBefore, bool reversePendingBefore) =
+            Validators(VALIDATORS).getPendingValidatorBySigner(newSigner);
+        assertEq(pendingValidatorBefore, v1);
+        assertEq(reverseEffectiveBlockBefore, 10);
+        assertTrue(reversePendingBefore);
+
+        vm.prank(v1);
+        Validators(VALIDATORS).createOrEditValidator(payable(v1), "", "", "", "", "");
+
+        (address pendingSignerAfter, uint256 effectiveBlockAfter, bool pendingAfter) =
+            Validators(VALIDATORS).getPendingValidatorSigner(v1);
+        assertEq(pendingSignerAfter, address(0));
+        assertEq(effectiveBlockAfter, 0);
+        assertFalse(pendingAfter);
+
+        (address pendingValidatorAfter, uint256 reverseEffectiveBlockAfter, bool reversePendingAfter) =
+            Validators(VALIDATORS).getPendingValidatorBySigner(newSigner);
+        assertEq(pendingValidatorAfter, address(0));
+        assertEq(reverseEffectiveBlockAfter, 0);
+        assertFalse(reversePendingAfter);
+    }
+
     function testEpochTransitionSignerQueryExposesNextSignerAtCheckpoint() public {
         address newSigner = vm.addr(0x207);
 
@@ -280,8 +337,20 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
         vm.prank(v1);
         Validators(VALIDATORS).createOrEditValidator(payable(v1), rotatedSigner, "", "", "", "", "");
 
+        (address pendingSignerBefore, uint256 effectiveBlockBefore, bool pendingBefore) =
+            Validators(VALIDATORS).getPendingValidatorSigner(v1);
+        assertEq(pendingSignerBefore, rotatedSigner);
+        assertEq(effectiveBlockBefore, 10);
+        assertTrue(pendingBefore);
+
         vm.prank(v1);
         Staking(STAKING).resignValidator();
+
+        (address pendingSignerAfter, uint256 effectiveBlockAfter, bool pendingAfter) =
+            Validators(VALIDATORS).getPendingValidatorSigner(v1);
+        assertEq(pendingSignerAfter, address(0));
+        assertEq(effectiveBlockAfter, 0);
+        assertFalse(pendingAfter);
 
         vm.prank(v2);
         Validators(VALIDATORS).createOrEditValidator(payable(v2), rotatedSigner, "", "", "", "", "");
@@ -301,8 +370,20 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
         vm.prank(v1);
         Validators(VALIDATORS).createOrEditValidator(payable(v1), rotatedSigner, "", "", "", "", "");
 
+        (address pendingValidatorBefore, uint256 effectiveBlockBefore, bool pendingBefore) =
+            Validators(VALIDATORS).getPendingValidatorBySigner(rotatedSigner);
+        assertEq(pendingValidatorBefore, v1);
+        assertEq(effectiveBlockBefore, 10);
+        assertTrue(pendingBefore);
+
         vm.prank(PUNISH);
         Validators(VALIDATORS).removeValidator(v1);
+
+        (address pendingValidatorAfter, uint256 effectiveBlockAfter, bool pendingAfter) =
+            Validators(VALIDATORS).getPendingValidatorBySigner(rotatedSigner);
+        assertEq(pendingValidatorAfter, address(0));
+        assertEq(effectiveBlockAfter, 0);
+        assertFalse(pendingAfter);
 
         vm.prank(v2);
         Validators(VALIDATORS).createOrEditValidator(payable(v2), rotatedSigner, "", "", "", "", "");

@@ -18,6 +18,30 @@ interface IValidators {
     function getValidatorBySigner(address signer) external view returns (address validator);
 
     /**
+     * @dev Gets the pending signer rotation record for a validator.
+     * @param validator Validator cold address.
+     * @return signer Pending signer hot address.
+     * @return effectiveBlock Checkpoint block after which the pending signer becomes runtime-effective.
+     * @return pending True when a consistent pending rotation record is still stored on-chain.
+     */
+    function getPendingValidatorSigner(address validator)
+        external
+        view
+        returns (address signer, uint256 effectiveBlock, bool pending);
+
+    /**
+     * @dev Gets the pending signer rotation record by signer address.
+     * @param signer Pending signer hot address.
+     * @return validator Validator cold address that reserved the signer.
+     * @return effectiveBlock Checkpoint block after which the pending signer becomes runtime-effective.
+     * @return pending True when a consistent pending rotation record is still stored on-chain.
+     */
+    function getPendingValidatorBySigner(address signer)
+        external
+        view
+        returns (address validator, uint256 effectiveBlock, bool pending);
+
+    /**
      * @dev Resolves a signer address to its validator using historical effective bindings.
      * @param signer Signer hot address.
      * @return validator Validator cold address, or zero if signer has never been effective.

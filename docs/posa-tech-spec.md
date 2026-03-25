@@ -291,6 +291,8 @@ Other important storage:
 2. Signer mapping
    - `getValidatorSigner(validator)`
    - `getValidatorBySigner(signer)`
+   - `getPendingValidatorSigner(validator)`
+   - `getPendingValidatorBySigner(signer)`
    - `getValidatorBySignerHistory(signer)`
    - pending signer rotation activates from the first block after the next epoch checkpoint
    - historical signer ownership is recorded only after that signer has actually entered the on-chain effective signer set
@@ -354,6 +356,10 @@ Other important storage:
 
 - `currentValidatorSet` and `highestValidatorsSet` store validator cold addresses only
 - `getActiveSigners()` and `getTopSigners()` derive signer hot-address sets from the effective cold/hot mapping
+- `getPendingValidatorSigner(validator)` and `getPendingValidatorBySigner(signer)` expose the stored delayed-rotation
+  record for tooling; `pending = true` means the pending mappings are still internally consistent on-chain
+- the pending getter `pending` flag does not imply the rotation is still future-dated; a due record may remain visible
+  until a state-changing sync or cleanup path executes
 - the feeAddr-only `createOrEditValidator(...)` overload preserves the existing signer binding
 - if no signer has ever been assigned, the validator address is used as the default signer
 - existing registered validators may keep updating `feeAddr`, metadata, and signer binding even after `pass` is cleared
