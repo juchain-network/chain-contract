@@ -6,30 +6,37 @@ contract Params {
     /**
      * @dev Indicates whether the contract has been initialized.
      */
-    bool public initialized;
+    bool public initialized ;
 
     uint256 public epoch;
     uint256 public constant CONSENSUS_MAX_VALIDATORS = 21;
     uint256[50] private __gap;
 
+    
     // Production version: constants use SCREAMING_SNAKE_CASE
     // System contracts (POSA addresses)
     /**
      * @dev Address of the Validators contract.
      */
-    address public constant VALIDATOR_ADDR = 0x000000000000000000000000000000000000F010;
+    address
+        public constant VALIDATOR_ADDR = 0x000000000000000000000000000000000000F010;
     /**
      * @dev Address of the Punish contract.
      */
-    address public constant PUNISH_ADDR = 0x000000000000000000000000000000000000F011;
+    address
+        public constant PUNISH_ADDR = 0x000000000000000000000000000000000000F011;
     /**
      * @dev Address of the Proposal contract.
      */
-    address public constant PROPOSAL_ADDR = 0x000000000000000000000000000000000000F012;
+    address
+        public constant PROPOSAL_ADDR = 0x000000000000000000000000000000000000F012;
     /**
      * @dev Address of the Staking contract.
      */
-    address public constant STAKING_ADDR = 0x000000000000000000000000000000000000F013;
+    address
+        public constant STAKING_ADDR = 0x000000000000000000000000000000000000F013;
+
+    
 
     modifier onlyMiner() {
         _onlyMiner();
@@ -82,11 +89,13 @@ contract Params {
     }
 
     function _onlyMiner() internal view {
+        
         require(
             // For production, strictly use block.coinbase
             msg.sender == block.coinbase,
             "Miner only"
         );
+        
     }
 
     function _onlyNotInitialized() internal view {
@@ -98,7 +107,9 @@ contract Params {
     }
 
     function _onlyPunishContract() internal view {
+        
         require(msg.sender == PUNISH_ADDR, "Punish contract only");
+        
     }
 
     function _onlyBlockEpoch(uint256 epochParam) internal view {
@@ -114,20 +125,37 @@ contract Params {
     }
 
     function _onlyValidatorsContract() internal view {
-        require(msg.sender == VALIDATOR_ADDR, "Validators contract only");
+        require(
+            
+            msg.sender == VALIDATOR_ADDR,
+            
+            "Validators contract only"
+        );
     }
 
     function _onlyProposalContract() internal view {
-        require(msg.sender == PROPOSAL_ADDR, "Proposal contract only");
+        require(
+            
+            msg.sender == PROPOSAL_ADDR,
+            
+            "Proposal contract only"
+        );
     }
 
     function _onlyStakingContract() internal view {
-        require(msg.sender == STAKING_ADDR, "Staking contract only");
+        require(
+            
+            msg.sender == STAKING_ADDR,
+            
+            "Staking contract only"
+        );
     }
 
     function _onlyPunishOrValidatorsContract() internal view {
         require(
+            
             msg.sender == PUNISH_ADDR || msg.sender == VALIDATOR_ADDR,
+            
             "Only punish or validators contract can call this function"
         );
     }
@@ -137,4 +165,6 @@ contract Params {
         require(epoch == 0, "Epoch already set");
         epoch = epoch_;
     }
+
+    
 }
