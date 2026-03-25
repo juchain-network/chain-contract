@@ -45,7 +45,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
     // Validator address => ValidatorStake
     mapping(address => ValidatorStake) public validatorStakes;
-    // Validator address => last active block (set by Validators.distributeBlockReward)
+    // Validator cold address => last active block
     mapping(address => uint256) public lastActiveBlock;
     // Validator address => last commission update block
     mapping(address => uint256) public lastCommissionUpdateBlock;
@@ -602,8 +602,8 @@ contract Staking is Params, ReentrancyGuard, IStaking {
     }
 
     /**
-     * @dev Distribute rewards to the current block miner (validator)
-     * @notice Validator address is obtained from block.coinbase
+     * @dev Distribute rewards to the current block miner's validator
+     * @notice Signer address is obtained from block.coinbase, then resolved to validator cold address
      * @notice Block reward is passed via msg.value (consensus layer reads from Proposal contract)
      * @notice If a validator is jailed in parent state, consensus rejects their blocks
      * @notice Jailed validators may remain in currentValidatorSet until the next epoch transition
@@ -633,8 +633,11 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             return;
         }
 
-        // Get validator address from block.coinbase (similar to Validators.distributeBlockReward())
-        address validator = block.coinbase;
+        // Resolve signer hot address to validator cold address
+        address validator = validatorsContract.getValidatorBySigner(block.coinbase);
+        if (validator == address(0)) {
+            return;
+        }
 
         // Update last active block for double sign window enforcement
         lastActiveBlock[validator] = block.number;

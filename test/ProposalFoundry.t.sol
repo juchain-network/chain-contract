@@ -19,19 +19,21 @@ contract ProposalFoundryTest is BaseSetup {
         v2 = makeAddr("v2");
         v3 = makeAddr("v3");
         address[] memory initVals = new address[](3);
-        initVals[0] = v1; initVals[1] = v2; initVals[2] = v3;
+        initVals[0] = v1;
+        initVals[1] = v2;
+        initVals[2] = v3;
         deploySystem(initVals);
     }
 
     function testVoteProposalWithResultAlreadyExists() public {
         Proposal p = Proposal(PROPOSAL);
         address newValidator = makeAddr("newValidator");
-        
+
         // Create a proposal
         vm.warp(5_000_000);
         vm.prank(v1); // Use validator v1 as proposer
         bytes32 id = p.createProposal(newValidator, true, "");
-        
+
         // Manually set resultExist to true to test the early return path
         // This simulates a situation where the result was already determined by previous votes
         vm.store(
@@ -39,7 +41,7 @@ contract ProposalFoundryTest is BaseSetup {
             keccak256(abi.encode(id, uint256(2))), // Slot for results[id]
             bytes32(uint256(1 << 160)) // resultExist = true, agree=0, reject=0
         );
-        
+
         // Try to vote - should return true without processing the vote
         vm.prank(v1);
         bool result = p.voteProposal(id, true);
@@ -49,17 +51,20 @@ contract ProposalFoundryTest is BaseSetup {
     function testVoteProposalRejectPath() public {
         Proposal p = Proposal(PROPOSAL);
         address newValidator = makeAddr("newValidator");
-        
+
         // Create a proposal
         vm.warp(5_000_000);
         vm.prank(v1); // Use validator v1 as proposer
         bytes32 id = p.createProposal(newValidator, true, "");
-        
+
         // Vote to make it rejected (majority against)
-        vm.prank(v1); p.voteProposal(id, false);
-        vm.prank(v2); p.voteProposal(id, false);
-        vm.prank(v3); p.voteProposal(id, false);
-        
+        vm.prank(v1);
+        p.voteProposal(id, false);
+        vm.prank(v2);
+        p.voteProposal(id, false);
+        vm.prank(v3);
+        p.voteProposal(id, false);
+
         // Check that reject path was taken
         (uint16 agree, uint16 reject, bool resultExist) = p.results(id);
         require(agree == 0, "should have 0 agree votes");
@@ -69,29 +74,32 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testIsProposalValidForStaking() public {
         Proposal p = Proposal(PROPOSAL);
-        
+
         // Test validator with no proposal (pass is false)
         address newValidator = makeAddr("newValidator");
         bool result = p.isProposalValidForStaking(newValidator);
         require(!result, "should return false for validator with no proposal");
-        
+
         // Test existing validator but no passed time recorded
         // (pass[v1] is true since it was initialized)
         // Let's assume v1 has no passed time (in real code it should, but for testing we'll proceed)
-        
+
         // Create a new validator proposal and pass it
         address testValidator = makeAddr("testValidator");
         vm.warp(5_000_000);
         vm.prank(v1); // Use validator v1 as proposer
         bytes32 id = p.createProposal(testValidator, true, "");
-        vm.prank(v1); p.voteProposal(id, true);
-        vm.prank(v2); p.voteProposal(id, true);
-        vm.prank(v3); p.voteProposal(id, true);
-        
+        vm.prank(v1);
+        p.voteProposal(id, true);
+        vm.prank(v2);
+        p.voteProposal(id, true);
+        vm.prank(v3);
+        p.voteProposal(id, true);
+
         // Now test with valid passed time but within deadline
         result = p.isProposalValidForStaking(testValidator);
         require(result, "should return true for valid proposal within deadline");
-        
+
         // Test after deadline has passed
         uint256 proposalLastingPeriod = p.proposalLastingPeriod();
         vm.roll(block.number + proposalLastingPeriod + 1);
@@ -101,7 +109,11 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testInitOnlyOnce() public {
         bytes memory err;
-        try Proposal(PROPOSAL).initialize(new address[](0), address(0xCAFE), TEST_EPOCH) { revert("should revert"); } catch (bytes memory e) { err = e; }
+        try Proposal(PROPOSAL).initialize(new address[](0), address(0xCAFE), TEST_EPOCH) {
+            revert("should revert");
+        } catch (bytes memory e) {
+            err = e;
+        }
         require(err.length > 0, "expected revert");
     }
 
@@ -121,39 +133,45 @@ contract ProposalFoundryTest is BaseSetup {
         vm.expectRevert("Details too long");
         p.createProposal(address(0xAAA1), true, tooLong);
 
-    // ok to add not passed address
-    vm.prank(v1);
-    bytes32 id = p.createProposal(address(0xBBB2), true, "");
-    require(id != bytes32(0), "create add should succeed");
+        // ok to add not passed address
+        vm.prank(v1);
+        bytes32 id = p.createProposal(address(0xBBB2), true, "");
+        require(id != bytes32(0), "create add should succeed");
 
-    // can't add already exist dst after pass
-    vm.prank(v1); p.voteProposal(id, true);
-    vm.prank(v2); p.voteProposal(id, true);
-    vm.prank(v3); p.voteProposal(id, true);
-    vm.roll(block.number + cooldown);
-    vm.prank(v1);
-    vm.expectRevert("Can't add an already passed dst");
-    p.createProposal(address(0xBBB2), true, "");
+        // can't add already exist dst after pass
+        vm.prank(v1);
+        p.voteProposal(id, true);
+        vm.prank(v2);
+        p.voteProposal(id, true);
+        vm.prank(v3);
+        p.voteProposal(id, true);
+        vm.roll(block.number + cooldown);
+        vm.prank(v1);
+        vm.expectRevert("Can't add an already passed dst");
+        p.createProposal(address(0xBBB2), true, "");
     }
 
     function testCreateAndVoteAddProposalPass() public {
         Proposal p = Proposal(PROPOSAL);
         address newValidator = address(0xBEEF);
-        
-        // create by validator v1
-    vm.prank(v1);
-    bytes32 id = p.createProposal(newValidator, true, "");
-    require(id != bytes32(0), "create failed");
 
-    // validators vote
-    vm.prank(v1); p.voteProposal(id, true);
-    vm.prank(v2); p.voteProposal(id, true);
-    vm.prank(v3); p.voteProposal(id, true);
+        // create by validator v1
+        vm.prank(v1);
+        bytes32 id = p.createProposal(newValidator, true, "");
+        require(id != bytes32(0), "create failed");
+
+        // validators vote
+        vm.prank(v1);
+        p.voteProposal(id, true);
+        vm.prank(v2);
+        p.voteProposal(id, true);
+        vm.prank(v3);
+        p.voteProposal(id, true);
 
         // assert pass recorded
         bool passed = p.pass(newValidator);
         require(passed, "should pass");
-        
+
         // In POSA mode, validator must register (stake) to become top validator
         // This is the design: proposal passing only grants permission, validator must actively register
         // Give new validator enough ETH and register
@@ -161,7 +179,7 @@ contract ProposalFoundryTest is BaseSetup {
         vm.deal(newValidator, minStake);
         vm.prank(newValidator);
         Staking(STAKING).registerValidator{value: minStake}(1000); // 10% commission
-        
+
         // registerValidator() internally calls tryAddValidatorToHighestSet(), so validator should now be top
         // also ensure validator became top
         bool isTop = Validators(VALIDATORS).isTopValidator(newValidator);
@@ -169,14 +187,14 @@ contract ProposalFoundryTest is BaseSetup {
     }
 
     function testOnlyValidatorCanVote() public {
-    Proposal p = Proposal(PROPOSAL);
-    // Create proposal using validator v1
-    vm.prank(v1);
-    bytes32 id = p.createProposal(address(0xCAFE), true, "");
+        Proposal p = Proposal(PROPOSAL);
+        // Create proposal using validator v1
+        vm.prank(v1);
+        bytes32 id = p.createProposal(address(0xCAFE), true, "");
         // non-validator
         address nv = makeAddr("nv");
-    vm.prank(nv);
-        (bool ok, ) = address(p).call(abi.encodeWithSelector(p.voteProposal.selector, id, true));
+        vm.prank(nv);
+        (bool ok,) = address(p).call(abi.encodeWithSelector(p.voteProposal.selector, id, true));
         require(!ok, "should fail");
     }
 
@@ -185,17 +203,18 @@ contract ProposalFoundryTest is BaseSetup {
         // Create proposal using validator v1
         vm.prank(v1);
         bytes32 id = p.createProposal(address(0xDEAD), true, "");
-        vm.prank(v1); p.voteProposal(id, true);
+        vm.prank(v1);
+        p.voteProposal(id, true);
         // second vote by same validator should fail
         vm.prank(v1);
-        (bool ok1, ) = address(p).call(abi.encodeWithSelector(p.voteProposal.selector, id, true));
+        (bool ok1,) = address(p).call(abi.encodeWithSelector(p.voteProposal.selector, id, true));
         require(!ok1, "double vote should fail");
 
         // expire by increasing block number
         uint256 lasting = p.proposalLastingPeriod();
         vm.roll(block.number + lasting + 1);
         vm.prank(v2);
-        (bool ok2, ) = address(p).call(abi.encodeWithSelector(p.voteProposal.selector, id, true));
+        (bool ok2,) = address(p).call(abi.encodeWithSelector(p.voteProposal.selector, id, true));
         require(!ok2, "expired vote should fail");
     }
 
@@ -205,34 +224,40 @@ contract ProposalFoundryTest is BaseSetup {
         // Create proposal using validator v2
         vm.prank(v2);
         bytes32 id = p.createProposal(v1, false, "");
-        vm.prank(v1); p.voteProposal(id, true);
-        vm.prank(v2); p.voteProposal(id, true);
-        vm.prank(v3); p.voteProposal(id, true);
+        vm.prank(v1);
+        p.voteProposal(id, true);
+        vm.prank(v2);
+        p.voteProposal(id, true);
+        vm.prank(v3);
+        p.voteProposal(id, true);
         require(!p.pass(v1), "v1 should be unpassed");
     }
 
     function testConfigUpdateAll() public {
         Proposal p = Proposal(PROPOSAL);
         uint256 cooldown = p.proposalCooldown();
-        uint256[8] memory cids = [uint256(0),1,2,3,4,5,6,7];
+        uint256[8] memory cids = [uint256(0), 1, 2, 3, 4, 5, 6, 7];
 
-        uint256[8] memory vals = [uint256(3600),20,60,30,500,833_000_000_000_000_000,604800,86400];
-        for (uint i = 0; i < cids.length; i++) {
+        uint256[8] memory vals = [uint256(3600), 20, 60, 30, 500, 833_000_000_000_000_000, 604800, 86400];
+        for (uint256 i = 0; i < cids.length; i++) {
             // Create config proposal using validator v1
             vm.prank(v1);
             bytes32 id = p.createUpdateConfigProposal(cids[i], vals[i]);
-            vm.prank(v1); p.voteProposal(id, true);
-            vm.prank(v2); p.voteProposal(id, true);
-            vm.prank(v3); p.voteProposal(id, true);
+            vm.prank(v1);
+            p.voteProposal(id, true);
+            vm.prank(v2);
+            p.voteProposal(id, true);
+            vm.prank(v3);
+            p.voteProposal(id, true);
 
-            if (cids[i]==0) require(p.proposalLastingPeriod()==3600, "cid0");
-            else if (cids[i]==1) require(p.punishThreshold()==vals[1], "cid1");
-            else if (cids[i]==2) require(p.removeThreshold()==vals[2], "cid2");
-            else if (cids[i]==3) require(p.decreaseRate()==vals[3], "cid3");
-            else if (cids[i]==4) require(p.withdrawProfitPeriod()==vals[4], "cid4");
-            else if (cids[i]==5) require(p.blockReward()==vals[5], "cid5");
-            else if (cids[i]==6) require(p.unbondingPeriod()==vals[6], "cid6");
-            else if (cids[i]==7) require(p.validatorUnjailPeriod()==vals[7], "cid7");
+            if (cids[i] == 0) require(p.proposalLastingPeriod() == 3600, "cid0");
+            else if (cids[i] == 1) require(p.punishThreshold() == vals[1], "cid1");
+            else if (cids[i] == 2) require(p.removeThreshold() == vals[2], "cid2");
+            else if (cids[i] == 3) require(p.decreaseRate() == vals[3], "cid3");
+            else if (cids[i] == 4) require(p.withdrawProfitPeriod() == vals[4], "cid4");
+            else if (cids[i] == 5) require(p.blockReward() == vals[5], "cid5");
+            else if (cids[i] == 6) require(p.unbondingPeriod() == vals[6], "cid6");
+            else if (cids[i] == 7) require(p.validatorUnjailPeriod() == vals[7], "cid7");
 
             if (i + 1 < cids.length) {
                 vm.roll(block.number + cooldown);
@@ -243,7 +268,7 @@ contract ProposalFoundryTest is BaseSetup {
     function testUpdateConfigWithInvalidCID() public {
         // Test updateConfig with an invalid CID (should revert during proposal creation)
         Proposal p = Proposal(PROPOSAL);
-        
+
         // CID 100 is invalid, should revert during proposal creation
         vm.warp(6_000_000);
         vm.prank(v1);
@@ -253,9 +278,9 @@ contract ProposalFoundryTest is BaseSetup {
 
     function testUpdateConfigRequireChecks() public {
         Proposal p = Proposal(PROPOSAL);
-        
+
         // Test that the validation checks work during proposal creation
-        
+
         // CID 0 - Invalid proposal period (zero value)
         vm.prank(v1);
         vm.expectRevert("Config value must be positive");
@@ -265,41 +290,44 @@ contract ProposalFoundryTest is BaseSetup {
     function testSetUnpassed() public {
         Proposal p = Proposal(PROPOSAL);
         Validators v = Validators(VALIDATORS);
-        
+
         // Test that only Validators contract can call setUnpassed
         vm.prank(v1);
         vm.expectRevert();
         p.setUnpassed(v1);
-        
+
         // Now test with Validators contract as caller
         vm.startPrank(address(v));
         bool result = p.setUnpassed(v1);
         vm.stopPrank();
-        
+
         require(result, "setUnpassed should return true");
         require(!p.pass(v1), "validator should be unpassed");
     }
 
     function testIsProposalValidForStakingWithInvalidValidator() public {
         Proposal p = Proposal(PROPOSAL);
-        
+
         // Test with invalid validator (pass is false)
         address invalidValidator = makeAddr("invalidValidator");
         bool result = p.isProposalValidForStaking(invalidValidator);
         require(!result, "should return false for invalid validator");
-        
+
         // Test with valid validator that passed proposal and is within period
         address validValidator = makeAddr("validValidator");
         vm.warp(7_000_000);
         vm.prank(v1);
         bytes32 id = p.createProposal(validValidator, true, "");
-        vm.prank(v1); p.voteProposal(id, true);
-        vm.prank(v2); p.voteProposal(id, true);
-        vm.prank(v3); p.voteProposal(id, true);
-        
+        vm.prank(v1);
+        p.voteProposal(id, true);
+        vm.prank(v2);
+        p.voteProposal(id, true);
+        vm.prank(v3);
+        p.voteProposal(id, true);
+
         result = p.isProposalValidForStaking(validValidator);
         require(result, "should return true for valid validator within period");
-        
+
         // Test with valid validator that passed proposal and is outside period
         uint256 proposalLastingPeriod = p.proposalLastingPeriod();
         vm.roll(block.number + proposalLastingPeriod + 1);
@@ -310,31 +338,34 @@ contract ProposalFoundryTest is BaseSetup {
     function testCreateProposalExpiredPass() public {
         Proposal p = Proposal(PROPOSAL);
         address newValidator = makeAddr("newValidator");
-        
+
         // 1. 创建一个添加验证者的提案，并使其通过
         vm.warp(8_000_000);
         vm.prank(v1);
         bytes32 id = p.createProposal(newValidator, true, "");
-        vm.prank(v1); p.voteProposal(id, true);
-        vm.prank(v2); p.voteProposal(id, true);
-        vm.prank(v3); p.voteProposal(id, true);
-        
+        vm.prank(v1);
+        p.voteProposal(id, true);
+        vm.prank(v2);
+        p.voteProposal(id, true);
+        vm.prank(v3);
+        p.voteProposal(id, true);
+
         // 验证提案初始状态
         require(p.pass(newValidator), "validator should be passed initially");
-        
+
         // 2. 等待提案过期
         uint256 proposalLastingPeriod = p.proposalLastingPeriod();
         vm.roll(block.number + proposalLastingPeriod + 1);
-        
+
         // 3. 再次尝试创建相同的添加验证者提案
         // 这应该成功，因为提案已经过期，第182-185行的分支会被执行
         vm.prank(v1);
         bytes32 newId = p.createProposal(newValidator, true, "");
-        
+
         // 4. 验证新提案成功创建
         require(newId != bytes32(0), "should be able to create new proposal after expiration");
         require(newId != id, "new proposal should have different ID");
-        
+
         // 验证计数器状态被重置
         require(!p.pass(newValidator), "pass should be reset to false");
         require(p.proposalPassedHeight(newValidator) == 0, "proposalPassedHeight should be reset to 0");

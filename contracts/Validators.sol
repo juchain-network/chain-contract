@@ -44,6 +44,18 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     }
 
     mapping(address => Validator) validatorInfo;
+    // validator cold address => current effective signer hot address
+    mapping(address => address) private validatorSigners;
+    // current effective signer hot address => validator cold address
+    mapping(address => address) private signerValidators;
+    // signer hot address => validator cold address, only populated after signer becomes effective at least once
+    mapping(address => address) private historicalSignerOwners;
+    // validator cold address => pending signer hot address, effective after pendingSignerEpochs[validator]
+    mapping(address => address) private pendingValidatorSigners;
+    // pending signer hot address => validator cold address
+    mapping(address => address) private pendingSignerValidators;
+    // validator cold address => checkpoint block after which the pending signer becomes effective
+    mapping(address => uint256) private pendingSignerEpochs;
     // current validator set used by chain
     // only changed at block epoch
     address[] public currentValidatorSet;
@@ -78,6 +90,8 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     event LogRemoveValidatorIncoming(address indexed val, uint256 hb, uint256 time);
     event LogDistributeBlockReward(address indexed coinbase, uint256 blockReward, uint256 time);
     event LogUpdateValidator(address[] newSet);
+    event LogSetValidatorSigner(address indexed validator, address indexed signer, uint256 effectiveBlock);
+    event LogScheduleValidatorSigner(address indexed validator, address indexed signer, uint256 effectiveBlock);
 
     modifier onlyNotRewarded() {
         _onlyNotRewarded();
@@ -89,16 +103,31 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     }
 
     /**
-     * @dev Initializes the Validators contract with validators and dependencies.
-     * @param vals Array of initial validator addresses.
+     * @dev Initializes the Validators contract with validator/signer pairs and dependencies.
+     * @param vals Array of initial validator cold addresses.
+     * @param signers Array of initial signer hot addresses. Zero entries default to validator address.
      * @param proposal_ Address of the Proposal contract.
      * @param punish_ Address of the Punish contract.
      * @param staking_ Address of the Staking contract.
      */
-    function initialize(address[] calldata vals, address proposal_, address punish_, address staking_)
-        external
-        onlyNotInitialized
-    {
+    function initialize(
+        address[] calldata vals,
+        address[] calldata signers,
+        address proposal_,
+        address punish_,
+        address staking_
+    ) external onlyNotInitialized {
+        _initialize(vals, signers, proposal_, punish_, staking_);
+    }
+
+    function _initialize(
+        address[] calldata vals,
+        address[] calldata signers,
+        address proposal_,
+        address punish_,
+        address staking_
+    ) internal {
+        require(vals.length == signers.length, "Length mismatch");
         require(proposal_ != address(0), "Invalid proposal address");
         require(punish_ != address(0), "Invalid punish address");
         require(staking_ != address(0), "Invalid staking address");
@@ -112,17 +141,21 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         _initializeEpoch(proposal.epoch());
 
         for (uint256 i = 0; i < vals.length; i++) {
-            require(vals[i] != address(0), "Invalid validator address");
+            address validator = vals[i];
+            require(validator != address(0), "Invalid validator address");
+            address signer = signers[i] == address(0) ? validator : signers[i];
 
-            if (!isActiveValidator(vals[i])) {
-                currentValidatorSet.push(vals[i]);
+            if (!isActiveValidator(validator)) {
+                currentValidatorSet.push(validator);
             }
-            if (!isTopValidator(vals[i])) {
-                highestValidatorsSet.push(vals[i]);
+            if (!isTopValidator(validator)) {
+                highestValidatorsSet.push(validator);
             }
-            if (validatorInfo[vals[i]].feeAddr == address(0)) {
-                validatorInfo[vals[i]].feeAddr = payable(vals[i]);
+            if (validatorInfo[validator].feeAddr == address(0)) {
+                validatorInfo[validator].feeAddr = payable(validator);
             }
+            _assignCurrentSigner(validator, signer);
+            _recordHistoricalSigner(validator, signer);
             // Important: Initialize validator info for genesis validators
             // Status is now managed by Staking contract, we only set feeAddr here
             // Note: Genesis validators are pre-registered in Staking contract with default stake
@@ -162,26 +195,69 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         string calldata email,
         string calldata details
     ) external onlyInitialized returns (bool) {
+        _prepareValidatorEdit(feeAddr, address(0));
+        _updateValidatorDescription(msg.sender, moniker, identity, website, email, details);
+        emit LogEditValidator(msg.sender, feeAddr, block.timestamp);
+        return true;
+    }
+
+    /**
+     * @dev Creates or edits a validator's information and signer binding.
+     * @param feeAddr Address where validator fees will be sent.
+     * @param signer Signer hot address. For registered validators, signer changes take effect from the first block after the next epoch checkpoint.
+     * @param moniker Validator's display name.
+     * @param identity Validator's identity (e.g., Keybase ID).
+     * @param website Validator's website URL.
+     * @param email Validator's email address.
+     * @param details Additional details about the validator.
+     * @return bool Returns true if the operation was successful.
+     */
+    function createOrEditValidator(
+        address payable feeAddr,
+        address signer,
+        string calldata moniker,
+        string calldata identity,
+        string calldata website,
+        string calldata email,
+        string calldata details
+    ) external onlyInitialized returns (bool) {
+        _prepareValidatorEdit(feeAddr, signer);
+        _updateValidatorDescription(msg.sender, moniker, identity, website, email, details);
+        emit LogEditValidator(msg.sender, feeAddr, block.timestamp);
+        return true;
+    }
+
+    function _prepareValidatorEdit(address payable feeAddr, address signer) internal {
         require(feeAddr != address(0), "Invalid fee address");
-        require(validateDescription(moniker, identity, website, email, details), "Invalid description");
         address payable validator = payable(msg.sender);
 
-        bool canEdit = proposal.pass(validator);
-        if (!canEdit) {
-            (,,,,,,,, bool isRegistered,) = staking.getValidatorInfo(validator);
-            canEdit = isRegistered;
-        }
-        require(canEdit, "You must be authorized or an existing validator");
+        (,,,,,,,, bool isRegistered,) = staking.getValidatorInfo(validator);
+        require(proposal.pass(validator) || isRegistered, "You must be authorized or an existing validator");
+
+        _syncPendingSignerIfDue(validator);
+        _configureSigner(validator, signer, isRegistered);
 
         if (validatorInfo[validator].feeAddr != feeAddr) {
             validatorInfo[validator].feeAddr = feeAddr;
         }
+    }
 
-        validatorInfo[validator].description =
-            Description({moniker: moniker, identity: identity, website: website, email: email, details: details});
+    function _updateValidatorDescription(
+        address validator,
+        string calldata moniker,
+        string calldata identity,
+        string calldata website,
+        string calldata email,
+        string calldata details
+    ) internal {
+        require(validateDescription(moniker, identity, website, email, details), "Invalid description");
 
-        emit LogEditValidator(validator, feeAddr, block.timestamp);
-        return true;
+        Description storage description = validatorInfo[validator].description;
+        description.moniker = moniker;
+        description.identity = identity;
+        description.website = website;
+        description.email = email;
+        description.details = details;
     }
 
     /**
@@ -198,6 +274,8 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             msg.sender == address(proposal) || msg.sender == address(staking),
             "Only Proposal or Staking contract can call"
         );
+
+        _ensureCurrentSignerAssigned(validator);
 
         // Add validator to highest validators set if not already there
         _tryAddValidatorToHighestSet(validator);
@@ -264,8 +342,14 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Set distributed flag immediately to prevent reentrancy
         operationsDone[block.number][uint8(Operations.Distribute)] = true;
 
-        address val = msg.sender;
+        address val = _resolveCurrentValidator(msg.sender);
         uint256 hb = msg.value;
+        if (val == address(0)) {
+            return;
+        }
+
+        _syncPendingSignerIfDue(val);
+
         uint256 minValidatorStake = proposal.minValidatorStake();
 
         // Check if validator exists (has staked) from Staking contract
@@ -325,6 +409,14 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         _validateValidatorSet(newSet);
         _validateValidatorSet(expected);
         _requireSameSet(newSet, expected);
+        _resolveSignerSet(newSet);
+        for (uint256 i = 0; i < newSet.length; i++) {
+            _recordHistoricalSigner(newSet[i], _getEpochTransitionSigner(newSet[i]));
+        }
+
+        for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
+            _syncPendingSignerIfDue(highestValidatorsSet[i]);
+        }
 
         currentValidatorSet = newSet;
 
@@ -370,6 +462,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
             // call proposal contract to set unpass.
             // you have to repropose to be a validator.
             require(proposal.setUnpassed(val), "Validator unpass set failed");
+            _clearPendingSigner(val);
             emit LogRemoveValidator(val, hb, block.timestamp);
         }
     }
@@ -453,6 +546,54 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     }
 
     /**
+     * @dev Gets the effective signer for a validator.
+     * @param validator Validator cold address.
+     * @return signer Effective signer hot address.
+     */
+    function getValidatorSigner(address validator) public view returns (address signer) {
+        return _getEffectiveSigner(validator);
+    }
+
+    /**
+     * @dev Resolves a signer to the current effective validator.
+     * @param signer Signer hot address.
+     * @return validator Validator cold address, or zero if signer is not currently effective.
+     */
+    function getValidatorBySigner(address signer) public view returns (address validator) {
+        validator = signerValidators[signer];
+        if (validator != address(0) && _getEffectiveSigner(validator) == signer) {
+            return validator;
+        }
+
+        validator = pendingSignerValidators[signer];
+        if (
+            validator != address(0) && _isPendingSignerEffective(validator)
+                && pendingValidatorSigners[validator] == signer
+        ) {
+            return validator;
+        }
+
+        return address(0);
+    }
+
+    /**
+     * @dev Resolves a signer to the validator that has historically owned it.
+     * @param signer Signer hot address.
+     * @return validator Validator cold address, or zero if signer has never become effective.
+     */
+    function getValidatorBySignerHistory(address signer) public view returns (address validator) {
+        return historicalSignerOwners[signer];
+    }
+
+    /**
+     * @dev Gets the effective signer set derived from currentValidatorSet.
+     * @return signers Current active signer addresses.
+     */
+    function getActiveSigners() public view returns (address[] memory signers) {
+        return _resolveSignerSet(currentValidatorSet);
+    }
+
+    /**
      * @dev Get active validators list with their total stake amounts
      * @notice Returns validators from currentValidatorSet along with their total stake (selfStake + totalDelegated)
      * @notice currentValidatorSet is only updated at epoch blocks, so jailed validators
@@ -525,6 +666,23 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         }
 
         return (validators, totalStakes);
+    }
+
+    /**
+     * @dev Get reward-eligible signers with their validator total stake amounts.
+     * @notice Mirrors getRewardEligibleValidatorsWithStakes() but exposes the effective signer set.
+     * @return signers Array of non-jailed signers in currentValidatorSet order
+     * @return totalStakes Array of total stake amounts for each signer's validator (selfStake + totalDelegated)
+     */
+    function getRewardEligibleSignersWithStakes()
+        public
+        view
+        returns (address[] memory signers, uint256[] memory totalStakes)
+    {
+        (address[] memory validators, uint256[] memory stakes) = getRewardEligibleValidatorsWithStakes();
+        signers = _resolveSignerSet(validators);
+        totalStakes = stakes;
+        return (signers, totalStakes);
     }
 
     /**
@@ -639,6 +797,25 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     }
 
     /**
+     * @dev Get the effective top signer set derived from top validators.
+     * @return Top signer list, sorted by stake through the corresponding validator set
+     */
+    function getTopSigners() public view returns (address[] memory) {
+        return _resolveSignerSet(getEffectiveTopValidators());
+    }
+
+    /**
+     * @dev Get the signer set that should be committed into the current epoch checkpoint header.
+     * @notice Uses checkpoint-transition semantics: a signer scheduled for this epoch block is
+     *         exposed here so consensus can commit the next signer set into header.Extra, while
+     *         runtime resolution on the checkpoint block itself still uses the old signer.
+     * @return Top signer list for epoch transition/header extra construction.
+     */
+    function getTopSignersForEpochTransition() public view returns (address[] memory) {
+        return _resolveEpochTransitionSignerSet(getEffectiveTopValidators());
+    }
+
+    /**
      * @dev Get the effective top validators after stake-based filtering.
      * @return Top validators list, sorted by stake in POSA
      */
@@ -670,6 +847,200 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      */
     function getHighestValidators() public view returns (address[] memory) {
         return highestValidatorsSet;
+    }
+
+    function _configureSigner(address validator, address signer, bool isRegistered) internal {
+        address currentSigner = validatorSigners[validator];
+
+        if (signer == address(0)) {
+            if (currentSigner == address(0)) {
+                _assignCurrentSigner(validator, validator);
+                emit LogSetValidatorSigner(validator, validator, block.number);
+            }
+            return;
+        }
+
+        if (currentSigner == address(0)) {
+            _assignCurrentSigner(validator, signer);
+            emit LogSetValidatorSigner(validator, signer, block.number);
+            return;
+        }
+
+        if (!isRegistered) {
+            _assignCurrentSigner(validator, signer);
+            _clearPendingSigner(validator);
+            emit LogSetValidatorSigner(validator, signer, block.number);
+            return;
+        }
+
+        if (currentSigner == signer) {
+            _clearPendingSigner(validator);
+            return;
+        }
+
+        uint256 effectiveBlock = _nextEpochStartBlock();
+        _reservePendingSigner(validator, signer);
+        pendingValidatorSigners[validator] = signer;
+        pendingSignerEpochs[validator] = effectiveBlock;
+
+        emit LogScheduleValidatorSigner(validator, signer, effectiveBlock);
+    }
+
+    function _ensureCurrentSignerAssigned(address validator) internal {
+        _syncPendingSignerIfDue(validator);
+        if (validatorSigners[validator] == address(0)) {
+            _assignCurrentSigner(validator, validator);
+        }
+    }
+
+    function _assignCurrentSigner(address validator, address signer) internal {
+        require(signer != address(0), "Invalid signer address");
+
+        address historicalOwner = historicalSignerOwners[signer];
+        require(historicalOwner == address(0) || historicalOwner == validator, "Signer already used");
+
+        address currentOwner = signerValidators[signer];
+        require(currentOwner == address(0) || currentOwner == validator, "Signer already assigned");
+
+        address pendingOwner = pendingSignerValidators[signer];
+        require(pendingOwner == address(0) || pendingOwner == validator, "Signer already reserved");
+
+        address currentSigner = validatorSigners[validator];
+        if (currentSigner != address(0) && currentSigner != signer && signerValidators[currentSigner] == validator) {
+            delete signerValidators[currentSigner];
+        }
+
+        if (pendingOwner == validator) {
+            delete pendingSignerValidators[signer];
+        }
+
+        validatorSigners[validator] = signer;
+        signerValidators[signer] = validator;
+    }
+
+    function _recordHistoricalSigner(address validator, address signer) internal {
+        require(signer != address(0), "Invalid signer address");
+        address historicalOwner = historicalSignerOwners[signer];
+        require(historicalOwner == address(0) || historicalOwner == validator, "Signer already used");
+        if (historicalOwner == address(0)) {
+            historicalSignerOwners[signer] = validator;
+        }
+    }
+
+    function _reservePendingSigner(address validator, address signer) internal {
+        require(signer != address(0), "Invalid signer address");
+
+        address historicalOwner = historicalSignerOwners[signer];
+        require(historicalOwner == address(0) || historicalOwner == validator, "Signer already used");
+
+        address pendingOwner = pendingSignerValidators[signer];
+        require(pendingOwner == address(0) || pendingOwner == validator, "Signer already reserved");
+
+        address currentPending = pendingValidatorSigners[validator];
+        if (
+            currentPending != address(0) && currentPending != signer
+                && pendingSignerValidators[currentPending] == validator
+        ) {
+            delete pendingSignerValidators[currentPending];
+        }
+
+        pendingSignerValidators[signer] = validator;
+    }
+
+    function _clearPendingSigner(address validator) internal {
+        address pendingSigner = pendingValidatorSigners[validator];
+        if (pendingSigner != address(0) && pendingSignerValidators[pendingSigner] == validator) {
+            delete pendingSignerValidators[pendingSigner];
+        }
+        delete pendingValidatorSigners[validator];
+        delete pendingSignerEpochs[validator];
+    }
+
+    function _syncPendingSignerIfDue(address validator) internal {
+        if (!_isPendingSignerEffective(validator)) {
+            return;
+        }
+
+        address pendingSigner = pendingValidatorSigners[validator];
+        _assignCurrentSigner(validator, pendingSigner);
+        _clearPendingSigner(validator);
+    }
+
+    function _getEffectiveSigner(address validator) internal view returns (address signer) {
+        if (_isPendingSignerEffective(validator)) {
+            signer = pendingValidatorSigners[validator];
+            if (signer != address(0)) {
+                return signer;
+            }
+        }
+        return validatorSigners[validator];
+    }
+
+    function _resolveCurrentValidator(address signer) internal view returns (address validator) {
+        validator = signerValidators[signer];
+        if (validator != address(0) && _getEffectiveSigner(validator) == signer) {
+            return validator;
+        }
+
+        validator = pendingSignerValidators[signer];
+        if (
+            validator != address(0) && _isPendingSignerEffective(validator)
+                && pendingValidatorSigners[validator] == signer
+        ) {
+            return validator;
+        }
+
+        return address(0);
+    }
+
+    function _resolveSignerSet(address[] memory validators) internal view returns (address[] memory signers) {
+        uint256 length = validators.length;
+        signers = new address[](length);
+        for (uint256 i = 0; i < length; i++) {
+            address signer = _getEffectiveSigner(validators[i]);
+            require(signer != address(0), "Signer not configured");
+            for (uint256 j = 0; j < i; j++) {
+                require(signers[j] != signer, "Duplicate signer");
+            }
+            signers[i] = signer;
+        }
+    }
+
+    function _resolveEpochTransitionSignerSet(address[] memory validators)
+        internal
+        view
+        returns (address[] memory signers)
+    {
+        uint256 length = validators.length;
+        signers = new address[](length);
+        for (uint256 i = 0; i < length; i++) {
+            address signer = _getEpochTransitionSigner(validators[i]);
+            require(signer != address(0), "Signer not configured");
+            for (uint256 j = 0; j < i; j++) {
+                require(signers[j] != signer, "Duplicate signer");
+            }
+            signers[i] = signer;
+        }
+    }
+
+    function _getEpochTransitionSigner(address validator) internal view returns (address signer) {
+        uint256 effectiveBlock = pendingSignerEpochs[validator];
+        if (effectiveBlock != 0 && block.number >= effectiveBlock) {
+            signer = pendingValidatorSigners[validator];
+            if (signer != address(0)) {
+                return signer;
+            }
+        }
+        return _getEffectiveSigner(validator);
+    }
+
+    function _isPendingSignerEffective(address validator) internal view returns (bool) {
+        uint256 effectiveBlock = pendingSignerEpochs[validator];
+        return effectiveBlock != 0 && block.number > effectiveBlock;
+    }
+
+    function _nextEpochStartBlock() internal view returns (uint256) {
+        return (block.number / epoch + 1) * epoch;
     }
 
     /**
@@ -758,6 +1129,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Set unpassed so validator must repropose to regain validator status
         bool success = proposal.setUnpassed(validator);
         require(success, "Failed to update validator status");
+        _clearPendingSigner(validator);
 
         // Note: We do NOT remove transaction fee income (aacIncoming) here
         // This is different from removeValidatorInternal() which calls tryRemoveValidatorIncoming()

@@ -10,7 +10,7 @@ contract RemoveNodeScript is BaseSetup {
         address toRemove = 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65;
         removeNode(toRemove);
     }
-    
+
     function removeNode(address toRemove) public {
         Proposal p = Proposal(PROPOSAL);
         p.createProposal(toRemove, false, "Removing validator node");

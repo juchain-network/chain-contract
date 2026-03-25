@@ -4,6 +4,47 @@ pragma solidity ^0.8.29;
 
 interface IValidators {
     /**
+     * @dev Gets the effective signer for a validator.
+     * @param validator Validator cold address.
+     * @return signer Effective hot signer address.
+     */
+    function getValidatorSigner(address validator) external view returns (address signer);
+
+    /**
+     * @dev Resolves a signer address to its validator.
+     * @param signer Signer hot address.
+     * @return validator Validator cold address, or zero if not found.
+     */
+    function getValidatorBySigner(address signer) external view returns (address validator);
+
+    /**
+     * @dev Resolves a signer address to its validator using historical effective bindings.
+     * @param signer Signer hot address.
+     * @return validator Validator cold address, or zero if signer has never been effective.
+     */
+    function getValidatorBySignerHistory(address signer) external view returns (address validator);
+
+    /**
+     * @dev Gets effective active signer set derived from current validator set.
+     * @return signers Active signer addresses.
+     */
+    function getActiveSigners() external view returns (address[] memory signers);
+
+    /**
+     * @dev Gets effective top signer set derived from effective top validators.
+     * @return signers Top signer addresses.
+     */
+    function getTopSigners() external view returns (address[] memory signers);
+
+    /**
+     * @dev Gets the signer set that should be committed into the current epoch checkpoint header.
+     * @notice Uses checkpoint-transition semantics: a signer scheduled for the current epoch block
+     *         is exposed here even though it does not become the runtime-effective signer until the next block.
+     * @return signers Top signer addresses for epoch transition/header extra construction.
+     */
+    function getTopSignersForEpochTransition() external view returns (address[] memory signers);
+
+    /**
      * @dev Tries to add a validator to the highest set based on stake.
      * @param validator Address of the validator to add.
      */
@@ -56,6 +97,16 @@ interface IValidators {
         external
         view
         returns (address[] memory validators, uint256[] memory totalStakes);
+
+    /**
+     * @dev Get reward-eligible signers and their corresponding validator total stakes.
+     * @return signers Active signer addresses that can receive block rewards.
+     * @return totalStakes Total stake amounts for each signer's validator.
+     */
+    function getRewardEligibleSignersWithStakes()
+        external
+        view
+        returns (address[] memory signers, uint256[] memory totalStakes);
 
     /**
      * @dev Checks if an address is an active validator.

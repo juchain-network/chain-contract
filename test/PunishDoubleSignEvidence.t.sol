@@ -6,17 +6,18 @@ import {BaseSetup} from "./BaseSetup.t.sol";
 import {Punish} from "../contracts/Punish.sol";
 import {Staking} from "../contracts/Staking.sol";
 import {Proposal} from "../contracts/Proposal.sol";
+import {Validators} from "../contracts/Validators.sol";
 
 contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
     uint256 private constant SIGNER_KEY = 0xA11CE;
 
-    address private signer;
+    address internal signer;
     bytes[] internal goHeaders1;
     bytes[] internal goHeaders2;
     address[] internal goSigners;
     uint256[] internal goHeights;
 
-    function setUp() public {
+    function setUp() public virtual {
         _loadGoVectors();
         signer = vm.addr(SIGNER_KEY);
         address[] memory initVals = _buildInitValidators();
@@ -29,7 +30,7 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         vm.roll(1000);
     }
 
-    function testSubmitDoubleSignEvidenceValid() public {
+    function testSubmitDoubleSignEvidenceValid() public virtual {
         uint256 height = block.number - 1;
 
         bytes memory header1 = _buildSignedHeader(height, signer, bytes32(uint256(1)), bytes8(uint64(1)), SIGNER_KEY);
@@ -61,8 +62,10 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         uint256 height = block.number - 1;
         address fakeCoinbase = address(0xBEEF);
 
-        bytes memory header1 = _buildSignedHeader(height, fakeCoinbase, bytes32(uint256(1)), bytes8(uint64(1)), SIGNER_KEY);
-        bytes memory header2 = _buildSignedHeader(height, fakeCoinbase, bytes32(uint256(2)), bytes8(uint64(2)), SIGNER_KEY);
+        bytes memory header1 =
+            _buildSignedHeader(height, fakeCoinbase, bytes32(uint256(1)), bytes8(uint64(1)), SIGNER_KEY);
+        bytes memory header2 =
+            _buildSignedHeader(height, fakeCoinbase, bytes32(uint256(2)), bytes8(uint64(2)), SIGNER_KEY);
 
         vm.expectRevert("Signer != coinbase");
         Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
@@ -75,7 +78,7 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         Punish(PUNISH).submitDoubleSignEvidence(header, header);
     }
 
-    function testSubmitDoubleSignEvidenceZeroNumberLongExtra() public {
+    function testSubmitDoubleSignEvidenceZeroNumberLongExtra() public virtual {
         vm.roll(1);
         bytes memory extraTrimmed = new bytes(80);
         bytes memory header1 =
@@ -184,13 +187,11 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         }
     }
 
-    function _buildSignedHeader(
-        uint256 number,
-        address coinbase,
-        bytes32 mixDigest,
-        bytes8 nonce,
-        uint256 signerKey
-    ) internal pure returns (bytes memory) {
+    function _buildSignedHeader(uint256 number, address coinbase, bytes32 mixDigest, bytes8 nonce, uint256 signerKey)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory extraTrimmed = new bytes(32);
         return _buildSignedHeaderWithExtra(number, coinbase, mixDigest, nonce, signerKey, extraTrimmed);
     }
@@ -213,13 +214,11 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         return _buildHeaderRlp(number, coinbase, mixDigest, nonce, extraWithSig);
     }
 
-    function _buildHeaderRlp(
-        uint256 number,
-        address coinbase,
-        bytes32 mixDigest,
-        bytes8 nonce,
-        bytes memory extra
-    ) internal pure returns (bytes memory) {
+    function _buildHeaderRlp(uint256 number, address coinbase, bytes32 mixDigest, bytes8 nonce, bytes memory extra)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes[] memory items = new bytes[](15);
         items[0] = _encodeBytes(abi.encodePacked(bytes32(uint256(1)))); // ParentHash
         items[1] = _encodeBytes(abi.encodePacked(bytes32(uint256(2)))); // UncleHash
@@ -324,16 +323,135 @@ contract PunishDoubleSignEvidenceTest is Test, BaseSetup {
         return _copyBytesSlice(dest, destOffset, src, 0, src.length);
     }
 
-    function _copyBytesSlice(
-        bytes memory dest,
-        uint256 destOffset,
-        bytes memory src,
-        uint256 srcOffset,
-        uint256 len
-    ) internal pure returns (uint256) {
+    function _copyBytesSlice(bytes memory dest, uint256 destOffset, bytes memory src, uint256 srcOffset, uint256 len)
+        internal
+        pure
+        returns (uint256)
+    {
         for (uint256 i = 0; i < len; i++) {
             dest[destOffset + i] = src[srcOffset + i];
         }
         return destOffset + len;
+    }
+}
+
+contract PunishDoubleSignEvidenceSignerSeparationTest is PunishDoubleSignEvidenceTest {
+    uint256 private constant OLD_SIGNER_KEY = 0xBEEF01;
+    uint256 private constant NEW_SIGNER_KEY = 0xBEEF02;
+    uint256 private constant OTHER_SIGNER_KEY_1 = 0xBEEF03;
+    uint256 private constant OTHER_SIGNER_KEY_2 = 0xBEEF04;
+
+    address private validator1;
+    address private oldSigner;
+    address private newSigner;
+
+    function setUp() public override {
+        validator1 = makeAddr("cold-validator-1");
+        address validator2 = makeAddr("cold-validator-2");
+        address validator3 = makeAddr("cold-validator-3");
+
+        oldSigner = vm.addr(OLD_SIGNER_KEY);
+        newSigner = vm.addr(NEW_SIGNER_KEY);
+        signer = oldSigner;
+        address signer2 = vm.addr(OTHER_SIGNER_KEY_1);
+        address signer3 = vm.addr(OTHER_SIGNER_KEY_2);
+
+        address[] memory initVals = new address[](3);
+        initVals[0] = validator1;
+        initVals[1] = validator2;
+        initVals[2] = validator3;
+
+        address[] memory initSigners = new address[](3);
+        initSigners[0] = oldSigner;
+        initSigners[1] = signer2;
+        initSigners[2] = signer3;
+
+        deploySystem(initVals, initSigners, 10);
+        vm.deal(STAKING, 200000 ether);
+        vm.roll(5);
+    }
+
+    function testDoubleSignEvidenceUsesHistoricalSignerAfterRotation() public {
+        vm.prank(validator1);
+        Validators(VALIDATORS).createOrEditValidator(payable(validator1), newSigner, "", "", "", "", "");
+
+        bytes memory header1 = _buildSignedHeader(9, oldSigner, bytes32(uint256(1)), bytes8(uint64(1)), OLD_SIGNER_KEY);
+        bytes memory header2 = _buildSignedHeader(9, oldSigner, bytes32(uint256(2)), bytes8(uint64(2)), OLD_SIGNER_KEY);
+
+        vm.roll(11);
+
+        (uint256 selfStakeBefore,,,,,,,,,) = Staking(STAKING).getValidatorInfo(validator1);
+        uint256 slashAmount = Proposal(PROPOSAL).doubleSignSlashAmount();
+        uint256 rewardAmount = Proposal(PROPOSAL).doubleSignRewardAmount();
+
+        address reporter = vm.addr(0xCAFE01);
+        uint256 reporterBalanceBefore = reporter.balance;
+
+        vm.prank(reporter);
+        Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
+
+        (uint256 selfStakeAfter,,,,,,,,,) = Staking(STAKING).getValidatorInfo(validator1);
+        uint256 actualSlash = slashAmount > selfStakeBefore ? selfStakeBefore : slashAmount;
+        uint256 actualReward = rewardAmount > actualSlash ? actualSlash : rewardAmount;
+
+        assertEq(selfStakeAfter, selfStakeBefore - actualSlash, "historical signer should slash validator cold stake");
+        assertEq(reporter.balance, reporterBalanceBefore + actualReward, "reporter reward mismatch");
+    }
+
+    function testSubmitDoubleSignEvidenceValid() public override {
+        uint256 height = block.number - 1;
+
+        bytes memory header1 =
+            _buildSignedHeader(height, oldSigner, bytes32(uint256(1)), bytes8(uint64(1)), OLD_SIGNER_KEY);
+        bytes memory header2 =
+            _buildSignedHeader(height, oldSigner, bytes32(uint256(2)), bytes8(uint64(2)), OLD_SIGNER_KEY);
+
+        (uint256 selfStakeBefore,,,,,,,,,) = Staking(STAKING).getValidatorInfo(validator1);
+        address reporter = vm.addr(0xB0B);
+        uint256 reporterBalanceBefore = reporter.balance;
+
+        vm.prank(reporter);
+        Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
+
+        (uint256 selfStakeAfter,,,,,,,,,) = Staking(STAKING).getValidatorInfo(validator1);
+        uint256 slashAmount = Proposal(PROPOSAL).doubleSignSlashAmount();
+        uint256 rewardAmount = Proposal(PROPOSAL).doubleSignRewardAmount();
+
+        uint256 actualSlash = slashAmount > selfStakeBefore ? selfStakeBefore : slashAmount;
+        uint256 actualReward = rewardAmount > actualSlash ? actualSlash : rewardAmount;
+
+        assertEq(selfStakeAfter, selfStakeBefore - actualSlash, "selfStake should be slashed");
+        assertEq(reporter.balance, reporterBalanceBefore + actualReward, "reporter should be rewarded");
+
+        vm.expectRevert("Already punished");
+        vm.prank(reporter);
+        Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
+    }
+
+    function testPendingSignerCannotBePunishedBeforeActivation() public {
+        vm.prank(validator1);
+        Validators(VALIDATORS).createOrEditValidator(payable(validator1), newSigner, "", "", "", "", "");
+
+        bytes memory header1 = _buildSignedHeader(6, newSigner, bytes32(uint256(1)), bytes8(uint64(1)), NEW_SIGNER_KEY);
+        bytes memory header2 = _buildSignedHeader(6, newSigner, bytes32(uint256(2)), bytes8(uint64(2)), NEW_SIGNER_KEY);
+
+        vm.roll(7);
+        vm.expectRevert("Signer not exist");
+        Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
+    }
+
+    function testSubmitDoubleSignEvidenceZeroNumberLongExtra() public override {
+        vm.roll(1);
+        bytes memory extraTrimmed = new bytes(80);
+        bytes memory header1 = _buildSignedHeaderWithExtra(
+            0, oldSigner, bytes32(uint256(1)), bytes8(uint64(1)), OLD_SIGNER_KEY, extraTrimmed
+        );
+        bytes memory header2 = _buildSignedHeaderWithExtra(
+            0, oldSigner, bytes32(uint256(2)), bytes8(uint64(2)), OLD_SIGNER_KEY, extraTrimmed
+        );
+
+        address reporter = vm.addr(0xB0D);
+        vm.prank(reporter);
+        Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
     }
 }

@@ -243,7 +243,7 @@ function main() {
       `   ✅ extraData includes ${INITIAL_VALIDATORS.length} preset validator(s) for local genesis`,
     );
     console.log(
-      `   ✅ Congress bootstrap will pre-fund Staking with ${formatJu(minValidatorStake)} per genesis validator after Proposal initialization`,
+      `   ✅ Each genesis validator cold address should hold at least ${formatJu(minValidatorStake)} so bootstrap can move that amount into Staking at initialization`,
     );
     console.log(
       "   ✅ JPoSA consensus will work normally, no manual validator registration needed",

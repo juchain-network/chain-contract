@@ -62,7 +62,7 @@ contract StakingTest is Test {
         Proposal(PROPOSAL).initialize(initVals, VALIDATORS, TEST_EPOCH);
         Staking(STAKING).initialize(VALIDATORS, PROPOSAL, PUNISH);
         Punish(PUNISH).initialize(VALIDATORS, PROPOSAL, STAKING);
-        Validators(VALIDATORS).initialize(initVals, PROPOSAL, PUNISH, STAKING);
+        Validators(VALIDATORS).initialize(initVals, initVals, PROPOSAL, PUNISH, STAKING);
     }
 
     function testInitialization() public view {

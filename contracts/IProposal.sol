@@ -83,13 +83,13 @@ interface IProposal {
      * @return uint256 The epoch duration.
      */
     function epoch() external view returns (uint256);
-    
+
     /**
      * @dev Returns the minimum delegation amount per delegator.
      * @return uint256 The minimum delegation amount in wei.
      */
     function minDelegation() external view returns (uint256);
-    
+
     /**
      * @dev Returns the minimum undelegation amount per delegator.
      * @return uint256 The minimum undelegation amount in wei.

@@ -39,18 +39,21 @@ interface IStaking {
      * @return isRegistered Whether the validator is currently registered.
      * @return totalRewards Total rewards earned by distribution (cumulative).
      */
-    function getValidatorInfo(address validator) external view returns (
-        uint256 selfStake,
-        uint256 totalDelegated,
-        uint256 commissionRate,
-        uint256 accumulatedRewards,
-        bool isJailed,
-        uint256 jailUntilBlock,
-        uint256 totalClaimedRewards,
-        uint256 lastClaimBlock,
-        bool isRegistered,
-        uint256 totalRewards
-    );
+    function getValidatorInfo(address validator)
+        external
+        view
+        returns (
+            uint256 selfStake,
+            uint256 totalDelegated,
+            uint256 commissionRate,
+            uint256 accumulatedRewards,
+            bool isJailed,
+            uint256 jailUntilBlock,
+            uint256 totalClaimedRewards,
+            uint256 lastClaimBlock,
+            bool isRegistered,
+            uint256 totalRewards
+        );
 
     /**
      * @dev Update last active block for a validator (called by Validators contract).
@@ -82,6 +85,4 @@ interface IStaking {
         uint256 rewardAmount,
         address burnAddress
     ) external returns (uint256 actualSlash, uint256 actualReward);
-
-
 }

@@ -64,7 +64,7 @@ contract StakingAdditionalCoverageTest is Test {
 
         // Initialize Validators contract
         vm.startPrank(deployer);
-        validators.initialize(initialValidators, PROPOSAL, PUNISH, STAKING);
+        validators.initialize(initialValidators, initialValidators, PROPOSAL, PUNISH, STAKING);
         vm.stopPrank();
 
         // Initialize Staking contract

@@ -45,7 +45,9 @@ At genesis, Congress is configured under `config.congress`:
   "config": {
     "congress": {
       "period": 1,
-      "epoch": 86400
+      "epoch": 86400,
+      "initialValidators": ["0xValidatorCold1", "0xValidatorCold2"],
+      "initialSigners": ["0xSignerHot1", "0xSignerHot2"]
     }
   }
 }
@@ -55,8 +57,18 @@ Meaning:
 
 - `period`: target block interval in seconds
 - `epoch`: validator-set rotation period in blocks
+- `initialValidators`: optional bootstrap validator cold-address list
+- `initialSigners`: optional bootstrap signer hot-address list
 
 Validator-set changes only become effective at epoch boundaries.
+
+Fresh PoSA bootstrap mapping rules:
+
+- if both `initialValidators` and `initialSigners` are omitted, fresh PoSA defaults to same-address mode from the
+  genesis `extraData` signer list
+- if only one side is provided, the missing side defaults to the same addresses
+- if both are provided, the two arrays are positional and define the validator-to-signer mapping
+- for in-place PoA->PoSA migration, any explicit validator/signer remap must provide both sides together
 
 ### 1.3 Repository Boundaries
 
@@ -158,19 +170,26 @@ Do not hand-copy old `0xf000` to `0xf003` examples from legacy POA documents.
 
 ### 3.2 `extraData` Format
 
-Genesis validators come from the `extraData` validator list. The field layout is:
+Genesis signer addresses come from the `extraData` list. The field layout is:
 
 ```text
-extraData = vanity(32 bytes) + validators(20 bytes * N) + signature(65 bytes)
+extraData = vanity(32 bytes) + signers(20 bytes * N) + signature(65 bytes)
 ```
 
 Where:
 
 - `vanity` is arbitrary 32-byte padding
-- `validators` is the genesis validator address list
+- `signers` is the genesis signer hot-address list used by consensus
 - `signature` is the genesis block seal placeholder used by the consensus engine
 
-Congress reads those validators as the initial validator set and uses them to bootstrap the PoSA contracts.
+For fresh PoSA:
+
+- `config.congress.initialValidators` / `initialSigners` define the bootstrap cold/hot mapping
+- `extraData` must match the effective signer set as a set
+- the order of `extraData` does not define cold/hot pairing; the pairing comes from the positional relationship between
+  `initialValidators` and `initialSigners`
+- if no bootstrap mapping is configured, same-address mode uses the `extraData` signer list as both validators and
+  signers
 
 ### 3.3 Initialization Order
 
@@ -179,7 +198,7 @@ At block `1`, Congress initializes contracts in this order:
 1. `Proposal.initialize(validators, validatorsAddr, epoch)`
 2. `Staking.initializeWithValidators(validatorsAddr, proposalAddr, punishAddr, validators, commissionRate)`
 3. `Punish.initialize(validatorsAddr, proposalAddr, stakingAddr)`
-4. `Validators.initialize(validators, proposalAddr, punishAddr, stakingAddr)`
+4. `Validators.initialize(validators, signers, proposalAddr, punishAddr, stakingAddr)`
 
 This ordering matters because:
 
@@ -187,27 +206,60 @@ This ordering matters because:
 - `Staking` must exist before `Punish` and `Validators` can reference real stake and jail state
 - `Validators` is initialized last because it references all of the others
 
+Congress always uses the dual-array `Validators.initialize(validators, signers, ...)` path. Same-address mode is
+achieved by passing identical validator and signer arrays.
+
 ### 3.4 Genesis Validator Bootstrap
 
 Bootstrap specifics:
 
-- Congress initializes `Proposal` first, reads `Proposal.minValidatorStake()`, and pre-funds the staking contract with that amount per genesis validator for `initializeWithValidators(...)`
+- Congress initializes `Proposal` first, reads `Proposal.minValidatorStake()`, and moves that amount per bootstrap
+  validator from the validator cold-address balances into the `Staking` contract before `initializeWithValidators(...)`
+- fresh PoSA genesis alloc must therefore fund every bootstrap validator cold address with at least
+  `Proposal.minValidatorStake()`
 - genesis validators are registered directly by the bootstrap path
 - genesis validators start with `minValidatorStake` bootstrap self-stake and `1000` bps commission
 - with current defaults this means `100000 JU` per genesis validator
 - validators below the current `minValidatorStake` are excluded from top-validator ranking and from contract-side active / voting / reward eligibility
 
-Bootstrap stake and validator minimum are intentionally aligned at initialization time.
+Bootstrap stake and validator minimum are intentionally aligned at initialization time. The bootstrap path does not mint
+synthetic stake into `Staking`; it consumes real cold-address balances.
 
-### 3.5 Recommended Genesis Validation Checks
+### 3.5 Bootstrap and Upgrade Validation Checks
 
-Before you initialize nodes from a newly generated genesis, verify:
+Before you initialize nodes from a freshly generated genesis or schedule a PoA->PoSA upgrade, verify:
 
 - chain ID and `config.congress` values are correct
 - alloc contains bytecode at `f010` to `f013`
-- `extraData` contains the intended validator list
-- the initial validator count is non-zero and does not exceed the consensus maximum
+- `extraData` contains the intended signer hot-address set
+- the effective bootstrap validator/signer mapping is the one you intend:
+  - fresh PoSA and re-genesis upgrades use `config.congress.initialValidators` / `initialSigners`
+  - if one side is omitted, the missing side defaults to the other side
+  - if both sides are omitted, same-address mode uses the `extraData` signer list for both
+- the bootstrap validator/signer count is between `1` and `21`; exceeding `21` will fail during contract
+  initialization even if earlier genesis tooling does not reject it
+- every bootstrap validator cold address has at least `minValidatorStake` available for bootstrap funding
 - no old POA contract addresses are being used as current system-contract allocs
+
+For in-place PoA->PoSA upgrades, Congress resolves bootstrap validator/signer input in this precedence:
+
+1. CLI overrides:
+   - `--override.posaValidators`
+   - `--override.posaSigners`
+2. chain config:
+   - `config.congress.initialValidators`
+   - `config.congress.initialSigners`
+3. default fallback:
+   - validator = signer = legacy POA miner address
+
+Additional upgrade rules:
+
+- explicit migration remaps must provide validator and signer arrays together, whether they come from chain config or
+  from `--override.posaValidators` / `--override.posaSigners`
+- the effective bootstrap signer set must cover the live POA validator/signer set that is being migrated
+- PoA->PoSA uses the same `minValidatorStake` bootstrap funding rule from validator cold-address balances
+- if a migration bootstrap validator lacks enough balance at the scheduled PoSA time, Congress defers activation by one
+  epoch and persists the effective `posaTime` override in the node database so restarts stay consistent
 
 ## 4. Node Deployment and Network Layout
 
@@ -235,7 +287,7 @@ Your node deployment must ensure:
 
 - all validators start from the same `genesis.json`
 - chain config in the node matches the generated genesis
-- validators can sign blocks with the intended mining account
+- validator nodes can sign blocks with the intended signer hot account
 - network peers can discover or statically connect to one another
 - RPC is available for contract operations and monitoring
 
@@ -244,9 +296,9 @@ Your node deployment must ensure:
 Each validator node should have:
 
 - a dedicated data directory
-- a dedicated validator key or external signer
+- a dedicated signer hot key or external signer
 - RPC enabled on a protected interface
-- mining enabled for the validator address
+- mining enabled for the signer hot address
 - persistent peer connectivity
 
 The exact startup command depends on the chain repository and your runtime environment, but those properties must hold regardless of wrapper scripts.
@@ -255,10 +307,14 @@ The exact startup command depends on the chain repository and your runtime envir
 
 Recommended approach:
 
-- use one validator account per node
-- keep fee-receiver and validator key responsibilities explicit
+- treat the three roles explicitly:
+  - validator cold address: governance, self-stake, signer rotation, unjail, and exit
+  - signer hot address: block production only
+  - `feeAddr`: transaction-fee withdrawal
+- default same-address mode is supported, but production deployments should keep the validator cold key off the
+  validator node and only load the signer hot key there
 - prefer external signing or hardened key management in production
-- keep validator keystores and passwords separate per node
+- keep cold-key storage, signer keystores, and fee-receiver operational controls separate
 
 ### 4.6 Network Connectivity
 
@@ -295,31 +351,44 @@ The current validator-admission flow is:
 1. an active validator creates an add-validator proposal with `Proposal.createProposal(candidate, true, details)`
 2. active non-jailed validators vote with `Proposal.voteProposal(id, true)`
 3. as soon as majority is reached, `Proposal.pass[candidate]` becomes `true`
-4. the candidate calls `Staking.registerValidator(commissionRate)` with `msg.value >= minValidatorStake`
-5. the validator enters `highestValidatorsSet`
-6. the validator becomes active in consensus only at the next epoch transition
+4. the candidate may preconfigure `feeAddr`, metadata, and an optional signer hot address through
+   `Validators.createOrEditValidator(...)`
+5. the candidate calls `Staking.registerValidator(commissionRate)` with `msg.value >= minValidatorStake`
+6. the validator enters `highestValidatorsSet`
+7. the validator becomes active in consensus only at the next epoch transition
 
 Important details:
 
 - proposal majority is `getVotingValidatorCount() / 2 + 1`
 - proposal approval is immediate on majority
 - the candidate must register within `proposalLastingPeriod`
+- if the candidate never sets a separate signer, the validator address remains the effective signer
 - `registerValidator(...)` is only allowed on non-epoch blocks
 - `registerValidator(...)` and `unjailValidator(...)` share the "one validator addition per epoch" limit
 
-### 5.3 Edit Validator Metadata
+### 5.3 Edit Validator Metadata and Signer Binding
 
-Validator descriptive data is updated through:
+Validator operational data is updated through either overload:
 
 - `Validators.createOrEditValidator(feeAddr, moniker, identity, website, email, details)`
+- `Validators.createOrEditValidator(feeAddr, signer, moniker, identity, website, email, details)`
 
 Requirements:
 
-- caller must be the validator address
+- caller must be the validator cold address
 - validator must either have governance authorization through `Proposal.pass` or already exist as a registered validator
+- `feeAddr` must be non-zero
 - metadata field lengths must satisfy the contract validation rules
 
-This operation does not change stake or active-set membership.
+Behavior:
+
+- the feeAddr-only overload keeps the current signer unchanged
+- if a signer is provided for a registered validator, the old signer stays valid through the next epoch checkpoint block
+  and the new signer becomes effective from the first block after that checkpoint
+- if the validator leaves before the pending signer activates, the pending signer reservation is cleared
+- existing registered validators may continue to update `feeAddr`, metadata, and signer binding even after `pass` has
+  been cleared, as long as the validator still exists in `Staking`
+- feeAddr and metadata changes are immediate; signer rotation is epoch-delayed
 
 ### 5.4 Update Commission Rate
 
@@ -457,9 +526,15 @@ There are three separate reward withdrawal surfaces:
 3. delegator reward share
    - `Staking.claimRewards(validator)`
 
-Validator reward and profit withdrawals are each rate-limited by `withdrawProfitPeriod` in their respective paths.
-If a validator fee address is misconfigured or cannot receive ETH, the validator can rotate `feeAddr` through
-`Validators.createOrEditValidator(...)` and then retry `withdrawProfits(...)`, even after `pass` has been cleared, as
+Role split:
+
+- transaction-fee income is withdrawn by `feeAddr`
+- coinbase reward share is claimed by the validator cold address
+- the signer hot address does not own a separate reward bucket
+
+Validator reward and profit withdrawals are each rate-limited by `withdrawProfitPeriod` in their respective paths. If a
+validator fee address is misconfigured or cannot receive ETH, the validator can rotate `feeAddr` through either
+`createOrEditValidator(...)` overload and then retry `withdrawProfits(...)`, even after `pass` has been cleared, as
 long as the validator still exists in `Staking`.
 
 ### 6.6 Pending Payouts
@@ -526,6 +601,15 @@ Useful contract reads include:
 
 These queries are enough to reconstruct most validator-lifecycle and governance state without external CLI wrappers.
 
+Signer-aware queries that are useful in separated cold/hot deployments:
+
+- `Validators.getValidatorSigner(validator)`
+- `Validators.getValidatorBySigner(signer)`
+- `Validators.getActiveSigners()`
+- `Validators.getTopSigners()`
+- `Validators.getTopSignersForEpochTransition()`
+- `Validators.getRewardEligibleSignersWithStakes()`
+
 ### 7.3 Epoch-Sensitive Operating Rules
 
 Treat epoch blocks specially.
@@ -558,12 +642,17 @@ At and around epoch boundaries, compare:
 - `highestValidatorsSet`
 - `getTopValidators()`
 - `currentValidatorSet`
+- `getTopSigners()`
+- `getTopSignersForEpochTransition()`
+- `getActiveSigners()`
 
 Expected behavior:
 
 - `highestValidatorsSet` changes immediately when validators register, resign, or are removed
 - `getTopValidators()` reflects current ranking among candidates
 - `currentValidatorSet` only changes at epoch rotation
+- `getTopSigners()` and `getActiveSigners()` reflect current-block runtime signer semantics
+- `getTopSignersForEpochTransition()` is the checkpoint-only query used to build the next epoch header signer set
 
 ## 8. Troubleshooting Guide
 
@@ -572,10 +661,12 @@ Expected behavior:
 Check the following in order:
 
 1. is the validator in `currentValidatorSet`
-2. is the validator jailed in `Staking`
-3. is the validator key unlocked or external signer available
-4. does the node have stable peer connectivity
-5. is the validator being rejected by Congress because the parent state already marks it jailed
+2. does `Validators.getValidatorSigner(validator)` return the signer hot address you expect
+3. is that signer present in the effective signer set (`getActiveSigners()` / epoch `header.Extra`)
+4. is the validator jailed in `Staking`
+5. is the signer hot key unlocked or external signer available
+6. does the node have stable peer connectivity
+7. is the validator being rejected by Congress because the parent state already marks it jailed
 
 ### 8.2 Proposal Creation or Voting Fails
 
@@ -631,9 +722,11 @@ Check the reward surface first:
 
 If the chain rejects an epoch header for validator mismatch:
 
-1. compare `header.Extra` validators with `Validators.getTopValidators()` at the parent state
+1. compare `header.Extra` signers with `Validators.getTopSignersForEpochTransition()` at the parent state
 2. verify no local node is using a different genesis or chain config
-3. verify all nodes agree on the PoSA upgrade time and system contract addresses
+3. verify all nodes agree on the effective bootstrap validator/signer mapping and PoSA upgrade time
+4. for in-place upgrades, verify every node is using the same `--override.posaTime`, `--override.posaValidators`, and
+   `--override.posaSigners` inputs
 
 ### 8.8 Double-Sign Evidence Rejected
 
@@ -680,12 +773,19 @@ High-value operational functions:
 
 High-value operational functions:
 
-- `createOrEditValidator(...)`
+- `createOrEditValidator(feeAddr, moniker, ...)`
+- `createOrEditValidator(feeAddr, signer, moniker, ...)`
 - `withdrawProfits(address validator)`
+- `getValidatorSigner(address validator)`
+- `getValidatorBySigner(address signer)`
+- `getActiveSigners()`
 - `getActiveValidators()`
 - `getActiveValidatorCount()`
 - `getVotingValidatorCount()`
+- `getRewardEligibleSignersWithStakes()`
 - `getRewardEligibleValidatorsWithStakes()`
+- `getTopSignersForEpochTransition()`
+- `getTopSigners()`
 - `getTopValidators()`
 - `isValidatorActive(address validator)`
 - `isValidatorJailed(address validator)`
@@ -704,7 +804,10 @@ System and evidence functions:
 - treat `blockReward` as a formula input, not a fixed payout promise
 - treat `currentValidatorSet` as an epoch cache, not the only source of effective validator status
 - separate fee-income accounting from coinbase reward accounting in monitoring and operations
+- treat validator cold address, signer hot address, and `feeAddr` as separate roles unless you intentionally choose
+  same-address mode
 - document clearly that delegation boosts validator ranking, while direct slash remains on validator self-stake
 - avoid sending validator-management transactions on epoch blocks
+- provide `--override.posaValidators` and `--override.posaSigners` together when using in-place PoA->PoSA overrides
 - regenerate genesis whenever contract bytecode changes
 - never restore old `ju-cli` or legacy POA flows into current operational runbooks without verifying them against the current contracts

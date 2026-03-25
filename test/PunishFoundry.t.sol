@@ -7,16 +7,19 @@ import {Proposal} from "../contracts/Proposal.sol";
 import {Validators} from "../contracts/Validators.sol";
 
 contract PunishFoundryTest is BaseSetup {
-
     address miner;
-    address v1; address v2; address v3;
+    address v1;
+    address v2;
+    address v3;
 
     function setUp() public {
         v1 = makeAddr("v1");
         v2 = makeAddr("v2");
         v3 = makeAddr("v3");
         address[] memory initVals = new address[](3);
-        initVals[0] = v1; initVals[1] = v2; initVals[2] = v3;
+        initVals[0] = v1;
+        initVals[1] = v2;
+        initVals[2] = v3;
         deploySystem(initVals);
         miner = v1; // simulate coinbase
         vm.coinbase(miner);
@@ -31,7 +34,7 @@ contract PunishFoundryTest is BaseSetup {
             Punish(PUNISH).punish(miner);
             vm.roll(block.number + 1);
         }
-        (, , uint256 aac,,) = Validators(VALIDATORS).getValidatorInfo(miner);
+        (,, uint256 aac,,) = Validators(VALIDATORS).getValidatorInfo(miner);
         require(aac == 0, "incoming removed at punish threshold");
     }
 
@@ -68,9 +71,9 @@ contract PunishFoundryTest is BaseSetup {
         vm.prank(miner);
         Punish(PUNISH).decreaseMissedBlocksCounter(epoch);
 
-    uint256 r2 = Punish(PUNISH).getPunishRecord(v2);
-    uint256 r3 = Punish(PUNISH).getPunishRecord(v3);
-    require(r2 == 0, "v2 decreased to zero or reset");
-    require(r3 == 0, "v3 decreased to zero or reset");
+        uint256 r2 = Punish(PUNISH).getPunishRecord(v2);
+        uint256 r3 = Punish(PUNISH).getPunishRecord(v3);
+        require(r2 == 0, "v2 decreased to zero or reset");
+        require(r3 == 0, "v3 decreased to zero or reset");
     }
 }

@@ -31,7 +31,18 @@ Becoming a validator after genesis requires two distinct steps:
 
 This means stake alone is not enough to join the validator pool.
 
-### 3. Dual Reward Channels
+### 3. Separated Operational Roles
+
+JPoSA distinguishes three operational addresses:
+
+- validator cold address for stake, governance, unjail, exit, and signer rotation
+- signer hot address for block production
+- fee address for transaction-fee withdrawal
+
+Default same-address mode remains supported, but production deployments may separate cold and hot roles without
+changing validator economics.
+
+### 4. Dual Reward Channels
 
 JPoSA separates:
 
@@ -40,15 +51,16 @@ JPoSA separates:
 
 The transaction-fee path is handled by `Validators`, while the coinbase reward is computed by Congress and distributed through `Staking`.
 
-### 4. Dynamic but Predictable Validator Set
+### 5. Dynamic but Predictable Validator Set
 
 The validator set is dynamic, but not every state change affects consensus immediately.
 
 - candidate ranking changes when stake changes
 - effective block production changes at epoch boundaries
+- signer rotation on an existing validator takes effect only after the next checkpoint block has passed
 - jailed validators lose key privileges immediately even before the epoch cache rotates
 
-### 5. Governance-Tunable Economics
+### 6. Governance-Tunable Economics
 
 Core parameters such as block reward input, punishment thresholds, unbonding period, validator caps, commission caps, and slash amounts are governable without redeploying the system contracts.
 
@@ -87,6 +99,7 @@ It tracks:
 
 - the epoch-effective active set
 - the candidate cache used for ranking
+- the effective validator-to-signer bindings used by consensus
 - validator fee addresses and metadata
 - transaction-fee income balances
 
@@ -186,7 +199,9 @@ This means a successful claim may create a pending payout instead of always tran
 
 ## Miner (Validator) Role
 
-In JPoSA, miners are validators. They produce blocks, participate in governance, and maintain validator service quality.
+In JPoSA, the validator is the economic and governance owner. Block production may use the same address or a delegated
+signer hot address. For operational convenience below, "validator" means the validator role, while actual sealing may
+be performed by its current signer.
 
 ### Process to Become a Validator
 
@@ -208,15 +223,21 @@ Current default thresholds:
 - minimum validator self-stake: `100000 JU`
 - maximum active validators: `21`
 
+Genesis bootstrap validators also start from `minValidatorStake`, and default to same-address signing unless a separate
+bootstrap signer mapping is configured.
+
 ### Validator Core Responsibilities
 
 Validators are responsible for:
 
-- producing blocks in the Congress turn-taking schedule
+- producing blocks in the Congress turn-taking schedule through the current signer key
 - staying online and synchronized
 - participating in governance votes
 - maintaining competitive stake and delegation
-- managing their commission rate and fee address
+- managing commission rate, fee address, and signer assignment
+
+Signer rotation is intentionally delayed until after the next checkpoint block so the checkpoint block itself still uses
+the previous signer.
 
 ### Validator Responsibilities and Risks
 
@@ -390,7 +411,7 @@ JPoSA is built around three core values:
 1. controlled decentralization
    - stake matters, but entry is governed
 2. deterministic operation
-   - consensus uses parent-state validator selection and epoch-based activation
+   - consensus uses parent-state validator selection, signer-set checkpoints, and epoch-based activation
 3. operational resilience
    - punishment, reward exclusion, and pending payout mechanics handle adverse conditions explicitly
 

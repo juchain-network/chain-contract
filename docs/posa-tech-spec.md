@@ -59,7 +59,7 @@ Congress still contains address routing for legacy POA contracts at `0xf000` to 
 ```text
 ┌────────────────────────────────────────────────────────────────┐
 │                       Congress Consensus                        │
-│  Prepare()   -> set header difficulty, extra-data validators   │
+│  Prepare()   -> set header difficulty, extra-data signers      │
 │  Finalize()  -> rewards, punishments, epoch updates            │
 │  VerifyHeader() -> validate header.Extra against parent state  │
 └────────────────────────────────────────────────────────────────┘
@@ -86,14 +86,30 @@ The validator system is intentionally split across four contracts:
 
 - `Proposal.pass[validator]` means governance has authorized the validator
 - `Proposal.proposalPassedHeight[validator]` records when that authorization was obtained
-- `Validators.highestValidatorsSet` is the candidate cache used for stake-based ranking
-- `Validators.currentValidatorSet` is the epoch-effective consensus cache
+- `Validators.highestValidatorsSet` is the validator cold-address candidate cache used for stake-based ranking
+- `Validators.currentValidatorSet` is the epoch-effective validator cold-address cache
+- `Validators.validatorSigners[validator]` and `Validators.signerValidators[signer]` define the active cold/hot binding
+- `Validators.pendingValidatorSigners[validator]` / `pendingSignerEpochs[validator]` hold delayed signer rotations
 - `Staking.validatorStakes[validator]` stores self-stake, delegation totals, rewards, and jail state
 - `Punish.punishRecords[validator]` stores the missed-block counter and pending punishment state
 
 This split is important: a validator can be present in one cache and absent from another during transitions.
 
-### 1.5 Active, Voting, Reward-Eligible, and Top Validators
+### 1.5 Validator, Signer, and Fee Address Roles
+
+JPoSA supports separated operational identities:
+
+- validator cold address
+  - owns self-stake, governance rights, unjail, exit, commission updates, and signer rotation
+- signer hot address
+  - seals blocks and appears in `header.Coinbase` / epoch `header.Extra`
+- fee address
+  - withdraws transaction-fee income from `Validators.withdrawProfits(validator)`
+
+Default same-address mode is still supported, but the protocol no longer requires the cold validator key to be the
+block-signing key.
+
+### 1.6 Active, Voting, Reward-Eligible, and Top Validators
 
 The code uses several similar-looking concepts that must not be confused.
 
@@ -102,9 +118,12 @@ The code uses several similar-looking concepts that must not be confused.
 | authorized validator | `Proposal.pass` | governance has approved the validator |
 | registered validator | `Staking.validatorStakes[validator].isRegistered` | the validator has a stake record |
 | top validator | `Validators.getTopValidators()` | candidate selected by stake ranking from `highestValidatorsSet`; requires `isRegistered && selfStake >= minValidatorStake` |
+| top signer | `Validators.getTopSigners()` | effective signer set derived from the current top-validator set |
 | active validator | `Validators.isValidatorActive()` | in `currentValidatorSet`, registered, not jailed, and `selfStake >= minValidatorStake` |
+| active signer | `Validators.getActiveSigners()` | effective signer set derived from `currentValidatorSet` |
 | voting validator | `Validators.getVotingValidatorCount()` | governance-counted validator; jailed or below-min-stake validators are excluded immediately |
 | reward-eligible validator | `Validators.getRewardEligibleValidatorsWithStakes()` | coinbase-reward-eligible validator; jailed or below-min-stake validators are excluded immediately |
+| reward-eligible signer | `Validators.getRewardEligibleSignersWithStakes()` | signer set paired to reward-eligible validators for Congress reward calculation |
 
 ## 2. Contract Responsibilities
 
@@ -177,6 +196,8 @@ Configuration proposals support `cid = 0` to `19` and become effective immediate
 1. Genesis bootstrap
    - `initializeWithValidators(...)` pre-registers genesis validators
    - each genesis validator receives `Proposal.minValidatorStake()` bootstrap self-stake
+   - Congress satisfies that bootstrap by moving `minValidatorStake` from each bootstrap validator cold address into
+     `Staking` before initialization
 2. Validator lifecycle
    - `registerValidator(commissionRate)`
    - `addValidatorStake()`
@@ -245,6 +266,9 @@ Other important storage:
 - `resignValidator()` consumes the "one removal per epoch" slot
 - `decreaseValidatorStake(amount)` is partial-only; if remaining stake would fall below `minValidatorStake`, the call reverts
 - `exitValidator()` is only allowed after the validator is no longer in `currentValidatorSet`
+- `distributeRewards()` resolves `block.coinbase` signer through `Validators.getValidatorBySigner(...)`
+- validator coinbase rewards are claimed by the validator cold address; the signer hot address does not own a separate
+  reward bucket
 
 #### Relationships
 
@@ -259,24 +283,38 @@ Other important storage:
 
 #### Main Features
 
-1. Validator metadata
-   - `createOrEditValidator(...)`
-   - stores fee address and descriptive metadata
+1. Validator metadata and signer binding
+   - `createOrEditValidator(feeAddr, moniker, ...)`
+   - `createOrEditValidator(feeAddr, signer, moniker, ...)`
+   - stores fee address, descriptive metadata, and signer binding
    - callable by a proposal-authorized candidate or any existing registered validator
-2. Set management
-   - `currentValidatorSet` is the epoch-effective set
-   - `highestValidatorsSet` is the candidate cache
+2. Signer mapping
+   - `getValidatorSigner(validator)`
+   - `getValidatorBySigner(signer)`
+   - `getValidatorBySignerHistory(signer)`
+   - pending signer rotation activates from the first block after the next epoch checkpoint
+   - historical signer ownership is recorded only after that signer has actually entered the on-chain effective signer set
+3. Set management
+   - `currentValidatorSet` is the epoch-effective validator cold-address set
+   - `highestValidatorsSet` is the validator cold-address candidate cache
+   - `getActiveSigners()` / `getTopSigners()` derive the effective signer sets from those validator caches
+   - `getTopSignersForEpochTransition()` exposes the signer set that should be committed into the current checkpoint
+     header
    - `updateActiveValidatorSet(newSet, epoch)` updates `currentValidatorSet`
    - `tryActive(validator)` inserts a validator into `highestValidatorsSet`
    - `removeFromHighestSet(validator)` removes a validator from `highestValidatorsSet` and clears proposal authorization
-3. Transaction-fee income
+4. Transaction-fee income
    - `distributeBlockReward()` accrues transaction-fee reward
    - `withdrawProfits(validator)` lets the validator fee address withdraw `aacIncoming`
-4. Query surface
+5. Query surface
    - `getActiveValidators()`
+   - `getActiveSigners()`
    - `getActiveValidatorCount()`
    - `getVotingValidatorCount()`
+   - `getRewardEligibleSignersWithStakes()`
    - `getRewardEligibleValidatorsWithStakes()`
+   - `getTopSignersForEpochTransition()`
+   - `getTopSigners()`
    - `getTopValidators()`
 
 #### Main Data
@@ -303,15 +341,31 @@ Other important storage:
 
 - `currentValidatorSet`
 - `highestValidatorsSet`
+- `validatorSigners[address]`
+- `signerValidators[address]`
+- `historicalSignerOwners[address]`
+- `pendingValidatorSigners[address]`
+- `pendingSignerValidators[address]`
+- `pendingSignerEpochs[address]`
 - `validatorInfo[address]`
 - `operationsDone[block][operation]`
 
 #### Key Behavioral Rules
 
+- `currentValidatorSet` and `highestValidatorsSet` store validator cold addresses only
+- `getActiveSigners()` and `getTopSigners()` derive signer hot-address sets from the effective cold/hot mapping
+- the feeAddr-only `createOrEditValidator(...)` overload preserves the existing signer binding
+- if no signer has ever been assigned, the validator address is used as the default signer
+- existing registered validators may keep updating `feeAddr`, metadata, and signer binding even after `pass` is cleared
 - `getVotingValidatorCount()` excludes jailed validators immediately
+- `getRewardEligibleSignersWithStakes()` excludes jailed or below-min-stake validators immediately and returns the
+  signer set Congress rewards against
 - `getRewardEligibleValidatorsWithStakes()` excludes jailed validators immediately
 - `getActiveValidators()` still returns the raw `currentValidatorSet`, which may temporarily include jailed validators until next epoch
 - `getTopValidators()` delegates to `Staking.getTopValidators(highestValidatorsSet)`
+- when a registered validator rotates signer, the old signer remains valid through the checkpoint block itself and the
+  new signer becomes effective from the first block after that checkpoint
+- validator removal and voluntary exit clear any pending signer reservation for that validator
 - `removeFromHighestSet()` preserves at least one remaining validator in `highestValidatorsSet`
 
 #### Relationships
@@ -329,11 +383,13 @@ Other important storage:
 
 1. Missed-block punishment
    - `punish(val)` increments the counter and triggers threshold logic
+   - `val` may be the current validator cold address or the current signer hot address
 2. Deferred execution
    - punishment that hits on epoch blocks is deferred into pending queues
    - `executePending(limit)` drains those queues on non-epoch blocks
 3. Double-sign evidence
    - `submitDoubleSignEvidence(header1, header2)`
+   - resolves the recovered signer through `getValidatorBySignerHistory(...)`
 4. Counter decay
    - `decreaseMissedBlocksCounter(epoch)` runs once per epoch
 
@@ -354,6 +410,11 @@ Other important storage:
 - `pendingRemoveIncoming[address]`
 - `pendingValidators`
 - `doubleSigned[height][validator]`
+
+Upgrade note:
+
+- PoA -> PoSA migration only carries over legacy missed-block state (`punishValidators` / `punishRecords`).
+- `pendingRemove`, `pendingRemoveIncoming`, and `pendingValidators` are PoSA runtime queue state and start empty after upgrade.
 
 #### Threshold Semantics
 
@@ -377,16 +438,18 @@ Other important storage:
 3. When majority is reached:
    - `pass[candidate] = true`
    - `proposalPassedHeight[candidate] = block.number`
-4. The candidate calls `Staking.registerValidator(commissionRate)` with sufficient self-stake.
-5. `Staking`:
+4. Before or after registration, the candidate may call `Validators.createOrEditValidator(...)` to configure `feeAddr`,
+   metadata, and an optional signer hot address.
+5. The candidate calls `Staking.registerValidator(commissionRate)` with sufficient self-stake.
+6. `Staking`:
    - validates proposal state and registration window
    - records `validatorStakes[candidate]`
    - appends the validator to `allValidators`
    - calls `Validators.tryActive(candidate)`
-6. `Validators.tryActive(candidate)`:
+7. `Validators.tryActive(candidate)`:
    - inserts into `highestValidatorsSet`
    - cleans punish record if the validator was previously jailed
-7. Congress will include the validator in `currentValidatorSet` only at the next epoch transition.
+8. Congress will include the validator in `currentValidatorSet` only at the next epoch transition.
 
 ### 3.2 Governance Removal Flow
 
@@ -426,8 +489,10 @@ Other important storage:
 
 1. Congress computes block transaction fees and calls `Validators.distributeBlockReward()` with `msg.value`.
 2. `Validators.distributeBlockReward()`:
-   - checks whether the producer exists
-   - if the producer is jailed, redistributes the fee reward to other active non-jailed validators
+   - resolves `msg.sender` signer to the validator cold address
+   - checks whether the validator exists and still satisfies the minimum self-stake floor
+   - if the validator is jailed or below `minValidatorStake`, redistributes the fee reward to other active non-jailed
+     validators
    - otherwise adds the amount to `validatorInfo[val].aacIncoming`
 3. The validator's fee address later withdraws this accumulated income through `Validators.withdrawProfits(validator)`.
    If the current fee address cannot receive ETH, the validator may rotate `feeAddr` via
@@ -436,10 +501,11 @@ Other important storage:
 ### 3.5 Coinbase Reward Flow
 
 1. Congress reads `Proposal.blockReward()` and `Proposal.baseRewardRatio()`.
-2. Congress queries `Validators.getRewardEligibleValidatorsWithStakes()`.
+2. Congress queries `Validators.getRewardEligibleSignersWithStakes()`.
 3. Congress computes `actualReward`.
 4. Congress credits the producer and calls `Staking.distributeRewards{value: actualReward}()`.
 5. `Staking.distributeRewards()`:
+   - resolves `block.coinbase` signer to the validator cold address
    - records validator activity via `lastActiveBlock`
    - takes validator commission
    - allocates validator self-stake share
@@ -450,14 +516,44 @@ Other important storage:
 
 ### 3.6 Epoch Update Flow
 
-1. At epoch block `N`, Congress derives the next validator set from the parent block state.
-2. `Prepare()` writes that set into `header.Extra`.
-3. `VerifyHeader()` checks that the epoch header encodes exactly that parent-derived set.
+1. At epoch block `N`, Congress derives the next validator cold-address set and the corresponding effective signer set
+   from the parent block state.
+2. `Prepare()` writes the signer set into `header.Extra`.
+3. `VerifyHeader()` checks that the epoch header encodes exactly that parent-derived signer set.
 4. `Finalize()` calls `handleEpochTransition(...)`.
 5. `handleEpochTransition(...)`:
-   - calls `updateValidators(newSet, ...)`
+   - calls `updateValidators(newValidatorSet, ...)`
    - calls `decreaseMissedBlocksCounter(...)`
-6. `Validators.updateActiveValidatorSet(newSet, epoch)` replaces `currentValidatorSet`.
+6. `Validators.updateActiveValidatorSet(newValidatorSet, epoch)` replaces `currentValidatorSet`.
+
+### 3.7 Bootstrap and Migration Flow
+
+Fresh PoSA bootstrap:
+
+1. Congress resolves the effective bootstrap mapping from `config.congress.initialValidators` /
+   `config.congress.initialSigners`.
+2. If one side is omitted, it defaults to the other side. If both are omitted, the genesis signer list from
+   `extraData` is used for both validators and signers.
+3. `extraData` must match the effective signer set as a set.
+4. At initialization, Congress:
+   - initializes `Proposal`
+   - reads `minValidatorStake`
+   - moves one `minValidatorStake` from each bootstrap validator cold address into `Staking`
+   - initializes `Staking`, `Punish`, and `Validators.initialize(validators, signers, ...)`
+
+PoA -> PoSA migration:
+
+1. Congress resolves bootstrap validator/signer input in this precedence:
+   - CLI overrides `--override.posaValidators` / `--override.posaSigners`
+   - chain config `initialValidators` / `initialSigners`
+   - default legacy same-address miner mapping
+2. Any explicit migration validator/signer remap must supply both arrays together.
+3. The effective signer set must cover the live POA validator/signer set being migrated.
+4. The same `minValidatorStake` cold-address funding rule applies during migration bootstrap.
+5. If any bootstrap validator balance is insufficient at the scheduled upgrade time, Congress defers PoSA activation by
+   one epoch and persists the effective `posaTime` override in the node database.
+6. Migration rewrites legacy validator and punish state onto validator cold addresses; runtime pending queues start
+   empty after upgrade.
 
 ## 4. Consensus Flow and Contract Coordination
 
@@ -469,9 +565,9 @@ Important checks:
 
 - header timestamp is not too far in the future
 - `header.Extra` has correct vanity and signature layout
-- non-epoch blocks must not contain validator bytes in `header.Extra`
-- epoch blocks must contain a non-empty validator list with valid address byte length
-- on epoch blocks, `verifyEpochValidators()` compares `header.Extra` with the parent-state contract-derived validator set
+- non-epoch blocks must not contain signer bytes in `header.Extra`
+- epoch blocks must contain a non-empty signer list with valid address byte length
+- on epoch blocks, `verifyEpochValidators()` compares `header.Extra` with the parent-state contract-derived signer set
 - mix digest must be zero
 - uncle hash must be empty
 - post-fork fields such as `BaseFee`, `WithdrawalsHash`, `ExcessBlobGas`, and `ParentBeaconRoot` are checked when relevant
@@ -482,16 +578,16 @@ Important checks:
 
 It:
 
-- sets `header.Coinbase` to the local validator
+- sets `header.Coinbase` to the local signer hot address
 - sets consensus difficulty using `calcDifficulty(...)`
 - normalizes vanity bytes in `header.Extra`
 - for epoch blocks:
-  - calls `getTopValidators(chain, header)`
-  - appends those validators to `header.Extra`
+  - resolves the parent-derived validator/signer transition set
+  - appends the effective signer set to `header.Extra`
 - appends the seal bytes placeholder
 - sets header time to at least `parent.Time + period`
 
-Prepare therefore commits the next epoch validator list into `header.Extra` before block execution.
+Prepare therefore commits the next epoch signer list into `header.Extra` before block execution.
 
 ### 4.3 Finalize
 
@@ -513,13 +609,13 @@ In current PoSA mode it:
 
 Congress maintains a consensus snapshot that stores:
 
-- authorized validators for signing order and recents-window checks
+- signer hot addresses for signing order and recents-window checks
 - recent signers used by spam protection
 
 At epoch blocks, `snapshot.apply(...)`:
 
-- reads validators from `header.Extra`
-- rebuilds the validator map from that committed header
+- reads signers from `header.Extra`
+- rebuilds the signer map from that committed header
 - adjusts recents-window state if validator count changed
 
 The snapshot follows the header, not a fresh live contract query.
@@ -528,11 +624,14 @@ The snapshot follows the header, not a fresh live contract query.
 
 Validator selection for epoch blocks follows the parent-state rule.
 
-- `getTopValidators(chain, header)` loads the parent header
+- `resolveEpochTransitionSet(...)` loads the parent header
 - `getTopValidatorsAt(chain, parent)` executes `Validators.getTopValidators()` against the parent state root
+- `getTopSignersForEpochTransitionFromState(chain, parent, epochHeader)` executes
+  `Validators.getTopSignersForEpochTransition()` against the parent state root
 - `Validators.getTopValidators()` internally calls `Staking.getTopValidators(highestValidatorsSet)`
 
-This means the epoch block at height `N` commits the validator set derived from state at height `N-1`.
+This means the epoch block at height `N` commits the signer set derived from state at height `N-1`, while
+`Finalize()` still updates `currentValidatorSet` with the corresponding validator cold addresses.
 
 ### 4.6 Recent-Signer Window
 
@@ -621,13 +720,17 @@ Withdrawal surface:
 - delegator rewards: `Staking.claimRewards(validator)`
 - delayed transfers: `Staking.withdrawPendingPayout(recipient)`
 
+The signer hot address does not own a separate reward ledger. Both fee-income and coinbase reward ultimately resolve
+back to the validator cold address and its configured `feeAddr`.
+
 ### 5.7 Missed-Block Punishment
 
 When `Punish.punish(val)` runs:
 
 1. missed-block counter increments
-2. if threshold is hit on an epoch block, the action is queued
-3. if threshold is hit on a normal block:
+2. the input is resolved from current signer hot address to validator cold address when needed
+3. if threshold is hit on an epoch block, the action is queued
+4. if threshold is hit on a normal block:
    - `punishThreshold` removes fee-income eligibility
    - `removeThreshold` jails and removes the validator
 
@@ -639,11 +742,13 @@ Double-sign evidence path:
 
 1. reporter submits two conflicting headers
 2. `Punish` recovers the signer and checks the evidence window
-3. validator is jailed if at least one other voting validator remains
-4. `Staking.slashValidator(...)` slashes self-stake
-5. reporter reward is paid
-6. remaining slash amount is sent to `burnAddress`
-7. validator is removed through `Validators.removeValidator(...)`
+3. the signer is resolved through `getValidatorBySignerHistory(...)`, so evidence can still target a recently rotated
+   signer, but not a signer that was only configured and never became effective on-chain
+4. validator is jailed if at least one other voting validator remains
+5. `Staking.slashValidator(...)` slashes self-stake
+6. reporter reward is paid
+7. remaining slash amount is sent to `burnAddress`
+8. validator is removed through `Validators.removeValidator(...)`
 
 In the current PoSA design, direct slashing is intentionally limited to validator `selfStake`.
 Delegated principal and already-unbonding principal are not slashed by this path.
@@ -668,12 +773,17 @@ To rejoin after jail or governance removal:
 
 Validator operational metadata is updated separately from stake and validator-set membership.
 
-- `Validators.createOrEditValidator(...)` updates fee address and descriptive fields
+- `Validators.createOrEditValidator(feeAddr, ...)` updates fee address and descriptive fields while preserving signer
+- `Validators.createOrEditValidator(feeAddr, signer, ...)` can also bind or rotate signer
 - `Staking.updateCommissionRate(newCommissionRate)` updates commission subject to `commissionUpdateCooldown`
 
 `createOrEditValidator(...)` is available both to proposal-authorized pre-registration candidates and to existing
-registered validators whose `pass` flag has later been cleared, so fee-income withdrawal can still be recovered by
-changing `feeAddr`.
+registered validators whose `pass` flag has later been cleared, so fee-income withdrawal and signer recovery can still
+be managed while the validator remains registered.
+
+When `createOrEditValidator(...)` is used to rotate a signer, the old signer remains valid through the next epoch
+checkpoint block itself, and the new signer becomes the effective consensus signer starting from the first block after
+that checkpoint. If the validator leaves before the rotation activates, the pending signer reservation is cleared.
 
 These changes do not require epoch rotation.
 
@@ -701,9 +811,9 @@ In both cases, jail state lives in `Staking`, and other contracts query that sta
 
 Reward flow is intentionally split:
 
-- `Validators` owns fee-income accounting
+- `Validators` owns fee-income accounting and signer->validator fee-income resolution
 - Congress computes coinbase reward
-- `Staking` splits coinbase reward between validator and delegators
+- `Staking` resolves signer->validator again and splits coinbase reward between validator and delegators
 
 This is why validator rewards are not a single number inside one contract.
 
@@ -760,7 +870,7 @@ Key protections include:
 ```text
 Prepare
   -> set coinbase / difficulty / time
-  -> no validator list in header.Extra
+  -> no signer list in header.Extra
 
 Transactions execute
 
@@ -776,17 +886,17 @@ Finalize
 
 ```text
 Prepare
-  -> query top validators from parent state
-  -> write validators into header.Extra
+  -> query top validators and effective top signers from parent state
+  -> write signers into header.Extra
 
 VerifyHeader
-  -> compare header.Extra against parent-derived validator set
+  -> compare header.Extra against parent-derived signer set
 
 Finalize
   -> execute rewards as normal
-  -> update currentValidatorSet
+  -> update currentValidatorSet with validator cold addresses
   -> decrease punish counters
-  -> validate header extra set again against the derived epoch set
+  -> validate header extra set again against the derived signer set
 ```
 
 ### 7.3 Validator Turn and Seal Checks
@@ -795,7 +905,7 @@ Finalize
 
 This means:
 
-- the signer must be in the snapshot validator set
+- the signer must be in the snapshot signer set
 - the signer must not violate the recent-signer window
 - jailed-aware recent-limit calculation can shrink the effective recents window when many validators are jailed
 
@@ -803,19 +913,21 @@ This means:
 
 ```text
 Block N-1 state
-  -> determine top validators
+  -> determine top validators and effective top signers
 
 Epoch Block N Prepare
-  -> write parent-derived validators to header.Extra
+  -> write parent-derived signers to header.Extra
 
 Epoch Block N execution
-  -> still executing with the previous currentValidatorSet semantics
+  -> still executes the checkpoint block with the previous currentValidatorSet semantics
+  -> signer rotations scheduled for block N are not active yet
 
 Epoch Block N Finalize
-  -> call Validators.updateActiveValidatorSet(newSet, epoch)
+  -> call Validators.updateActiveValidatorSet(newValidatorSet, epoch)
 
 Block N+1 onward
-  -> consensus uses the new currentValidatorSet
+  -> consensus uses the new signer snapshot from header.Extra
+  -> scheduled signer rotations for epoch N become effective
 ```
 
 ## 8. Key Parameters and Constants
@@ -919,7 +1031,14 @@ This is expected behavior when:
 
 Delayed payout does not mean reward loss; it means the user must later call `withdrawPendingPayout(recipient)`.
 
-### 9.5 Last-Validator Protections
+### 9.5 Bootstrap Funding and Upgrade Deferral
+
+- fresh PoSA bootstrap requires each bootstrap validator cold address to hold at least `minValidatorStake`
+- PoA->PoSA migration applies the same rule to the resolved bootstrap validator cold addresses
+- if migration funding is insufficient at the scheduled PoSA time, Congress defers activation by one epoch and persists
+  the effective `posaTime` override so restarts keep the same schedule
+
+### 9.6 Last-Validator Protections
 
 Several removal paths preserve liveness by refusing to collapse the effective validator set to zero.
 
@@ -927,13 +1046,13 @@ Several removal paths preserve liveness by refusing to collapse the effective va
 - `Staking.slashValidator()` preserves `minValidatorStake` for the last effective validator
 - punishment removal paths check `getVotingValidatorCount() > 1` before fully jailing and removing
 
-### 9.6 Proposal and Config Safety
+### 9.7 Proposal and Config Safety
 
 - configuration proposals validate before creation and before application
 - add-validator proposals cannot be spammed against a still-valid passed authorization
 - proposer cooldown avoids rapid proposal churn from one validator
 
-### 9.7 Reward Safety
+### 9.8 Reward Safety
 
 `blockReward` is a formula input, not a guaranteed exact per-block payout. Documentation, monitoring, and downstream tools must treat:
 
@@ -994,3 +1113,16 @@ No. The validator must:
 ### 10.8 Why does Congress use parent state for epoch validators?
 
 Because the epoch block header must commit to a deterministic validator set before that block's execution mutates current state. Parent-state selection ensures the header and the validator-rotation logic agree.
+
+### 10.9 What is the difference between validator, signer, and feeAddr?
+
+- validator = cold address that owns stake and governance
+- signer = hot address that seals blocks for the validator
+- feeAddr = address that withdraws transaction-fee income
+
+They may be the same address, but the protocol does not require that.
+
+### 10.10 When does signer rotation take effect?
+
+If a registered validator schedules a new signer for epoch block `N`, the old signer is still valid on block `N`
+itself, and the new signer becomes effective starting from block `N+1`.

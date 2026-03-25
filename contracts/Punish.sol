@@ -108,61 +108,63 @@ contract Punish is Params, ReentrancyGuard {
         punished[block.number] = true;
         require(epoch > 0, "Epoch not set");
         bool isEpochBlock = block.number % epoch == 0;
+        address validator = _resolveCurrentValidator(val);
+        require(validator != address(0) && validators.isValidatorExist(validator), "Validator not exist");
 
         if (!isEpochBlock) {
-            if (pendingRemove[val]) {
-                pendingRemove[val] = false;
-                pendingRemoveIncoming[val] = false;
-                punishRecords[val].missedBlocksCounter = 0;
+            if (pendingRemove[validator]) {
+                pendingRemove[validator] = false;
+                pendingRemoveIncoming[validator] = false;
+                punishRecords[validator].missedBlocksCounter = 0;
                 if (validators.getVotingValidatorCount() > 1) {
-                    staking.jailValidator(val, proposal.validatorUnjailPeriod());
-                    validators.removeValidator(val);
+                    staking.jailValidator(validator, proposal.validatorUnjailPeriod());
+                    validators.removeValidator(validator);
                 }
-                emit LogPunishValidator(val, block.timestamp);
+                emit LogPunishValidator(validator, block.timestamp);
                 return;
             }
-            if (pendingRemoveIncoming[val]) {
-                pendingRemoveIncoming[val] = false;
-                validators.removeValidatorIncoming(val);
-                emit LogPunishValidator(val, block.timestamp);
+            if (pendingRemoveIncoming[validator]) {
+                pendingRemoveIncoming[validator] = false;
+                validators.removeValidatorIncoming(validator);
+                emit LogPunishValidator(validator, block.timestamp);
                 return;
             }
         }
 
-        if (!punishRecords[val].exist) {
-            punishRecords[val].index = punishValidators.length;
-            punishValidators.push(val);
-            punishRecords[val].exist = true;
+        if (!punishRecords[validator].exist) {
+            punishRecords[validator].index = punishValidators.length;
+            punishValidators.push(validator);
+            punishRecords[validator].exist = true;
         }
-        punishRecords[val].missedBlocksCounter++;
+        punishRecords[validator].missedBlocksCounter++;
 
         if (isEpochBlock) {
-            if (punishRecords[val].missedBlocksCounter % proposal.removeThreshold() == 0) {
-                pendingRemove[val] = true;
-                pendingRemoveIncoming[val] = false;
-                _enqueuePending(val);
-            } else if (punishRecords[val].missedBlocksCounter % proposal.punishThreshold() == 0) {
-                pendingRemoveIncoming[val] = true;
-                _enqueuePending(val);
+            if (punishRecords[validator].missedBlocksCounter % proposal.removeThreshold() == 0) {
+                pendingRemove[validator] = true;
+                pendingRemoveIncoming[validator] = false;
+                _enqueuePending(validator);
+            } else if (punishRecords[validator].missedBlocksCounter % proposal.punishThreshold() == 0) {
+                pendingRemoveIncoming[validator] = true;
+                _enqueuePending(validator);
             }
-            emit LogPunishValidator(val, block.timestamp);
+            emit LogPunishValidator(validator, block.timestamp);
             return;
         }
 
-        if (punishRecords[val].missedBlocksCounter % proposal.removeThreshold() == 0) {
+        if (punishRecords[validator].missedBlocksCounter % proposal.removeThreshold() == 0) {
             // reset validator's missed blocks counter
-            punishRecords[val].missedBlocksCounter = 0;
+            punishRecords[validator].missedBlocksCounter = 0;
             if (validators.getVotingValidatorCount() > 1) {
                 // jail validator first (sets isJailed in Staking contract)
-                staking.jailValidator(val, proposal.validatorUnjailPeriod());
+                staking.jailValidator(validator, proposal.validatorUnjailPeriod());
                 // then remove validator (which will check isJailed status)
-                validators.removeValidator(val);
+                validators.removeValidator(validator);
             }
-        } else if (punishRecords[val].missedBlocksCounter % proposal.punishThreshold() == 0) {
-            validators.removeValidatorIncoming(val);
+        } else if (punishRecords[validator].missedBlocksCounter % proposal.punishThreshold() == 0) {
+            validators.removeValidatorIncoming(validator);
         }
 
-        emit LogPunishValidator(val, block.timestamp);
+        emit LogPunishValidator(validator, block.timestamp);
     }
 
     function executePending(uint256 limit) external onlyMiner onlyInitialized onlyNotEpoch nonReentrant {
@@ -210,29 +212,31 @@ contract Punish is Params, ReentrancyGuard {
         require(number1 == number2, "Height mismatch");
         require(hash1 != hash2, "Same header");
         require(signer1 == signer2, "Different signer");
-        require(validators.isValidatorExist(signer1), "Signer not exist");
-        require(!doubleSigned[number1][signer1], "Already punished");
+        address validator = validators.getValidatorBySignerHistory(signer1);
+        require(validator != address(0), "Signer not exist");
+        require(validators.isValidatorExist(validator), "Validator not exist");
+        require(!doubleSigned[number1][validator], "Already punished");
         require(block.number >= number1, "Future block");
         require(block.number - number1 <= proposal.doubleSignWindow(), "Evidence expired");
 
-        doubleSigned[number1][signer1] = true;
+        doubleSigned[number1][validator] = true;
 
         bool canJail = validators.getVotingValidatorCount() > 1;
         if (canJail) {
-            staking.jailValidator(signer1, proposal.validatorUnjailPeriod());
+            staking.jailValidator(validator, proposal.validatorUnjailPeriod());
         }
         (uint256 actualSlash, uint256 actualReward) = staking.slashValidator(
-            signer1,
+            validator,
             proposal.doubleSignSlashAmount(),
             msg.sender,
             proposal.doubleSignRewardAmount(),
             proposal.burnAddress()
         );
         if (canJail) {
-            validators.removeValidator(signer1);
+            validators.removeValidator(validator);
         }
 
-        emit LogDoubleSignPunish(signer1, msg.sender, number1, actualSlash, actualReward, block.timestamp);
+        emit LogDoubleSignPunish(validator, msg.sender, number1, actualSlash, actualReward, block.timestamp);
     }
 
     /**
@@ -277,6 +281,19 @@ contract Punish is Params, ReentrancyGuard {
         }
         pendingValidators.push(val);
         pendingIndex[val] = pendingValidators.length;
+    }
+
+    function _resolveCurrentValidator(address maybeValidatorOrSigner) private view returns (address validator) {
+        validator = validators.getValidatorBySigner(maybeValidatorOrSigner);
+        if (validator != address(0)) {
+            return validator;
+        }
+
+        if (validators.isValidatorExist(maybeValidatorOrSigner)) {
+            return maybeValidatorOrSigner;
+        }
+
+        return address(0);
     }
 
     /**

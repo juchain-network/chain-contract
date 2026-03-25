@@ -229,7 +229,7 @@ contract DeployToChainScript is Script {
 
         // 4. Finally initialize Validators (pass in all other contract addresses)
         console.log("Initializing Validators...");
-        Validators(validators).initialize(initialValidators, proposal, punish, staking);
+        Validators(validators).initialize(initialValidators, initialValidators, proposal, punish, staking);
         console.log("Validators initialized successfully");
 
         console.log("=== All contracts initialized with correct addresses! ===");

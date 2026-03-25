@@ -18,6 +18,9 @@ contract RejectingFeeReceiver {
 
 // Complete validator tests, corresponding to all functions in test/validators.js
 contract ValidatorsCompleteFoundryTest is BaseSetup {
+    bytes4 private constant CREATE_OR_EDIT_SELECTOR =
+        bytes4(keccak256("createOrEditValidator(address,string,string,string,string,string)"));
+
     address v1;
     address v2;
     address v3;
@@ -43,7 +46,8 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
     function testCanOnlyInitOnce() public {
         // Corresponds to "can only init once"
         bytes memory err;
-        try Validators(VALIDATORS).initialize(new address[](0), address(0xCAFE), address(0xBEEF), address(0xDEAD)) {
+        try Validators(VALIDATORS)
+            .initialize(new address[](0), new address[](0), address(0xCAFE), address(0xBEEF), address(0xDEAD)) {
             revert("should revert");
         } catch (bytes memory e) {
             err = e;
@@ -57,7 +61,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         address validator = makeAddr("validator");
         vm.prank(validator);
         (bool ok,) = address(Validators(VALIDATORS))
-            .call(abi.encodeWithSelector(Validators.createOrEditValidator.selector, address(0), "", "", "", "", ""));
+            .call(abi.encodeWithSelector(CREATE_OR_EDIT_SELECTOR, address(0), "", "", "", "", ""));
         require(!ok, "should fail with zero address");
     }
 
@@ -67,11 +71,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         string memory tooLongMoniker = _generateLongString(71); // > 70 limit
         vm.prank(validator);
         (bool ok,) = address(Validators(VALIDATORS))
-            .call(
-                abi.encodeWithSelector(
-                    Validators.createOrEditValidator.selector, payable(validator), tooLongMoniker, "", "", "", ""
-                )
-            );
+            .call(abi.encodeWithSelector(CREATE_OR_EDIT_SELECTOR, payable(validator), tooLongMoniker, "", "", "", ""));
         require(!ok, "should fail with too long moniker");
     }
 
@@ -80,11 +80,7 @@ contract ValidatorsCompleteFoundryTest is BaseSetup {
         address validator = makeAddr("validator");
         vm.prank(validator);
         (bool ok,) = address(Validators(VALIDATORS))
-            .call(
-                abi.encodeWithSelector(
-                    Validators.createOrEditValidator.selector, payable(validator), "", "", "", "", ""
-                )
-            );
+            .call(abi.encodeWithSelector(CREATE_OR_EDIT_SELECTOR, payable(validator), "", "", "", "", ""));
         require(!ok, "should fail without authorization");
     }
 

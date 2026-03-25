@@ -11,7 +11,7 @@ contract UpdateConfigScript is BaseSetup {
         uint256 newValue = 7200; // New value
         updateConfig(cid, newValue);
     }
-    
+
     function updateConfig(uint256 cid, uint256 newValue) public {
         Proposal(PROPOSAL).createUpdateConfigProposal(cid, newValue);
     }

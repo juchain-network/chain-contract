@@ -9,11 +9,7 @@ interface IPunish {
      * @param _proposal Address of the Proposal contract.
      * @param _staking Address of the Staking contract.
      */
-    function initialize(
-        address _validators,
-        address _proposal,
-        address _staking
-    ) external;
+    function initialize(address _validators, address _proposal, address _staking) external;
 
     /**
      * @dev Punishes a validator for missing blocks.

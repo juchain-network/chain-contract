@@ -16,6 +16,16 @@ abstract contract BaseSetup is Test {
 
     // Deploy runtime code of contracts to fixed addresses and initialize them
     function deploySystem(address[] memory initVals) internal {
+        deploySystem(initVals, initVals, TEST_EPOCH);
+    }
+
+    function deploySystem(address[] memory initVals, address[] memory initSigners) internal {
+        deploySystem(initVals, initSigners, TEST_EPOCH);
+    }
+
+    function deploySystem(address[] memory initVals, address[] memory initSigners, uint256 testEpoch) internal {
+        require(initVals.length == initSigners.length, "length mismatch");
+
         // place runtime code at fixed addresses (consistent with deployment)
         vm.etch(VALIDATORS, type(Validators).runtimeCode);
         vm.etch(PUNISH, type(Punish).runtimeCode);
@@ -24,7 +34,7 @@ abstract contract BaseSetup is Test {
 
         // Initialize contracts in correct order
         // 1. Proposal first (needed by others)
-        Proposal(PROPOSAL).initialize(initVals, VALIDATORS, TEST_EPOCH);
+        Proposal(PROPOSAL).initialize(initVals, VALIDATORS, testEpoch);
         uint256 minValidatorStake = Proposal(PROPOSAL).minValidatorStake();
 
         // 2. Staking with genesis validators (but don't call tryAddValidatorToHighestSet yet)
@@ -37,7 +47,7 @@ abstract contract BaseSetup is Test {
         Punish(PUNISH).initialize(VALIDATORS, PROPOSAL, STAKING);
 
         // 4. Validators last (needs all others)
-        Validators(VALIDATORS).initialize(initVals, PROPOSAL, PUNISH, STAKING);
+        Validators(VALIDATORS).initialize(initVals, initSigners, PROPOSAL, PUNISH, STAKING);
 
         // 5. Now that Validators is initialized, add genesis validators to highestValidatorsSet
         // This completes the registration process that was started in initializeWithValidators
