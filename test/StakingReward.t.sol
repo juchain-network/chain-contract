@@ -87,4 +87,12 @@ contract StakingRewardTest is BaseSetup {
         assertEq(amount, 1000 ether, "Delegation amount should match");
         assertEq(pendingRewards, 0, "Pending rewards should be 0 initially");
     }
+
+    function testZeroRewardStillUpdatesLastActiveBlock() public {
+        vm.coinbase(v1);
+        vm.prank(v1);
+        Staking(STAKING).distributeRewards{value: 0}();
+
+        assertEq(Staking(STAKING).lastActiveBlock(v1), block.number, "lastActiveBlock should still update");
+    }
 }

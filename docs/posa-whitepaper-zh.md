@@ -169,6 +169,8 @@ actualReward = fixedPart + weightedPart
 
 - 每个有资格拿奖励的出块者都会得到固定部分
 - 剩余部分按其在奖励资格集合中的质押权重分配
+- 如果出块者在区块执行结束时已经不满足 `isValidatorActive(...)`，区块仍然有效，但 `actualReward = 0`
+- 治理会把 `blockReward` 限制在安全算术边界内，避免共识奖励计算溢出
 
 ### 在 Staking 内部的奖励分配
 
@@ -395,6 +397,7 @@ signer 轮换会被故意延迟到下一个 checkpoint 区块之后，使 checkp
 - `minUndelegation = 1 JU`
 
 这些参数让网络可以在不重部署系统合约的情况下调整验证者经济和运行安全边界。
+其中 `minValidatorStake` 的治理更新还会额外保证：不会把投票验证者数量降为 0。
 
 ## 总结
 

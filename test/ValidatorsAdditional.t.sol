@@ -182,6 +182,16 @@ contract ValidatorsAdditionalTest is BaseSetup {
         assertEq(count, 3, "Should have 3 active validators");
     }
 
+    function testGetVotingValidatorCountWithMinStake() public view {
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
+        assertEq(Validators(VALIDATORS).getVotingValidatorCountWithMinStake(minStake), 3, "baseline count");
+        assertEq(
+            Validators(VALIDATORS).getVotingValidatorCountWithMinStake(minStake + 1),
+            0,
+            "higher threshold should exclude all bootstrap validators"
+        );
+    }
+
     // Test modifier onlyNotUpdated
     function testOnlyNotUpdatedModifier() public {
         uint256 epoch = Validators(VALIDATORS).epoch();

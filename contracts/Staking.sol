@@ -628,11 +628,6 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         // This avoids duplicate contract calls and saves gas
         uint256 blockReward = msg.value;
 
-        // Check if there are rewards to distribute
-        if (blockReward == 0) {
-            return;
-        }
-
         // Resolve signer hot address to validator cold address
         address validator = validatorsContract.getValidatorBySigner(block.coinbase);
         if (validator == address(0)) {
@@ -644,11 +639,16 @@ contract Staking is Params, ReentrancyGuard, IStaking {
 
         // Check if validator exists (has staked)
         ValidatorStake storage stake = validatorStakes[validator];
-        if (stake.selfStake == 0) {
+        if (!stake.isRegistered || stake.selfStake == 0) {
             return; // Validator doesn't exist, silently return
         }
 
-        if (stake.selfStake < proposalContract.minValidatorStake()) {
+        if (stake.isJailed || stake.selfStake < proposalContract.minValidatorStake()) {
+            return;
+        }
+
+        // Check if there are rewards to distribute
+        if (blockReward == 0) {
             return;
         }
 

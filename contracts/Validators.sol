@@ -79,7 +79,10 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     mapping(uint256 => mapping(uint8 => bool)) operationsDone;
 
     uint256 public revision;
-    uint256[50] private __gap;
+    // signer hot address => first block number at which the signer became effective
+    // value 0 means legacy/unbounded compatibility (or genesis-effective from block 0)
+    mapping(address => uint256) private signerHistoryEffectiveFrom;
+    uint256[49] private __gap;
 
     event LogEditValidator(address indexed val, address indexed fee, uint256 time);
     event LogActive(address indexed val, uint256 time);
@@ -155,7 +158,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
                 validatorInfo[validator].feeAddr = payable(validator);
             }
             _assignCurrentSigner(validator, signer);
-            _recordHistoricalSigner(validator, signer);
+            _recordHistoricalSigner(validator, signer, _initialHistoricalSignerEffectiveFrom());
             // Important: Initialize validator info for genesis validators
             // Status is now managed by Staking contract, we only set feeAddr here
             // Note: Genesis validators are pre-registered in Staking contract with default stake
@@ -409,9 +412,9 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         _validateValidatorSet(newSet);
         _validateValidatorSet(expected);
         _requireSameSet(newSet, expected);
-        _resolveSignerSet(newSet);
+        _resolveEpochTransitionSignerSet(newSet);
         for (uint256 i = 0; i < newSet.length; i++) {
-            _recordHistoricalSigner(newSet[i], _getEpochTransitionSigner(newSet[i]));
+            _recordHistoricalSigner(newSet[i], _getEpochTransitionSigner(newSet[i]), block.number + 1);
         }
 
         for (uint256 i = 0; i < highestValidatorsSet.length; i++) {
@@ -621,10 +624,30 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     /**
      * @dev Resolves a signer to the validator that has historically owned it.
      * @param signer Signer hot address.
-     * @return validator Validator cold address, or zero if signer has never become effective.
+     * @return validator Validator cold address, or zero if signer has never become effective by the current block.
      */
     function getValidatorBySignerHistory(address signer) public view returns (address validator) {
-        return historicalSignerOwners[signer];
+        return getValidatorBySignerHistoryAt(signer, block.number);
+    }
+
+    /**
+     * @dev Resolves a signer to the validator that owned it at a specific block height.
+     * @param signer Signer hot address.
+     * @param atBlock Block number at which the signer must already be effective.
+     * @return validator Validator cold address, or zero if signer had not yet become effective at that block.
+     */
+    function getValidatorBySignerHistoryAt(address signer, uint256 atBlock) public view returns (address validator) {
+        validator = historicalSignerOwners[signer];
+        if (validator == address(0)) {
+            return address(0);
+        }
+
+        uint256 effectiveFrom = signerHistoryEffectiveFrom[signer];
+        if (effectiveFrom == 0 || atBlock >= effectiveFrom) {
+            return validator;
+        }
+
+        return address(0);
     }
 
     /**
@@ -746,13 +769,21 @@ contract Validators is Params, ReentrancyGuard, IValidators {
      * @return Count of validators eligible to vote
      */
     function getVotingValidatorCount() public view returns (uint256) {
+        return getVotingValidatorCountWithMinStake(proposal.minValidatorStake());
+    }
+
+    /**
+     * @dev Get count of voting validators under an arbitrary min-self-stake threshold.
+     * @param minStake Minimum self-stake threshold to evaluate.
+     * @return Count of validators eligible to vote under the supplied threshold.
+     */
+    function getVotingValidatorCountWithMinStake(uint256 minStake) public view returns (uint256) {
         uint256 currentSetLength = currentValidatorSet.length;
         uint256 count = 0;
-        uint256 minValidatorStake = proposal.minValidatorStake();
         for (uint256 i = 0; i < currentSetLength; i++) {
             address validator = currentValidatorSet[i];
             (uint256 selfStake,,,, bool isJailed,,,, bool isRegistered,) = staking.getValidatorInfo(validator);
-            if (isRegistered && !isJailed && selfStake >= minValidatorStake) {
+            if (isRegistered && !isJailed && selfStake >= minStake) {
                 count++;
             }
         }
@@ -960,12 +991,13 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         signerValidators[signer] = validator;
     }
 
-    function _recordHistoricalSigner(address validator, address signer) internal {
+    function _recordHistoricalSigner(address validator, address signer, uint256 effectiveFrom) internal {
         require(signer != address(0), "Invalid signer address");
         address historicalOwner = historicalSignerOwners[signer];
         require(historicalOwner == address(0) || historicalOwner == validator, "Signer already used");
         if (historicalOwner == address(0)) {
             historicalSignerOwners[signer] = validator;
+            signerHistoryEffectiveFrom[signer] = effectiveFrom;
         }
     }
 
@@ -1008,6 +1040,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         }
 
         address pendingSigner = pendingValidatorSigners[validator];
+        _recordHistoricalSigner(validator, pendingSigner, block.number);
         _assignCurrentSigner(validator, pendingSigner);
         _clearPendingSigner(validator);
     }
@@ -1099,6 +1132,13 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     function _isPendingSignerEffective(address validator) internal view returns (bool) {
         uint256 effectiveBlock = pendingSignerEpochs[validator];
         return effectiveBlock != 0 && block.number > effectiveBlock;
+    }
+
+    function _initialHistoricalSignerEffectiveFrom() internal view returns (uint256) {
+        if (block.number <= 1) {
+            return 0;
+        }
+        return block.number;
     }
 
     function _nextEpochStartBlock() internal view returns (uint256) {

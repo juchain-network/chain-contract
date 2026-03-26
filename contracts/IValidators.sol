@@ -49,6 +49,14 @@ interface IValidators {
     function getValidatorBySignerHistory(address signer) external view returns (address validator);
 
     /**
+     * @dev Resolves a signer address to its validator using historical bindings effective at a specific block.
+     * @param signer Signer hot address.
+     * @param atBlock Block number at which the signer must already be effective.
+     * @return validator Validator cold address, or zero if signer was not yet effective at that block.
+     */
+    function getValidatorBySignerHistoryAt(address signer, uint256 atBlock) external view returns (address validator);
+
+    /**
      * @dev Gets effective active signer set derived from current validator set.
      * @return signers Active signer addresses.
      */
@@ -92,6 +100,13 @@ interface IValidators {
      * @return Count of validators eligible to vote.
      */
     function getVotingValidatorCount() external view returns (uint256);
+
+    /**
+     * @dev Get count of voting validators under an arbitrary min-self-stake threshold.
+     * @param minStake Minimum self-stake threshold to evaluate.
+     * @return Count of validators that would remain eligible to vote under this threshold.
+     */
+    function getVotingValidatorCountWithMinStake(uint256 minStake) external view returns (uint256);
 
     /**
      * @dev Get the effective top validators after applying stake-based filtering.

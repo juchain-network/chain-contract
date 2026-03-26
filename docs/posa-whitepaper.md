@@ -170,6 +170,8 @@ This means:
 
 - each reward-eligible producer gets a fixed component
 - the rest depends on stake weight among reward-eligible validators
+- if the producer is no longer `isValidatorActive(...)` by block end, the block still stands but `actualReward = 0`
+- governance keeps `blockReward` inside a safe arithmetic bound for consensus reward math
 
 ### Reward Distribution Inside Staking
 
@@ -399,6 +401,9 @@ The current governable parameter set can be understood in four groups.
 - `maxValidators = 21`
 - `minDelegation = 10 JU`
 - `minUndelegation = 1 JU`
+
+`minValidatorStake` governance updates are additionally constrained so they cannot reduce the voting-validator count to
+zero.
 
 These parameters let the network tune validator economics and operational safety without redeploying the system contracts.
 

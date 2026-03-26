@@ -440,6 +440,56 @@ contract PunishDoubleSignEvidenceSignerSeparationTest is PunishDoubleSignEvidenc
         Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
     }
 
+    function testCheckpointBlockStillRejectsNextEpochSignerEvidence() public {
+        vm.prank(validator1);
+        Validators(VALIDATORS).createOrEditValidator(payable(validator1), newSigner, "", "", "", "", "");
+
+        vm.roll(10);
+        vm.coinbase(oldSigner);
+        address[] memory newSet = Validators(VALIDATORS).getTopValidators();
+        vm.prank(oldSigner);
+        Validators(VALIDATORS).updateActiveValidatorSet(newSet, 10);
+
+        bytes memory header1 = _buildSignedHeader(10, newSigner, bytes32(uint256(1)), bytes8(uint64(1)), NEW_SIGNER_KEY);
+        bytes memory header2 = _buildSignedHeader(10, newSigner, bytes32(uint256(2)), bytes8(uint64(2)), NEW_SIGNER_KEY);
+
+        vm.roll(11);
+        vm.expectRevert("Signer not exist");
+        Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
+    }
+
+    function testNextEpochSignerEvidenceSucceedsAfterActivationBeforeSync() public {
+        vm.prank(validator1);
+        Validators(VALIDATORS).createOrEditValidator(payable(validator1), newSigner, "", "", "", "", "");
+
+        vm.roll(10);
+        vm.coinbase(oldSigner);
+        address[] memory newSet = Validators(VALIDATORS).getTopValidators();
+        vm.prank(oldSigner);
+        Validators(VALIDATORS).updateActiveValidatorSet(newSet, 10);
+
+        bytes memory header1 = _buildSignedHeader(11, newSigner, bytes32(uint256(1)), bytes8(uint64(1)), NEW_SIGNER_KEY);
+        bytes memory header2 = _buildSignedHeader(11, newSigner, bytes32(uint256(2)), bytes8(uint64(2)), NEW_SIGNER_KEY);
+
+        vm.roll(12);
+
+        (uint256 selfStakeBefore,,,,,,,,,) = Staking(STAKING).getValidatorInfo(validator1);
+        uint256 slashAmount = Proposal(PROPOSAL).doubleSignSlashAmount();
+        uint256 rewardAmount = Proposal(PROPOSAL).doubleSignRewardAmount();
+        address reporter = vm.addr(0xCAFE02);
+        uint256 reporterBalanceBefore = reporter.balance;
+
+        vm.prank(reporter);
+        Punish(PUNISH).submitDoubleSignEvidence(header1, header2);
+
+        (uint256 selfStakeAfter,,,,,,,,,) = Staking(STAKING).getValidatorInfo(validator1);
+        uint256 actualSlash = slashAmount > selfStakeBefore ? selfStakeBefore : slashAmount;
+        uint256 actualReward = rewardAmount > actualSlash ? actualSlash : rewardAmount;
+
+        assertEq(selfStakeAfter, selfStakeBefore - actualSlash, "new signer should slash validator after activation");
+        assertEq(reporter.balance, reporterBalanceBefore + actualReward, "reporter reward mismatch");
+    }
+
     function testSubmitDoubleSignEvidenceZeroNumberLongExtra() public override {
         vm.roll(1);
         bytes memory extraTrimmed = new bytes(80);

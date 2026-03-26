@@ -190,7 +190,9 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
         assertEq(Validators(VALIDATORS).getValidatorSigner(v1), s1);
         assertEq(Validators(VALIDATORS).getValidatorBySigner(s1), v1);
         assertEq(Validators(VALIDATORS).getValidatorBySigner(newSigner), address(0));
-        assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(newSigner), v1);
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(newSigner), address(0));
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistoryAt(newSigner, 10), address(0));
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistoryAt(newSigner, 11), v1);
 
         vm.coinbase(s1);
         vm.deal(s1, 1 ether);
@@ -204,6 +206,7 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
         assertEq(Validators(VALIDATORS).getValidatorSigner(v1), newSigner);
         assertEq(Validators(VALIDATORS).getValidatorBySigner(newSigner), v1);
         assertEq(Validators(VALIDATORS).getValidatorBySigner(s1), address(0));
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(newSigner), v1);
 
         vm.coinbase(newSigner);
         vm.deal(newSigner, 1 ether);
@@ -289,7 +292,9 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
         address[] memory transitionAtCheckpoint = Validators(VALIDATORS).getTopSignersForEpochTransition();
         assertEq(runtimeAtCheckpoint[0], s1);
         assertEq(transitionAtCheckpoint[0], newSigner);
-        assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(newSigner), v1);
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(newSigner), address(0));
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistoryAt(newSigner, 10), address(0));
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistoryAt(newSigner, 11), v1);
 
         vm.roll(11);
 
@@ -297,6 +302,7 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
         address[] memory transitionAfterCheckpoint = Validators(VALIDATORS).getTopSignersForEpochTransition();
         assertEq(runtimeAfterCheckpoint[0], newSigner);
         assertEq(transitionAfterCheckpoint[0], newSigner);
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(newSigner), v1);
     }
 
     function testCandidateSignerDoesNotEnterHistoryBeforeActivationAndCanBeReusedAfterEdit() public {
@@ -328,6 +334,9 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
 
         _runEpochUpdate(s1);
 
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(signer), address(0));
+        assertEq(Validators(VALIDATORS).getValidatorBySignerHistoryAt(signer, 10), address(0));
+        vm.roll(11);
         assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(signer), otherValidator);
         assertEq(Validators(VALIDATORS).getValidatorBySignerHistory(replacementSigner), address(0));
     }

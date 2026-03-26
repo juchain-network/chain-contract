@@ -563,8 +563,10 @@ actualReward = fixedPart + weightedPart
 Implications:
 
 - `blockReward` is a base input, not the guaranteed final payout for every block
+- governance updates keep `blockReward` within a safe arithmetic bound
 - the producer's stake weight changes the final amount
 - jailed validators are excluded from reward eligibility immediately
+- if the producer is no longer `isValidatorActive(...)` by block end, the block remains valid but `actualReward = 0`
 
 ### 6.8 Current Risk Allocation Model
 
@@ -641,6 +643,7 @@ Track these separately:
 - missed-block counters and pending punishment queues in `Punish`
 - pending payout balances in `Staking.pendingPayouts`
 - pending signer rotations through `getPendingValidatorSigner(...)` / `getPendingValidatorBySigner(...)`
+- height-sensitive signer history through `getValidatorBySignerHistoryAt(signer, blockNumber)`
 
 For the pending signer getters:
 
@@ -736,6 +739,8 @@ Check the reward surface first:
 
 - is the difference in transaction-fee income or coinbase reward
 - was the validator jailed and therefore excluded from reward eligibility
+- did the producer fall below `minValidatorStake` or otherwise fail `isValidatorActive(...)` by block end, causing zero
+  base reward mint
 - did the validator hit `punishThreshold` and lose fee-income eligibility
 - is the balance queued in `pendingPayouts`
 - is the validator still waiting for `withdrawProfitPeriod`
@@ -757,6 +762,7 @@ Common causes:
 - headers are for different heights
 - headers are identical
 - signer recovery does not match
+- signer was not yet effective at the evidence height
 - evidence is outside `doubleSignWindow`
 - target validator no longer exists
 - call was made on an epoch block
@@ -802,6 +808,8 @@ High-value operational functions:
 - `getValidatorBySigner(address signer)`
 - `getPendingValidatorSigner(address validator)`
 - `getPendingValidatorBySigner(address signer)`
+- `getValidatorBySignerHistory(address signer)`
+- `getValidatorBySignerHistoryAt(address signer, uint256 blockNumber)`
 - `getActiveSigners()`
 - `getActiveValidators()`
 - `getActiveValidatorCount()`
@@ -826,8 +834,10 @@ System and evidence functions:
 ## 10. Best Practices Summary
 
 - treat `blockReward` as a formula input, not a fixed payout promise
+- remember that governance cannot raise `minValidatorStake` into a zero-voting-validator state
 - treat `currentValidatorSet` as an epoch cache, not the only source of effective validator status
 - separate fee-income accounting from coinbase reward accounting in monitoring and operations
+- distinguish parent-state block authorization from current-state reward eligibility
 - treat validator cold address, signer hot address, and `feeAddr` as separate roles unless you intentionally choose
   same-address mode
 - document clearly that delegation boosts validator ranking, while direct slash remains on validator self-stake

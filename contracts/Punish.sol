@@ -212,7 +212,7 @@ contract Punish is Params, ReentrancyGuard {
         require(number1 == number2, "Height mismatch");
         require(hash1 != hash2, "Same header");
         require(signer1 == signer2, "Different signer");
-        address validator = validators.getValidatorBySignerHistory(signer1);
+        address validator = validators.getValidatorBySignerHistoryAt(signer1, number1);
         require(validator != address(0), "Signer not exist");
         require(validators.isValidatorExist(validator), "Validator not exist");
         require(!doubleSigned[number1][validator], "Already punished");

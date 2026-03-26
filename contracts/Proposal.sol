@@ -28,6 +28,7 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 private constant DEFAULT_MAX_COMMISSION_RATE = 6000; // 60.00%
     uint256 private constant DEFAULT_PROPOSAL_COOLDOWN = 100; // 100 blocks
     address private constant DEFAULT_BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
+    uint256 private constant MAX_SAFE_BLOCK_REWARD = type(uint256).max / CONSENSUS_MAX_VALIDATORS;
 
     // How many blocks a proposal will exist
     uint256 public proposalLastingPeriod;
@@ -410,6 +411,13 @@ contract Proposal is Params, ReentrancyGuard {
             require(decreaseRate <= value, "removeThreshold must be >= decreaseRate");
         } else if (cid == 3) {
             require(value <= removeThreshold, "decreaseRate must be <= removeThreshold");
+        } else if (cid == 5) {
+            require(value <= MAX_SAFE_BLOCK_REWARD, "blockReward exceeds safe bound");
+        } else if (cid == 8) {
+            require(
+                validators.getVotingValidatorCountWithMinStake(value) > 0,
+                "minValidatorStake would remove all voting validators"
+            );
         } else if (cid == 9) {
             require(value <= CONSENSUS_MAX_VALIDATORS, "maxValidators exceeds consensus limit");
         } else if (cid == 12) {

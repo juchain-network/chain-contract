@@ -294,8 +294,11 @@ Other important storage:
    - `getPendingValidatorSigner(validator)`
    - `getPendingValidatorBySigner(signer)`
    - `getValidatorBySignerHistory(signer)`
+   - `getValidatorBySignerHistoryAt(signer, blockNumber)`
    - pending signer rotation activates from the first block after the next epoch checkpoint
    - historical signer ownership is recorded only after that signer has actually entered the on-chain effective signer set
+   - `getValidatorBySignerHistoryAt(...)` is the height-sensitive source of truth for evidence handling; a signer that is
+     only configured or only pending is not historical yet
 3. Set management
    - `currentValidatorSet` is the epoch-effective validator cold-address set
    - `highestValidatorsSet` is the validator cold-address candidate cache
@@ -509,17 +512,22 @@ Upgrade note:
 
 ### 3.5 Coinbase Reward Flow
 
-1. Congress reads `Proposal.blockReward()` and `Proposal.baseRewardRatio()`.
-2. Congress queries `Validators.getRewardEligibleSignersWithStakes()`.
-3. Congress computes `actualReward`.
-4. Congress credits the producer and calls `Staking.distributeRewards{value: actualReward}()`.
-5. `Staking.distributeRewards()`:
+1. Congress resolves `block.coinbase` to the current validator cold address in the post-transaction current state.
+2. Congress checks `Validators.isValidatorActive(validator)` in that same current state.
+3. If the producer is still active, Congress reads `Proposal.blockReward()` / `baseRewardRatio()` and queries
+   `Validators.getRewardEligibleSignersWithStakes()` from the parent-state reward view.
+4. Congress computes `actualReward`.
+5. If the producer is no longer active by block end, or if the computed reward would overflow `uint256`, the block
+   remains valid but `actualReward = 0`.
+6. Congress credits the producer and calls `Staking.distributeRewards{value: actualReward}()`.
+7. `Staking.distributeRewards()`:
    - resolves `block.coinbase` signer to the validator cold address
    - records validator activity via `lastActiveBlock`
+   - exits early if the validator is no longer registered / active for payout
    - takes validator commission
    - allocates validator self-stake share
    - updates `rewardPerShare[validator]` for delegators
-6. Later withdrawals happen through:
+8. Later withdrawals happen through:
    - `claimRewards(validator)` for delegators
    - `claimValidatorRewards()` for validators
 
@@ -533,7 +541,8 @@ Upgrade note:
 5. `handleEpochTransition(...)`:
    - calls `updateValidators(newValidatorSet, ...)`
    - calls `decreaseMissedBlocksCounter(...)`
-6. `Validators.updateActiveValidatorSet(newValidatorSet, epoch)` replaces `currentValidatorSet`.
+6. `Validators.updateActiveValidatorSet(newValidatorSet, epoch)` replaces `currentValidatorSet` and records any
+   next-epoch signer history with `effectiveFrom = N + 1`.
 
 ### 3.7 Bootstrap and Migration Flow
 
@@ -753,8 +762,9 @@ Double-sign evidence path:
 
 1. reporter submits two conflicting headers
 2. `Punish` recovers the signer and checks the evidence window
-3. the signer is resolved through `getValidatorBySignerHistory(...)`, so evidence can still target a recently rotated
-   signer, but not a signer that was only configured and never became effective on-chain
+3. the signer is resolved through `getValidatorBySignerHistoryAt(signer, height)`, so evidence can still target a
+   recently rotated signer, but not a signer that was only configured / pending and never became effective on-chain at
+   the evidence height
 4. validator is jailed if at least one other voting validator remains
 5. `Staking.slashValidator(...)` slashes self-stake
 6. reporter reward is paid
@@ -1062,6 +1072,8 @@ Several removal paths preserve liveness by refusing to collapse the effective va
 - configuration proposals validate before creation and before application
 - add-validator proposals cannot be spammed against a still-valid passed authorization
 - proposer cooldown avoids rapid proposal churn from one validator
+- `blockReward` is hard-bounded so Congress reward math cannot overflow `uint256`
+- `minValidatorStake` updates are rejected if they would drop the voting-validator count to zero
 
 ### 9.8 Reward Safety
 
@@ -1073,6 +1085,13 @@ Several removal paths preserve liveness by refusing to collapse the effective va
 - delegator reward withdrawal
 
 as separate balances with separate claim paths.
+
+Additional reward-safety rules:
+
+- parent-state signer snapshots determine block authorization
+- current-state `isValidatorActive(...)` determines whether the producer still earns base reward at block end
+- if the producer loses eligibility by block end, the block still stands but no new base reward is minted
+- zero-reward settlement still refreshes `lastActiveBlock`, preserving the double-sign exit guard
 
 ## 10. FAQ
 

@@ -3,6 +3,7 @@ pragma solidity ^0.8.29;
 
 import {BaseSetup} from "./BaseSetup.t.sol";
 import {Proposal} from "../contracts/Proposal.sol";
+import {Staking} from "../contracts/Staking.sol";
 
 // Supplement missing Proposal test cases
 contract ProposalMissingFoundryTest is BaseSetup {
@@ -663,6 +664,14 @@ contract ProposalMissingFoundryTest is BaseSetup {
         p.createUpdateConfigProposal(5, invalidValue);
     }
 
+    function testUpdateConfigCID5RejectsOverflowBound() public {
+        Proposal p = Proposal(PROPOSAL);
+
+        vm.expectRevert("blockReward exceeds safe bound");
+        vm.prank(v1);
+        p.createUpdateConfigProposal(5, type(uint256).max);
+    }
+
     function testUpdateConfigCID6Invalid() public {
         // Test updating unbondingPeriod with invalid value (cid=6)
         Proposal p = Proposal(PROPOSAL);
@@ -688,7 +697,12 @@ contract ProposalMissingFoundryTest is BaseSetup {
     function testUpdateConfigCID8() public {
         // Test updating minValidatorStake (cid=8)
         Proposal p = Proposal(PROPOSAL);
-        uint256 validValue = 200000 ether; // New minimum validator stake
+        uint256 validValue = 150000 ether; // New minimum validator stake
+        uint256 extraStake = 100000 ether;
+
+        vm.deal(v1, extraStake);
+        vm.prank(v1);
+        Staking(STAKING).addValidatorStake{value: extraStake}();
 
         vm.prank(v1);
         bytes32 id = p.createUpdateConfigProposal(8, validValue);
@@ -734,6 +748,14 @@ contract ProposalMissingFoundryTest is BaseSetup {
         vm.expectRevert("Config value must be positive");
         vm.prank(v1); // Use validator v1 as proposer
         p.createUpdateConfigProposal(8, invalidValue);
+    }
+
+    function testUpdateConfigCID8RejectsRemovingAllVotingValidators() public {
+        Proposal p = Proposal(PROPOSAL);
+
+        vm.expectRevert("minValidatorStake would remove all voting validators");
+        vm.prank(v1);
+        p.createUpdateConfigProposal(8, 200000 ether);
     }
 
     function testUpdateConfigCID9Invalid() public {
