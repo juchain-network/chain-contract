@@ -385,6 +385,10 @@ Behavior:
 - the feeAddr-only overload keeps the current signer unchanged
 - if a signer is provided for a registered validator, the old signer stays valid through the next epoch checkpoint block
   and the new signer becomes effective from the first block after that checkpoint
+- once a rotation has crossed that checkpoint, the new signer node should already be online for block production; if the
+  validator is then jailed, removed, or resigns before the next checkpoint, contract cleanup preserves the active
+  signer-to-validator mapping long enough for Congress punishment/reward settlement to stay aligned with the current
+  epoch snapshot
 - if the validator leaves before the pending signer activates, the pending signer reservation is cleared
 - existing registered validators may continue to update `feeAddr`, metadata, and signer binding even after `pass` has
   been cleared, as long as the validator still exists in `Staking`
@@ -679,6 +683,12 @@ Check the following in order:
 6. is the signer hot key unlocked or external signer available
 7. does the node have stable peer connectivity
 8. is the validator being rejected by Congress because the parent state already marks it jailed
+
+Operational note for signer rotation:
+
+- keep the old signer running through the checkpoint block that commits the rotation
+- have the new signer node ready before the first post-checkpoint block, otherwise the new signer will start missing
+  scheduled turns immediately and can be punished/jail-removed by the normal Congress flow
 
 ### 8.2 Proposal Creation or Voting Fails
 

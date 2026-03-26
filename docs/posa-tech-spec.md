@@ -371,6 +371,9 @@ Other important storage:
 - `getTopValidators()` delegates to `Staking.getTopValidators(highestValidatorsSet)`
 - when a registered validator rotates signer, the old signer remains valid through the checkpoint block itself and the
   new signer becomes effective from the first block after that checkpoint
+- if that new signer is already effective when a removal/resign/highest-set-cleanup path runs, `Validators` first
+  materializes the due signer into the current signer mapping before clearing pending state, so punishment and reward
+  resolution stay consistent with the epoch snapshot signer set
 - validator removal and voluntary exit clear any pending signer reservation for that validator
 - `removeFromHighestSet()` preserves at least one remaining validator in `highestValidatorsSet`
 
@@ -739,6 +742,8 @@ When `Punish.punish(val)` runs:
 4. if threshold is hit on a normal block:
    - `punishThreshold` removes fee-income eligibility
    - `removeThreshold` jails and removes the validator
+5. if the punished validator had a signer rotation that was already runtime-effective, the effective signer-to-validator
+   mapping is preserved during cleanup so later punishment against the still-live epoch snapshot signer will not revert
 
 Counter decay happens at epoch blocks through `decreaseMissedBlocksCounter(epoch)`.
 

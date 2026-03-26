@@ -451,6 +451,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Note: Status is now managed by Staking contract
         // jailValidator() is called before removeValidator(), so isJailed should already be set
         // We don't set status here anymore
+        _materializeDueSignerBeforeCleanup(val);
 
         tryRemoveValidatorIncoming(val);
 
@@ -997,6 +998,10 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         delete pendingSignerEpochs[validator];
     }
 
+    function _materializeDueSignerBeforeCleanup(address validator) internal {
+        _syncPendingSignerIfDue(validator);
+    }
+
     function _syncPendingSignerIfDue(address validator) internal {
         if (!_isPendingSignerEffective(validator)) {
             return;
@@ -1175,6 +1180,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         }
 
         // If validator is in set, ensure removing them won't leave less than 1 validator
+        _materializeDueSignerBeforeCleanup(validator);
         if (isInSet) {
             require(
                 highestValidatorsSet.length > 1,

@@ -5,6 +5,7 @@ import {BaseSetup} from "./BaseSetup.t.sol";
 import {Validators} from "../contracts/Validators.sol";
 import {Proposal} from "../contracts/Proposal.sol";
 import {Staking} from "../contracts/Staking.sol";
+import {Punish} from "../contracts/Punish.sol";
 
 contract ValidatorSignerFoundryTest is BaseSetup {
     address internal v1;
@@ -408,5 +409,120 @@ contract ValidatorSignerEpochFoundryTest is BaseSetup {
         Proposal(PROPOSAL).voteProposal(id, true);
         vm.prank(v2);
         Proposal(PROPOSAL).voteProposal(id, true);
+    }
+}
+
+contract ValidatorSignerPunishRegressionFoundryTest is BaseSetup {
+    uint256 internal constant LARGE_EPOCH = 1000;
+
+    address internal v1;
+    address internal v2;
+    address internal v3;
+    address internal s1;
+    address internal s2;
+    address internal s3;
+
+    function setUp() public {
+        v1 = makeAddr("reg-v1");
+        v2 = makeAddr("reg-v2");
+        v3 = makeAddr("reg-v3");
+        s1 = vm.addr(0x301);
+        s2 = vm.addr(0x302);
+        s3 = vm.addr(0x303);
+
+        address[] memory initVals = new address[](3);
+        initVals[0] = v1;
+        initVals[1] = v2;
+        initVals[2] = v3;
+
+        address[] memory initSigners = new address[](3);
+        initSigners[0] = s1;
+        initSigners[1] = s2;
+        initSigners[2] = s3;
+
+        deploySystem(initVals, initSigners, LARGE_EPOCH);
+        vm.roll(5);
+    }
+
+    function testDueSignerRemovalKeepsSignerResolutionForFurtherPunish() public {
+        address rotatedSigner = vm.addr(0x30A);
+        uint256 removeThreshold = Proposal(PROPOSAL).removeThreshold();
+
+        _scheduleRotation(rotatedSigner);
+        _runEpochUpdate();
+
+        vm.roll(LARGE_EPOCH + 1);
+        assertEq(Validators(VALIDATORS).getValidatorSigner(v1), rotatedSigner);
+        assertEq(Validators(VALIDATORS).getValidatorBySigner(rotatedSigner), v1);
+
+        (address pendingSignerBefore,, bool pendingBefore) = Validators(VALIDATORS).getPendingValidatorSigner(v1);
+        assertEq(pendingSignerBefore, rotatedSigner);
+        assertTrue(pendingBefore);
+
+        _punishAs(s2, rotatedSigner, removeThreshold);
+
+        assertTrue(Staking(STAKING).isValidatorJailed(v1));
+        assertEq(Validators(VALIDATORS).getValidatorSigner(v1), rotatedSigner);
+        assertEq(Validators(VALIDATORS).getValidatorBySigner(rotatedSigner), v1);
+
+        (address pendingSignerAfter, uint256 effectiveBlockAfter, bool pendingAfter) =
+            Validators(VALIDATORS).getPendingValidatorSigner(v1);
+        assertEq(pendingSignerAfter, address(0));
+        assertEq(effectiveBlockAfter, 0);
+        assertFalse(pendingAfter);
+
+        vm.roll(block.number + 1);
+        vm.coinbase(s2);
+        vm.prank(s2);
+        Punish(PUNISH).punish(rotatedSigner);
+
+        assertEq(Punish(PUNISH).getPunishRecord(v1), 1);
+    }
+
+    function testResignAfterDueSignerKeepsCurrentSignerResolution() public {
+        address rotatedSigner = vm.addr(0x30B);
+
+        _scheduleRotation(rotatedSigner);
+        _runEpochUpdate();
+
+        vm.roll(LARGE_EPOCH + 1);
+        assertEq(Validators(VALIDATORS).getValidatorSigner(v1), rotatedSigner);
+        assertEq(Validators(VALIDATORS).getValidatorBySigner(rotatedSigner), v1);
+
+        vm.prank(v1);
+        Staking(STAKING).resignValidator();
+
+        assertEq(Validators(VALIDATORS).getValidatorSigner(v1), rotatedSigner);
+        assertEq(Validators(VALIDATORS).getValidatorBySigner(rotatedSigner), v1);
+
+        (address pendingSignerAfter, uint256 effectiveBlockAfter, bool pendingAfter) =
+            Validators(VALIDATORS).getPendingValidatorSigner(v1);
+        assertEq(pendingSignerAfter, address(0));
+        assertEq(effectiveBlockAfter, 0);
+        assertFalse(pendingAfter);
+    }
+
+    function _scheduleRotation(address signer) internal {
+        vm.prank(v1);
+        Validators(VALIDATORS).createOrEditValidator(payable(v1), signer, "", "", "", "", "");
+    }
+
+    function _runEpochUpdate() internal {
+        vm.roll(LARGE_EPOCH);
+        vm.coinbase(s1);
+        address[] memory newSet = Validators(VALIDATORS).getTopValidators();
+        vm.prank(s1);
+        Validators(VALIDATORS).updateActiveValidatorSet(newSet, LARGE_EPOCH);
+    }
+
+    function _punishAs(address minerSigner, address target, uint256 times) internal {
+        for (uint256 i = 0; i < times; i++) {
+            vm.coinbase(minerSigner);
+            vm.prank(minerSigner);
+            Punish(PUNISH).punish(target);
+            if (i + 1 < times) {
+                vm.roll(block.number + 1);
+            }
+        }
     }
 }
