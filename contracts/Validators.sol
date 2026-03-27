@@ -82,7 +82,7 @@ contract Validators is Params, ReentrancyGuard, IValidators {
     // signer hot address => first block number at which the signer became effective
     // value 0 means legacy/unbounded compatibility (or genesis-effective from block 0)
     mapping(address => uint256) private signerHistoryEffectiveFrom;
-    uint256[49] private __gap;
+    uint256[50] private __gap;
 
     event LogEditValidator(address indexed val, address indexed fee, uint256 time);
     event LogActive(address indexed val, uint256 time);
