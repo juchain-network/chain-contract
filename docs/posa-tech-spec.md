@@ -613,10 +613,10 @@ Prepare therefore commits the next epoch signer list into `header.Extra` before 
 
 In current PoSA mode it:
 
-1. rejects blocks from validators that are already jailed in parent state
+1. rejects blocks from signers that are not parent-state authorized / active validators
 2. rejects unauthorized external system transactions
 3. initializes or migrates system contracts when required
-4. punishes out-of-turn validators if needed
+4. punishes out-of-turn validators if needed (inactive or unmapped parent-state targets are skipped)
 5. executes pending punishments
 6. distributes transaction-fee rewards
 7. distributes coinbase reward
@@ -747,11 +747,13 @@ When `Punish.punish(val)` runs:
 
 1. missed-block counter increments
 2. the input is resolved from current signer hot address to validator cold address when needed
-3. if threshold is hit on an epoch block, the action is queued
-4. if threshold is hit on a normal block:
+3. if the resolved validator is already non-active (`!isValidatorActive`), punishment is skipped and the counter is not
+   changed
+4. if threshold is hit on an epoch block, the action is queued
+5. if threshold is hit on a normal block:
    - `punishThreshold` removes fee-income eligibility
    - `removeThreshold` jails and removes the validator
-5. if the punished validator had a signer rotation that was already runtime-effective, the effective signer-to-validator
+6. if the punished validator had a signer rotation that was already runtime-effective, the effective signer-to-validator
    mapping is preserved during cleanup so later punishment against the still-live epoch snapshot signer will not revert
 
 Counter decay happens at epoch blocks through `decreaseMissedBlocksCounter(epoch)`.

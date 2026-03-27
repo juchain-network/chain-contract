@@ -95,6 +95,29 @@ contract PunishMissingFoundryTest is BaseSetup {
         require(punish.getPunishRecord(v1) == 0, "v1 punish record should remain cleaned");
     }
 
+    function testPunishSkipsInactiveValidatorCounterUpdate() public {
+        Punish punish = Punish(PUNISH);
+
+        vm.coinbase(VALIDATORS);
+        vm.startPrank(VALIDATORS);
+
+        // Jail and remove validator by reaching removeThreshold.
+        for (uint256 i = 0; i < 48; i++) {
+            vm.roll(block.number + 1);
+            punish.punish(v1);
+        }
+
+        require(isJailed(v1), "v1 should be jailed");
+        require(punish.getPunishRecord(v1) == 0, "punish record should reset at remove threshold");
+
+        // Additional punish attempts against inactive validator should not accumulate counter again.
+        vm.roll(block.number + 1);
+        punish.punish(v1);
+        require(punish.getPunishRecord(v1) == 0, "inactive validator should not accumulate missed blocks");
+
+        vm.stopPrank();
+    }
+
     function testOnlyNotPunishedModifier() public {
         // Test that onlyNotPunished modifier prevents multiple punish calls in the same block
         Punish punish = Punish(PUNISH);

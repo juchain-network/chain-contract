@@ -131,6 +131,13 @@ contract Punish is Params, ReentrancyGuard {
             }
         }
 
+        // Skip ineffective punishment targets:
+        // once validator is no longer consensus-active (e.g. jailed / below min stake / not in current set),
+        // further missed-block accumulation is meaningless and can diverge from consensus snapshot timing.
+        if (!validators.isValidatorActive(validator)) {
+            return;
+        }
+
         if (!punishRecords[validator].exist) {
             punishRecords[validator].index = punishValidators.length;
             punishValidators.push(validator);

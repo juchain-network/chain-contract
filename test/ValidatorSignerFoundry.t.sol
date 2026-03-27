@@ -485,7 +485,8 @@ contract ValidatorSignerPunishRegressionFoundryTest is BaseSetup {
         vm.prank(s2);
         Punish(PUNISH).punish(rotatedSigner);
 
-        assertEq(Punish(PUNISH).getPunishRecord(v1), 1);
+        // v1 is already non-active (jailed), so punish short-circuits and counter must stay unchanged.
+        assertEq(Punish(PUNISH).getPunishRecord(v1), 0);
     }
 
     function testResignAfterDueSignerKeepsCurrentSignerResolution() public {
