@@ -288,6 +288,20 @@ contract StakingBranchFoundryTest is BaseSetup {
         Staking(STAKING).distributeRewards{value: 1 ether}();
     }
 
+    function testDistributeRewardsReturnsWhenMappedValidatorUnregistered() public {
+        address candidate = makeAddr("staking-branch-unregistered");
+        address candidateSigner = vm.addr(0x451);
+        _passProposal(candidate);
+
+        vm.prank(candidate);
+        Validators(VALIDATORS).createOrEditValidator(payable(candidate), candidateSigner, "", "", "", "", "");
+
+        vm.coinbase(candidateSigner);
+        vm.deal(candidateSigner, 1 ether);
+        vm.prank(candidateSigner);
+        Staking(STAKING).distributeRewards{value: 1 ether}();
+    }
+
     function testDistributeRewardsReturnsWhenValidatorJailed() public {
         vm.prank(PUNISH);
         Staking(STAKING).jailValidator(v1, 10);
@@ -314,6 +328,44 @@ contract StakingBranchFoundryTest is BaseSetup {
         vm.deal(candidate, 1 ether);
         vm.prank(candidate);
         Staking(STAKING).distributeRewards{value: 1 ether}();
+    }
+
+    function testWithdrawUnbondedKeepsDelegationWhenUnbondingsRemain() public {
+        address delegator = makeAddr("staking-branch-delegator");
+        vm.deal(delegator, 100 ether);
+
+        vm.startPrank(delegator);
+        Staking(STAKING).delegate{value: 30 ether}(v1);
+        Staking(STAKING).undelegate(v1, 10 ether);
+        vm.stopPrank();
+
+        uint256 unbondingPeriod = Proposal(PROPOSAL).unbondingPeriod();
+        vm.roll(block.number + unbondingPeriod + 1);
+
+        vm.prank(delegator);
+        Staking(STAKING).withdrawUnbonded(v1, 1);
+
+        (uint256 delegatedAmount,) = Staking(STAKING).delegations(delegator, v1);
+        assertEq(delegatedAmount, 20 ether);
+    }
+
+    function testSuccessfulUnjailPath() public {
+        address candidate = makeAddr("staking-branch-unjail-success");
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
+        vm.deal(candidate, minStake);
+        _passProposal(candidate);
+
+        vm.prank(candidate);
+        Staking(STAKING).registerValidator{value: minStake}(1000);
+
+        vm.prank(PUNISH);
+        Staking(STAKING).jailValidator(candidate, 1);
+
+        vm.roll(Proposal(PROPOSAL).epoch() + 1);
+        vm.prank(candidate);
+        Staking(STAKING).unjailValidator(candidate);
+
+        assertFalse(Staking(STAKING).isValidatorJailed(candidate));
     }
 
     function testClaimValidatorRewardsRejectsUnregisteredValidator() public {

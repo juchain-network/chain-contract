@@ -274,6 +274,11 @@ contract ProposalFoundryTest is BaseSetup {
         require(Proposal(PROPOSAL).validatorUnjailPeriod() == 86400, "cid7");
     }
 
+    function testConfigUpdateProposalCooldown() public {
+        _updateConfigAndAssert(19, 123);
+        require(Proposal(PROPOSAL).proposalCooldown() == 123, "cid19");
+    }
+
     function testUpdateConfigWithInvalidCID() public {
         // Test updateConfig with an invalid CID (should revert during proposal creation)
         Proposal p = Proposal(PROPOSAL);

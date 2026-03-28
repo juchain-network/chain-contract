@@ -115,6 +115,29 @@ contract ValidatorsBranchFoundryTest is BaseSetup {
         require(!ok, "second reward in same block should fail");
     }
 
+    function testDistributeBlockRewardReturnsWhenSignerUnmapped() public {
+        address stranger = makeAddr("validators-branch-stranger");
+        vm.coinbase(stranger);
+        vm.deal(stranger, 1 ether);
+
+        vm.prank(stranger);
+        Validators(VALIDATORS).distributeBlockReward{value: 1 ether}();
+    }
+
+    function testDistributeBlockRewardReturnsWhenMappedValidatorNotRegistered() public {
+        address candidate = makeAddr("validators-branch-unregistered");
+        address candidateSigner = vm.addr(0x398);
+        _passProposal(candidate);
+
+        vm.prank(candidate);
+        Validators(VALIDATORS).createOrEditValidator(payable(candidate), candidateSigner, "", "", "", "", "");
+
+        vm.coinbase(candidateSigner);
+        vm.deal(candidateSigner, 1 ether);
+        vm.prank(candidateSigner);
+        Validators(VALIDATORS).distributeBlockReward{value: 1 ether}();
+    }
+
     function testUpdateActiveValidatorSetReturnsWhenRepeatedInSameBlock() public {
         uint256 epoch = Validators(VALIDATORS).epoch();
         address[] memory newSet = Validators(VALIDATORS).getTopValidators();
@@ -164,6 +187,60 @@ contract ValidatorsBranchFoundryTest is BaseSetup {
         assertEq(pendingSigner, nextSigner);
     }
 
+    function testCreateOrEditValidatorClearsPendingSignerWhenResetToCurrentSigner() public {
+        address candidate = makeAddr("validators-branch-clear-pending");
+        _passProposal(candidate);
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
+        vm.deal(candidate, minStake);
+
+        vm.prank(candidate);
+        Staking(STAKING).registerValidator{value: minStake}(1000);
+
+        address originalSigner = Validators(VALIDATORS).getValidatorSigner(candidate);
+        address nextSigner = vm.addr(0x39A);
+
+        vm.prank(candidate);
+        Validators(VALIDATORS).createOrEditValidator(payable(candidate), nextSigner, "", "", "", "", "");
+
+        (address pendingSigner,, bool pending) = Validators(VALIDATORS).getPendingValidatorSigner(candidate);
+        assertTrue(pending);
+        assertEq(pendingSigner, nextSigner);
+
+        vm.prank(candidate);
+        Validators(VALIDATORS).createOrEditValidator(payable(candidate), originalSigner, "", "", "", "", "");
+
+        (pendingSigner,, pending) = Validators(VALIDATORS).getPendingValidatorSigner(candidate);
+        assertFalse(pending);
+        assertEq(pendingSigner, address(0));
+    }
+
+    function testCreateOrEditValidatorReplacesOldPendingSignerReservation() public {
+        address candidate = makeAddr("validators-branch-replace-pending");
+        _passProposal(candidate);
+        uint256 minStake = Proposal(PROPOSAL).minValidatorStake();
+        vm.deal(candidate, minStake);
+
+        vm.prank(candidate);
+        Staking(STAKING).registerValidator{value: minStake}(1000);
+
+        address signerA = vm.addr(0x39B);
+        address signerB = vm.addr(0x39C);
+
+        vm.prank(candidate);
+        Validators(VALIDATORS).createOrEditValidator(payable(candidate), signerA, "", "", "", "", "");
+
+        vm.prank(candidate);
+        Validators(VALIDATORS).createOrEditValidator(payable(candidate), signerB, "", "", "", "", "");
+
+        (address validatorA,, bool pendingA) = Validators(VALIDATORS).getPendingValidatorBySigner(signerA);
+        assertEq(validatorA, address(0));
+        assertFalse(pendingA);
+
+        (address validatorB,, bool pendingB) = Validators(VALIDATORS).getPendingValidatorBySigner(signerB);
+        assertEq(validatorB, candidate);
+        assertTrue(pendingB);
+    }
+
     function testValidateDescriptionRejectsIdentityTooLong() public {
         string memory tooLongIdentity = _generateString(3001);
         vm.expectRevert("Invalid identity length");
@@ -186,6 +263,48 @@ contract ValidatorsBranchFoundryTest is BaseSetup {
         string memory tooLongDetails = _generateString(281);
         vm.expectRevert("Invalid details length");
         Validators(VALIDATORS).validateDescription("", "", "", "", tooLongDetails);
+    }
+
+    function testIsActiveValidatorReturnsFalseForUnknownAddress() public {
+        assertFalse(Validators(VALIDATORS).isActiveValidator(makeAddr("validators-branch-not-active")));
+    }
+
+    function testIsTopValidatorReturnsFalseForUnknownAddress() public {
+        assertFalse(Validators(VALIDATORS).isTopValidator(makeAddr("validators-branch-not-top")));
+    }
+
+    function testDistributeBlockRewardZeroValueWithAllValidatorsIneligible() public {
+        vm.prank(PUNISH);
+        Staking(STAKING).jailValidator(v1, 10);
+        vm.prank(PUNISH);
+        Staking(STAKING).jailValidator(v2, 10);
+        vm.prank(PUNISH);
+        Staking(STAKING).jailValidator(v3, 10);
+
+        vm.coinbase(s1);
+        vm.prank(s1);
+        Validators(VALIDATORS).distributeBlockReward();
+    }
+
+    function testRemoveFromHighestSetBreaksWhenValidatorFound() public {
+        vm.prank(STAKING);
+        Validators(VALIDATORS).removeFromHighestSet(v1);
+
+        assertFalse(Validators(VALIDATORS).isTopValidator(v1));
+    }
+
+    function testStandaloneInitializeRecordsHistoricalSignerFromCurrentBlock() public {
+        Validators fresh = new Validators();
+        address[] memory vals = new address[](1);
+        vals[0] = makeAddr("validators-branch-fresh");
+        address[] memory signers = new address[](1);
+        signers[0] = vm.addr(0x39D);
+
+        vm.roll(5);
+        fresh.initialize(vals, signers, PROPOSAL, PUNISH, STAKING);
+
+        assertEq(fresh.getValidatorBySignerHistoryAt(signers[0], 4), address(0));
+        assertEq(fresh.getValidatorBySignerHistoryAt(signers[0], 5), vals[0]);
     }
 
     function _passProposal(address candidate) internal {

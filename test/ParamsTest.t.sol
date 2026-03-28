@@ -34,7 +34,15 @@ contract TestableParams is Params {
         return true;
     }
 
+    function callOnlyPunishOrValidatorsContract() external view onlyPunishOrValidatorsContract returns (bool) {
+        return true;
+    }
+
     function callOnlyBlockEpoch(uint256 epoch) external view onlyBlockEpoch(epoch) returns (bool) {
+        return true;
+    }
+
+    function callOnlyNotEpoch() external view onlyNotEpoch returns (bool) {
         return true;
     }
 
@@ -147,5 +155,29 @@ contract ParamsTest is Test {
         vm.roll(25); // 25 % 10 != 0
         vm.expectRevert("Block epoch only");
         params.callOnlyBlockEpoch(epoch);
+    }
+
+    function testOnlyNotEpochModifier() public {
+        uint256 epoch = 10;
+        params.setEpochForTest(epoch);
+
+        vm.roll(21);
+        assertTrue(params.callOnlyNotEpoch());
+
+        vm.roll(20);
+        vm.expectRevert("Epoch block forbidden");
+        params.callOnlyNotEpoch();
+    }
+
+    function testOnlyPunishOrValidatorsContractModifier() public {
+        vm.prank(params.PUNISH_ADDR());
+        assertTrue(params.callOnlyPunishOrValidatorsContract());
+
+        vm.prank(params.VALIDATOR_ADDR());
+        assertTrue(params.callOnlyPunishOrValidatorsContract());
+
+        vm.prank(address(0x123));
+        vm.expectRevert("Only punish or validators contract can call this function");
+        params.callOnlyPunishOrValidatorsContract();
     }
 }
