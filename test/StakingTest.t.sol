@@ -1036,6 +1036,19 @@ contract StakingTest is Test {
         assertEq(commissionRate, 3000);
     }
 
+    function testUpdateCommissionRate_DoesNotOverflowOnLargeCooldown() public {
+        _setupValidatorPass(VALIDATOR1);
+        vm.startPrank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+
+        Staking(STAKING).updateCommissionRate(2000);
+        vm.store(PROPOSAL, bytes32(uint256(68)), bytes32(type(uint256).max));
+
+        vm.expectRevert("Commission update too frequent");
+        Staking(STAKING).updateCommissionRate(3000);
+        vm.stopPrank();
+    }
+
     function test_RevertWhen_UpdateInvalidCommissionRate() public {
         // Register a validator first
         _setupValidatorPass(VALIDATOR1);
@@ -1704,7 +1717,7 @@ contract StakingTest is Test {
         Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
 
         // Set initial accumulatedRewards
-        bytes32 validatorStakeSlot = keccak256(abi.encode(VALIDATOR1, uint256(2)));
+        bytes32 validatorStakeSlot = keccak256(abi.encode(VALIDATOR1, uint256(52)));
         vm.store(STAKING, bytes32(uint256(validatorStakeSlot) + 3), bytes32(uint256(100 ether))); // accumulatedRewards
 
         // First claim should work since lastClaimBlock is 0
@@ -1751,6 +1764,23 @@ contract StakingTest is Test {
         vm.roll(lastClaimBlock + withdrawPeriod);
 
         // Claim rewards after wait period (should succeed)
+        Staking(STAKING).claimValidatorRewards();
+        vm.stopPrank();
+    }
+
+    function testClaimRewards_DoesNotOverflowOnLargeWithdrawPeriod() public {
+        _setupValidatorPass(VALIDATOR1);
+        vm.startPrank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+        vm.coinbase(VALIDATOR1);
+        vm.deal(VALIDATOR1, 200 ether);
+        Staking(STAKING).distributeRewards{value: 100 ether}();
+        Staking(STAKING).claimValidatorRewards();
+        vm.roll(block.number + 1);
+        Staking(STAKING).distributeRewards{value: 50 ether}();
+        vm.store(PROPOSAL, bytes32(uint256(56)), bytes32(type(uint256).max));
+
+        vm.expectRevert("Must wait withdrawProfitPeriod blocks between claims");
         Staking(STAKING).claimValidatorRewards();
         vm.stopPrank();
     }
@@ -2500,6 +2530,20 @@ contract StakingTest is Test {
         // Try to resign when already jailed - should revert
         vm.prank(VALIDATOR1);
         vm.expectRevert("Validator already resigned or jailed");
+        Staking(STAKING).resignValidator();
+    }
+
+    function testResignValidator_DoesNotOverflowOnLargeDoubleSignWindow() public {
+        _setupValidatorPass(VALIDATOR1);
+        vm.prank(VALIDATOR1);
+        Staking(STAKING).registerValidator{value: MIN_STAKE}(COMMISSION_RATE);
+
+        vm.prank(VALIDATORS);
+        Staking(STAKING).updateLastActiveBlock(VALIDATOR1);
+        vm.store(PROPOSAL, bytes32(uint256(66)), bytes32(type(uint256).max));
+
+        vm.prank(VALIDATOR1);
+        vm.expectRevert("Exit blocked in doubleSignWindow");
         Staking(STAKING).resignValidator();
     }
 

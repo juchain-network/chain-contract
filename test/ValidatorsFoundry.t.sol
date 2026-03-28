@@ -110,4 +110,55 @@ contract ValidatorsFoundryTest is BaseSetup {
         require(a2 == 2 wei, "v2 should get 2 wei");
         require(a3 == 1 wei, "v3 should get 1 wei");
     }
+
+    function testWithdrawProfitsDoesNotOverflowOnLargePeriod() public {
+        vm.store(PROPOSAL, bytes32(uint256(56)), bytes32(uint256(1)));
+
+        vm.startPrank(miner);
+        (bool ok,) = address(Validators(VALIDATORS)).call{value: 1 ether}(
+            abi.encodeWithSelector(Validators.distributeBlockReward.selector)
+        );
+        vm.stopPrank();
+        require(ok, "distribute failed");
+
+        vm.roll(block.number + 2);
+        vm.prank(miner);
+        Validators(VALIDATORS).withdrawProfits(miner);
+
+        vm.startPrank(miner);
+        (ok,) = address(Validators(VALIDATORS)).call{value: 1 ether}(
+            abi.encodeWithSelector(Validators.distributeBlockReward.selector)
+        );
+        vm.stopPrank();
+        require(ok, "second distribute failed");
+
+        vm.store(PROPOSAL, bytes32(uint256(56)), bytes32(type(uint256).max));
+
+        vm.prank(miner);
+        vm.expectRevert("You must wait enough blocks to withdraw your profits after latest withdraw of this validator");
+        Validators(VALIDATORS).withdrawProfits(miner);
+    }
+
+    function testCreateOrEditValidatorRejectsZeroFeeAddress() public {
+        vm.prank(v1);
+        vm.expectRevert("Invalid fee address");
+        Validators(VALIDATORS).createOrEditValidator(payable(address(0)), "", "", "", "", "");
+    }
+
+    function testCreateOrEditValidatorRejectsUnauthorizedCaller() public {
+        address candidate = makeAddr("candidate");
+        address feeAddr = makeAddr("candidateFee");
+
+        vm.prank(candidate);
+        vm.expectRevert("You must be authorized or an existing validator");
+        Validators(VALIDATORS).createOrEditValidator(payable(feeAddr), "", "", "", "", "");
+    }
+
+    function testCreateOrEditValidatorRejectsInvalidDescription() public {
+        string memory tooLongMoniker = new string(71);
+
+        vm.prank(v1);
+        vm.expectRevert("Invalid moniker length");
+        Validators(VALIDATORS).createOrEditValidator(payable(v1), tooLongMoniker, "", "", "", "");
+    }
 }

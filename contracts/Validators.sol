@@ -306,8 +306,10 @@ contract Validators is Params, ReentrancyGuard, IValidators {
         // Check if validator exists (has staked) from Staking contract
         require(this.isValidatorExist(validator), "Validator does not exist");
         require(validatorInfo[validator].feeAddr == feeAddr, "You are not the fee receiver of this validator");
+        uint256 lastWithdrawBlock = validatorInfo[validator].lastWithdrawProfitsBlock;
+        uint256 withdrawPeriod = proposal.withdrawProfitPeriod();
         require(
-            validatorInfo[validator].lastWithdrawProfitsBlock + proposal.withdrawProfitPeriod() <= block.number,
+            block.number >= lastWithdrawBlock && block.number - lastWithdrawBlock >= withdrawPeriod,
             "You must wait enough blocks to withdraw your profits after latest withdraw of this validator"
         );
         uint256 aacIncoming = validatorInfo[validator].aacIncoming;

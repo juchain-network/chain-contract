@@ -29,6 +29,7 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 private constant DEFAULT_PROPOSAL_COOLDOWN = 100; // 100 blocks
     address private constant DEFAULT_BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
     uint256 private constant MAX_SAFE_BLOCK_REWARD = type(uint256).max / CONSENSUS_MAX_VALIDATORS;
+    uint256 private constant MAX_BLOCK_DELTA = 315_360_000; // ~10 years at 1 block/sec
 
     // How many blocks a proposal will exist
     uint256 public proposalLastingPeriod;
@@ -219,7 +220,7 @@ contract Proposal is Params, ReentrancyGuard {
             if (pass[dst]) {
                 uint256 passedHeight = proposalPassedHeight[dst];
                 // If proposal has expired, clear the pass status to allow resubmission
-                if (block.number > passedHeight + proposalLastingPeriod) {
+                if (_isBlockDeltaExceeded(passedHeight, proposalLastingPeriod)) {
                     pass[dst] = false;
                     proposalPassedHeight[dst] = 0;
                 } else {
@@ -320,7 +321,7 @@ contract Proposal is Params, ReentrancyGuard {
     function voteProposal(bytes32 id, bool auth) external onlyValidator onlyNotEpoch nonReentrant returns (bool) {
         require(proposals[id].createTime != 0, "Proposal does not exist");
         require(votes[msg.sender][id].voteTime == 0, "You can't vote for a proposal twice");
-        require(block.number < proposals[id].createBlock + proposalLastingPeriod, "Proposal expired");
+        require(_isBlockDeltaOpen(proposals[id].createBlock, proposalLastingPeriod), "Proposal expired");
 
         votes[msg.sender][id].voteTime = block.timestamp;
         votes[msg.sender][id].voter = msg.sender;
@@ -404,6 +405,9 @@ contract Proposal is Params, ReentrancyGuard {
     function validateConfig(uint256 cid, uint256 value) internal view returns (bool) {
         require(cid <= 19, "Invalid config ID");
         require(value > 0, "Config value must be positive");
+        if (cid == 0 || cid == 4 || cid == 6 || cid == 7 || cid == 15 || cid == 16 || cid == 19) {
+            require(value <= MAX_BLOCK_DELTA, "Config block delta too large");
+        }
         if (cid == 1) {
             require(value < removeThreshold, "punishThreshold must be < removeThreshold");
         } else if (cid == 2) {
@@ -420,6 +424,10 @@ contract Proposal is Params, ReentrancyGuard {
             );
         } else if (cid == 9) {
             require(value <= CONSENSUS_MAX_VALIDATORS, "maxValidators exceeds consensus limit");
+        } else if (cid == 10) {
+            require(value >= minUndelegation, "minDelegation must be >= minUndelegation");
+        } else if (cid == 11) {
+            require(value <= minDelegation, "minUndelegation must be <= minDelegation");
         } else if (cid == 12) {
             require(value >= doubleSignRewardAmount, "doubleSignSlashAmount must be >= doubleSignRewardAmount");
         } else if (cid == 13) {
@@ -428,16 +436,10 @@ contract Proposal is Params, ReentrancyGuard {
             require(value <= type(uint160).max, "burnAddress invalid");
             // forge-lint: disable-next-line(unsafe-typecast)
             require(address(uint160(value)) != address(0), "burnAddress must be non-zero");
-        } else if (cid == 15) {
-            require(value > 0, "doubleSignWindow must be positive");
-        } else if (cid == 16) {
-            require(value > 0, "commissionUpdateCooldown must be positive");
         } else if (cid == 17) {
             require(value <= 10000, "baseRewardRatio must be <= 10000");
         } else if (cid == 18) {
             require(value <= 10000, "maxCommissionRate must be <= 10000");
-        } else if (cid == 19) {
-            require(value > 0, "proposalCooldown must be positive");
         }
         return true;
     }
@@ -527,7 +529,7 @@ contract Proposal is Params, ReentrancyGuard {
         }
         uint256 passedHeight = proposalPassedHeight[validator];
         // Check if within 7 days (604800 blocks) - only applies to NEW registrations
-        return block.number <= passedHeight + proposalLastingPeriod;
+        return _isBlockDeltaInclusive(passedHeight, proposalLastingPeriod);
     }
 
     /**
@@ -536,8 +538,24 @@ contract Proposal is Params, ReentrancyGuard {
     function _checkProposalCooldown() internal {
         uint256 lastBlock = lastProposalBlock[msg.sender];
         if (lastBlock > 0) {
-            require(block.number >= lastBlock + proposalCooldown, "Proposal creation too frequent");
+            require(_hasBlockDeltaElapsed(lastBlock, proposalCooldown), "Proposal creation too frequent");
         }
         lastProposalBlock[msg.sender] = block.number;
+    }
+
+    function _hasBlockDeltaElapsed(uint256 startBlock, uint256 delta) internal view returns (bool) {
+        return block.number >= startBlock && block.number - startBlock >= delta;
+    }
+
+    function _isBlockDeltaExceeded(uint256 startBlock, uint256 delta) internal view returns (bool) {
+        return block.number > startBlock && block.number - startBlock > delta;
+    }
+
+    function _isBlockDeltaInclusive(uint256 startBlock, uint256 delta) internal view returns (bool) {
+        return block.number >= startBlock && block.number - startBlock <= delta;
+    }
+
+    function _isBlockDeltaOpen(uint256 startBlock, uint256 delta) internal view returns (bool) {
+        return block.number >= startBlock && block.number - startBlock < delta;
     }
 }

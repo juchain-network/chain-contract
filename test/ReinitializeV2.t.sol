@@ -47,4 +47,24 @@ contract ReinitializeV2Test is BaseSetup {
         p.reinitializeV2();
         assertEq(p.revision(), 2);
     }
+
+    function testReinitializeV2ProposalRejectsSecondCall() public {
+        Proposal p = Proposal(PROPOSAL);
+        vm.prank(miner);
+        p.reinitializeV2();
+
+        vm.prank(miner);
+        vm.expectRevert("Already reinitialized");
+        p.reinitializeV2();
+    }
+
+    function testReinitializeV2ValidatorsRejectsSecondCall() public {
+        Validators v = Validators(VALIDATORS);
+        vm.prank(miner);
+        v.reinitializeV2();
+
+        vm.prank(miner);
+        vm.expectRevert("Already reinitialized");
+        v.reinitializeV2();
+    }
 }

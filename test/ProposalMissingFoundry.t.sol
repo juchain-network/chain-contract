@@ -7,6 +7,8 @@ import {Staking} from "../contracts/Staking.sol";
 
 // Supplement missing Proposal test cases
 contract ProposalMissingFoundryTest is BaseSetup {
+    uint256 constant MAX_BLOCK_DELTA = 315_360_000;
+
     address v1;
     address v2;
     address v3;
@@ -653,6 +655,18 @@ contract ProposalMissingFoundryTest is BaseSetup {
         p.createUpdateConfigProposal(4, invalidValue);
     }
 
+    function testBlockDeltaConfigRejectsOversizedValues() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 oversized = MAX_BLOCK_DELTA + 1;
+        uint256[7] memory cids = [uint256(0), 4, 6, 7, 15, 16, 19];
+
+        for (uint256 i = 0; i < cids.length; i++) {
+            vm.prank(v1);
+            vm.expectRevert("Config block delta too large");
+            p.createUpdateConfigProposal(cids[i], oversized);
+        }
+    }
+
     function testUpdateConfigCID5Invalid() public {
         // Test updating blockReward with invalid value (cid=5)
         Proposal p = Proposal(PROPOSAL);
@@ -769,6 +783,14 @@ contract ProposalMissingFoundryTest is BaseSetup {
         p.createUpdateConfigProposal(9, invalidValue);
     }
 
+    function testUpdateConfigCID9RejectsAboveConsensusLimit() public {
+        Proposal p = Proposal(PROPOSAL);
+
+        vm.prank(v1);
+        vm.expectRevert("maxValidators exceeds consensus limit");
+        p.createUpdateConfigProposal(9, 22);
+    }
+
     function testUpdateConfigCID10() public {
         // Test updating minDelegation (cid=10)
         Proposal p = Proposal(PROPOSAL);
@@ -795,6 +817,15 @@ contract ProposalMissingFoundryTest is BaseSetup {
         uint256 invalidValue = 0;
         vm.expectRevert("Config value must be positive");
         vm.prank(v1); // Use validator v1 as proposer
+        p.createUpdateConfigProposal(10, invalidValue);
+    }
+
+    function testUpdateConfigCID10RejectsBelowMinUndelegation() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 invalidValue = p.minUndelegation() - 1;
+
+        vm.prank(v1);
+        vm.expectRevert("minDelegation must be >= minUndelegation");
         p.createUpdateConfigProposal(10, invalidValue);
     }
 
@@ -827,6 +858,15 @@ contract ProposalMissingFoundryTest is BaseSetup {
         p.createUpdateConfigProposal(11, invalidValue);
     }
 
+    function testUpdateConfigCID11RejectsAboveMinDelegation() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 invalidValue = p.minDelegation() + 1;
+
+        vm.prank(v1);
+        vm.expectRevert("minUndelegation must be <= minDelegation");
+        p.createUpdateConfigProposal(11, invalidValue);
+    }
+
     function testUpdateConfigCID12() public {
         Proposal p = Proposal(PROPOSAL);
         uint256 rewardAmount = p.doubleSignRewardAmount();
@@ -842,6 +882,15 @@ contract ProposalMissingFoundryTest is BaseSetup {
         p.voteProposal(id, true);
 
         require(p.doubleSignSlashAmount() == validValue, "doubleSignSlashAmount should be updated");
+    }
+
+    function testUpdateConfigCID12RejectsBelowRewardAmount() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 invalidValue = p.doubleSignRewardAmount() - 1;
+
+        vm.prank(v1);
+        vm.expectRevert("doubleSignSlashAmount must be >= doubleSignRewardAmount");
+        p.createUpdateConfigProposal(12, invalidValue);
     }
 
     function testUpdateConfigCID13() public {
@@ -861,6 +910,15 @@ contract ProposalMissingFoundryTest is BaseSetup {
         require(p.doubleSignRewardAmount() == validValue, "doubleSignRewardAmount should be updated");
     }
 
+    function testUpdateConfigCID13RejectsAboveSlashAmount() public {
+        Proposal p = Proposal(PROPOSAL);
+        uint256 invalidValue = p.doubleSignSlashAmount() + 1;
+
+        vm.prank(v1);
+        vm.expectRevert("doubleSignRewardAmount must be <= doubleSignSlashAmount");
+        p.createUpdateConfigProposal(13, invalidValue);
+    }
+
     function testUpdateConfigCID14() public {
         Proposal p = Proposal(PROPOSAL);
         address newBurn = makeAddr("burn");
@@ -876,6 +934,14 @@ contract ProposalMissingFoundryTest is BaseSetup {
         p.voteProposal(id, true);
 
         require(p.burnAddress() == newBurn, "burnAddress should be updated");
+    }
+
+    function testUpdateConfigCID14RejectsZeroAddress() public {
+        Proposal p = Proposal(PROPOSAL);
+
+        vm.prank(v1);
+        vm.expectRevert("Config value must be positive");
+        p.createUpdateConfigProposal(14, 0);
     }
 
     function testUpdateConfigCID15() public {
@@ -999,5 +1065,49 @@ contract ProposalMissingFoundryTest is BaseSetup {
 
         // Verify the proposal is now invalid due to expiration
         require(!p.isProposalValidForStaking(candidate), "proposal should be invalid after expiration");
+    }
+
+    function testIsProposalValidForStakingDoesNotOverflowOnLargePeriod() public {
+        Proposal p = Proposal(PROPOSAL);
+        address candidate = makeAddr("candidate-large-period");
+
+        vm.prank(v1);
+        bytes32 id = p.createProposal(candidate, true, "add validator");
+        vm.prank(v1);
+        p.voteProposal(id, true);
+        vm.prank(v2);
+        p.voteProposal(id, true);
+        vm.prank(v3);
+        p.voteProposal(id, true);
+
+        vm.store(PROPOSAL, bytes32(uint256(52)), bytes32(type(uint256).max));
+
+        assertTrue(p.isProposalValidForStaking(candidate), "proposal should remain valid without overflow");
+    }
+
+    function testVoteProposalDoesNotOverflowOnLargePeriod() public {
+        Proposal p = Proposal(PROPOSAL);
+        address candidate = makeAddr("candidate-vote-large-period");
+
+        vm.prank(v1);
+        bytes32 id = p.createProposal(candidate, true, "test");
+
+        vm.store(PROPOSAL, bytes32(uint256(52)), bytes32(type(uint256).max));
+
+        vm.prank(v1);
+        p.voteProposal(id, true);
+    }
+
+    function testProposalCooldownDoesNotOverflowOnLargeValue() public {
+        Proposal p = Proposal(PROPOSAL);
+
+        vm.prank(v1);
+        p.createProposal(makeAddr("candidate-a"), true, "first");
+
+        vm.store(PROPOSAL, bytes32(uint256(71)), bytes32(type(uint256).max));
+
+        vm.prank(v1);
+        vm.expectRevert("Proposal creation too frequent");
+        p.createProposal(makeAddr("candidate-b"), true, "second");
     }
 }

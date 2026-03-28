@@ -233,36 +233,45 @@ contract ProposalFoundryTest is BaseSetup {
         require(!p.pass(v1), "v1 should be unpassed");
     }
 
-    function testConfigUpdateAll() public {
-        Proposal p = Proposal(PROPOSAL);
-        uint256 cooldown = p.proposalCooldown();
-        uint256[8] memory cids = [uint256(0), 1, 2, 3, 4, 5, 6, 7];
+    function testConfigUpdateProposalLastingPeriod() public {
+        _updateConfigAndAssert(0, 3600);
+        require(Proposal(PROPOSAL).proposalLastingPeriod() == 3600, "cid0");
+    }
 
-        uint256[8] memory vals = [uint256(3600), 20, 60, 30, 500, 833_000_000_000_000_000, 604800, 86400];
-        for (uint256 i = 0; i < cids.length; i++) {
-            // Create config proposal using validator v1
-            vm.prank(v1);
-            bytes32 id = p.createUpdateConfigProposal(cids[i], vals[i]);
-            vm.prank(v1);
-            p.voteProposal(id, true);
-            vm.prank(v2);
-            p.voteProposal(id, true);
-            vm.prank(v3);
-            p.voteProposal(id, true);
+    function testConfigUpdatePunishThreshold() public {
+        _updateConfigAndAssert(1, 20);
+        require(Proposal(PROPOSAL).punishThreshold() == 20, "cid1");
+    }
 
-            if (cids[i] == 0) require(p.proposalLastingPeriod() == 3600, "cid0");
-            else if (cids[i] == 1) require(p.punishThreshold() == vals[1], "cid1");
-            else if (cids[i] == 2) require(p.removeThreshold() == vals[2], "cid2");
-            else if (cids[i] == 3) require(p.decreaseRate() == vals[3], "cid3");
-            else if (cids[i] == 4) require(p.withdrawProfitPeriod() == vals[4], "cid4");
-            else if (cids[i] == 5) require(p.blockReward() == vals[5], "cid5");
-            else if (cids[i] == 6) require(p.unbondingPeriod() == vals[6], "cid6");
-            else if (cids[i] == 7) require(p.validatorUnjailPeriod() == vals[7], "cid7");
+    function testConfigUpdateRemoveThreshold() public {
+        _updateConfigAndAssert(2, 60);
+        require(Proposal(PROPOSAL).removeThreshold() == 60, "cid2");
+    }
 
-            if (i + 1 < cids.length) {
-                vm.roll(block.number + cooldown);
-            }
-        }
+    function testConfigUpdateDecreaseRate() public {
+        _updateConfigAndAssert(3, 30);
+        require(Proposal(PROPOSAL).decreaseRate() == 30, "cid3");
+    }
+
+    function testConfigUpdateWithdrawProfitPeriod() public {
+        _updateConfigAndAssert(4, 500);
+        require(Proposal(PROPOSAL).withdrawProfitPeriod() == 500, "cid4");
+    }
+
+    function testConfigUpdateBlockReward() public {
+        uint256 blockReward = 833_000_000_000_000_000;
+        _updateConfigAndAssert(5, blockReward);
+        require(Proposal(PROPOSAL).blockReward() == blockReward, "cid5");
+    }
+
+    function testConfigUpdateUnbondingPeriod() public {
+        _updateConfigAndAssert(6, 604800);
+        require(Proposal(PROPOSAL).unbondingPeriod() == 604800, "cid6");
+    }
+
+    function testConfigUpdateValidatorUnjailPeriod() public {
+        _updateConfigAndAssert(7, 86400);
+        require(Proposal(PROPOSAL).validatorUnjailPeriod() == 86400, "cid7");
     }
 
     function testUpdateConfigWithInvalidCID() public {
@@ -385,6 +394,18 @@ contract ProposalFoundryTest is BaseSetup {
 
         vm.prank(v2);
         vm.expectRevert("Invalid proposal type");
+        p.voteProposal(id, true);
+    }
+
+    function _updateConfigAndAssert(uint256 cid, uint256 value) internal {
+        Proposal p = Proposal(PROPOSAL);
+        vm.prank(v1);
+        bytes32 id = p.createUpdateConfigProposal(cid, value);
+        vm.prank(v1);
+        p.voteProposal(id, true);
+        vm.prank(v2);
+        p.voteProposal(id, true);
+        vm.prank(v3);
         p.voteProposal(id, true);
     }
 }

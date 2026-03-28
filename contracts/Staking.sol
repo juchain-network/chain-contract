@@ -336,7 +336,9 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         uint256 cooldown = proposalContract.commissionUpdateCooldown();
         uint256 lastUpdate = lastCommissionUpdateBlock[msg.sender];
         if (lastUpdate > 0) {
-            require(block.number >= lastUpdate + cooldown, "Commission update too frequent");
+            require(
+                block.number >= lastUpdate && block.number - lastUpdate >= cooldown, "Commission update too frequent"
+            );
         }
         lastCommissionUpdateBlock[msg.sender] = block.number;
 
@@ -391,7 +393,10 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         ValidatorStake storage stake = validatorStakes[msg.sender];
         uint256 lastBlock = lastActiveBlock[msg.sender];
         if (lastBlock != 0) {
-            require(block.number > lastBlock + proposalContract.doubleSignWindow(), "Exit blocked in doubleSignWindow");
+            require(
+                block.number > lastBlock && block.number - lastBlock > proposalContract.doubleSignWindow(),
+                "Exit blocked in doubleSignWindow"
+            );
         }
 
         // Cannot resign if already jailed/resigned
@@ -418,7 +423,10 @@ contract Staking is Params, ReentrancyGuard, IStaking {
         ValidatorStake storage stake = validatorStakes[msg.sender];
         uint256 lastBlock = lastActiveBlock[msg.sender];
         if (lastBlock != 0) {
-            require(block.number > lastBlock + proposalContract.doubleSignWindow(), "Exit blocked in doubleSignWindow");
+            require(
+                block.number > lastBlock && block.number - lastBlock > proposalContract.doubleSignWindow(),
+                "Exit blocked in doubleSignWindow"
+            );
         }
         uint256 withdrawAmount = stake.selfStake;
         require(withdrawAmount > 0, "Validator has no stake to withdraw");
@@ -733,7 +741,7 @@ contract Staking is Params, ReentrancyGuard, IStaking {
             if (stake.lastClaimBlock > 0) {
                 uint256 withdrawPeriod = proposalContract.withdrawProfitPeriod();
                 require(
-                    block.number >= stake.lastClaimBlock + withdrawPeriod,
+                    block.number >= stake.lastClaimBlock && block.number - stake.lastClaimBlock >= withdrawPeriod,
                     "Must wait withdrawProfitPeriod blocks between claims"
                 );
             }
