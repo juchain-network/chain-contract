@@ -20,6 +20,42 @@ const CONTRACT_ADDRESSES = {
 // Initial validator information for the local genesis template.
 const INITIAL_VALIDATORS = ["0x70997970C51812dc3A010C7d01b50e0d17dc79C8"];
 
+function normalizeAddress(addr) {
+  return `0x${addr.slice(2).toLowerCase()}`;
+}
+
+function ensureBootstrapConfig(genesis) {
+  if (!genesis.config) {
+    genesis.config = {};
+  }
+  if (!genesis.config.congress) {
+    genesis.config.congress = {};
+  }
+
+  const normalizedValidators = INITIAL_VALIDATORS.map(normalizeAddress);
+  genesis.config.congress.initialValidators = normalizedValidators;
+  genesis.config.congress.initialSigners = normalizedValidators;
+}
+
+function ensureBootstrapBalances(genesis, minValidatorStake) {
+  const normalizedValidators = INITIAL_VALIDATORS.map(normalizeAddress);
+
+  for (const validator of normalizedValidators) {
+    const currentBalanceHex = genesis.alloc[validator]?.balance || "0x0";
+    const currentBalance = BigInt(currentBalanceHex);
+
+    if (currentBalance < minValidatorStake) {
+      genesis.alloc[validator] = {
+        ...(genesis.alloc[validator] || {}),
+        balance: `0x${minValidatorStake.toString(16)}`,
+      };
+      console.log(
+        `✅ Ensured bootstrap balance for ${validator}: ${formatJu(minValidatorStake)}`,
+      );
+    }
+  }
+}
+
 function readDefaultMinValidatorStake() {
   const proposalSourcePath = path.join(__dirname, "contracts", "Proposal.sol");
   const proposalSource = fs.readFileSync(proposalSourcePath, "utf8");
@@ -129,6 +165,9 @@ function updateGenesisFile() {
       genesis.alloc = {};
     }
 
+    ensureBootstrapConfig(genesis);
+    ensureBootstrapBalances(genesis, minValidatorStake);
+
     // Add system contracts
     console.log("📋 Adding system contracts to Genesis file...");
 
@@ -159,6 +198,7 @@ function updateGenesisFile() {
     // Update extraData to include initial validators
     genesis.extraData = generateExtraData();
     console.log("✅ Updated extraData to include initial validators");
+    console.log("✅ Updated config.congress.initialValidators / initialSigners");
 
     // Write back to Genesis file
     fs.writeFileSync(genesisPath, JSON.stringify(genesis, null, 2));
