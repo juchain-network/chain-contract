@@ -13,7 +13,7 @@ contract Proposal is Params, ReentrancyGuard {
     uint256 private constant DEFAULT_REMOVE_THRESHOLD = 48; // blocks
     uint256 private constant DEFAULT_DECREASE_RATE = 24; // %
     uint256 private constant DEFAULT_WITHDRAW_PROFIT_PERIOD = 86400; // 1 day in blocks
-    uint256 private constant DEFAULT_BLOCK_REWARD = 0.2 ether; // 2 * 10^17 wei
+    uint256 private constant DEFAULT_BLOCK_REWARD = 0.002 ether; // 2 * 10^17 wei
     uint256 private constant DEFAULT_UNBONDING_PERIOD = 604800; // 7 days in blocks
     uint256 private constant DEFAULT_VALIDATOR_UNJAIL_PERIOD = 86400; // 1 day in blocks
     uint256 private constant DEFAULT_MIN_VALIDATOR_STAKE = 100000 ether; // Minimum validator stake
