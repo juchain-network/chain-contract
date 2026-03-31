@@ -1,0 +1,109 @@
+# AI Agents Guide for JuChain System Contracts
+
+This document provides context, architectural overview, and operational guidelines for AI agents working on the `chain-contract` repository. It is designed to minimize context-loading time and prevent regression of known system constraints.
+
+## 1. Project Overview
+
+**JuChain System Contracts** is the core smart contract layer for the JuChain blockchain (EVM-compatible). It implements the **PoSA (Proof of Stake Authority)** consensus mechanism ("Congress"), combining PoA governance with PoS economic incentives.
+
+### Core Features
+- **Hybrid Consensus**: Validators are selected by stake weight but admitted via governance proposals.
+- **Epoch-Based Updates**: Validator set changes only occur at `Epoch` boundaries (every 86,400 blocks in mainnet, configurable in genesis).
+- **Dual-Layer Governance**:
+    - **Validator Admission**: Proposals to add/remove validators.
+    - **Parameter Tuning**: Governance can update system parameters (e.g., `blockReward`, `unbondingPeriod`) without contract upgrades.
+
+## 2. Technology Stack
+
+- **Smart Contracts**: Solidity ^0.8.29 (Foundry framework).
+- **Integration Tests**: Moved to the standalone `chain-tests` repository.
+- **Infrastructure**: Docker & Docker Compose (for local 4-node cluster orchestration).
+- **Build/Scripts**: Makefile, JavaScript (Genesis generation), Bash.
+
+## 3. Directory Structure & Key Components
+
+### Root Directory
+
+- `contracts/`: **Core Solidity Contracts**.
+    - `Proposal.sol` (0xf012): **Governance Core**. Manages validator admission proposals and system configuration changes. A validator must pass a proposal *before* they can stake.
+    - `Staking.sol` (0xf013): **State Owner**. Manages staking, delegation, rewards, and the definitive "Jailed" state. Enforces the one-per-epoch resignation limit.
+    - `Validators.sol` (0xf010): **Consensus Interface**. Manages the active validator set (epoch cache) and distributes block/transaction rewards.
+    - `Punish.sol` (0xf011): **Slashing Logic**. Tracks missed blocks and triggers jailing (at `removeThreshold`) or income suspension (at `punishThreshold`).
+    - `Params.sol`: System constants and modifiers.
+  
+- `lib/`: External dependencies (OpenZeppelin, Forge Std).
+- `foundry.toml`: Foundry configuration.
+
+### End-to-End Tests (External)
+
+End-to-end coverage is maintained in the standalone `chain-tests` repository.
+This repository (`chain-contract`) keeps unit and contract-level tests only.
+
+## 4. Critical System Constraints (READ BEFORE CODING)
+
+When writing code or tests, you **MUST** adhere to these constraints specific to the JuChain PoSA implementation:
+
+### 4.1. Consensus & Mining
+
+- **Epoch Latency**: Validator set updates (add/remove) only take effect at `Epoch` boundaries.
+    - *Implication*: If you register a validator in block `N`, they will not be active until `ceil(N / Epoch) * Epoch`. Use `waitForNextEpochBlock()` in tests.
+- **Physical Node Limit**: The consensus threshold (`N/2 + 1`) must not exceed the number of physical Docker nodes (4).
+    - *Rule*: Do not add too many "virtual" validators in tests without removing others, or the chain will stall.
+- **One-per-Epoch Limit**: `Staking.sol` enforces that only **one** validator can resign per epoch. Tests must respect this.
+
+### 4.2. The "Proposal to Staking" Workflow
+
+Unlike standard PoS, you cannot just "stake" to become a validator. The flow is strictly:
+1.  **Create Proposal**: `Proposal.createProposal(candidate, true, ...)`
+2.  **Vote**: Active validators vote until `> 50%` support is reached.
+3.  **Registration Window**: The candidate MUST call `Staking.registerValidator` within `proposalLastingPeriod` (default ~7 days) blocks of the proposal passing.
+    - *Common Bug*: Tests failing because they try to register without a passed proposal or after the window expires.
+
+### 4.3. Transaction Handling (CIContext)
+
+- **Nonce Management**: Use `CIContext.GetTransactor`. It uses `PendingNonceAt` + a mutex to handle rapid-fire transactions. **Do not** manually manage nonces in tests.
+- **Gas Pricing**: This is a PoA chain.
+    - **Requirement**: Use **Legacy Transactions** (`GasPrice`).
+    - **Setting**: Set `GasPrice` to `1 Gwei` (or similar non-zero value) to avoid "underpriced" errors.
+    - **Avoid**: Do not use EIP-1559 (`GasFeeCap`/`GasTipCap`) as the node may reject them.
+- **WaitMined**: Always use `ctx.WaitMined(hash)`. It polls **all** cluster nodes to ensure propagation, preventing flaky timeouts.
+
+### 4.4. System Transactions
+
+- **Forbidden Calls**: Functions like `distributeBlockReward` or `punish` (consensus level) are protected by the node software.
+    - *Observation*: Calling them via RPC will fail with `forbidden system transaction`.
+    - *Action*: Skip these calls in integration tests; rely on side-effect verification (e.g., balance changes) or unit tests.
+
+## 5. Development Workflows
+
+### Compiling Contracts & Genesis Update
+
+If you modify `.sol` files, you must propagate changes to the genesis block:
+1.  Compile: `forge build`
+2.  Generate Bytecode: `npm run generate`
+3.  Update Genesis: `npm run init-genesis`
+4.  **Re-init Nodes**: If running a local net, you must wipe data and re-init with the new genesis.
+
+### Running Unit Tests (Foundry)
+
+Fast logic verification.
+```bash
+forge test
+```
+
+### Running End-to-End Tests
+
+Use the standalone `chain-tests` repository for full-system verification.
+This repository no longer contains `test-integration/`.
+
+## 6. Known Issues & Findings
+
+- **Active Set Lag**: A validator jailed in block `X` (epoch `E`) remains in the `currentValidatorSet` until epoch `E+1`, but their rewards are stripped immediately.
+- **Reentrancy**: System contracts utilize `ReentrancyGuard` and a custom `operationsDone` mapping to prevent multiple system calls in the same block.
+
+## 7. Interaction Guidelines for Agents
+
+1.  **Use Foundry tests for this repo**: Keep contract logic and regression coverage in `test/`.
+2.  **Use `chain-tests` for E2E**: Cross-node/consensus path verification belongs there.
+3.  **Logs**: Use `console.log` in Solidity and normal test assertions/messages in Foundry tests.
+4.  **Formatting**: Always run `forge fmt` after modifying Solidity files.

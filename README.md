@@ -1,110 +1,157 @@
 # Ju System Contracts
+This repository contains the system contracts for the Ju blockchain's JPoSA (JPoSA) consensus mechanism. It includes validator management, governance proposals, punishment mechanisms, and the scripts needed to build contract artifacts and genesis data.
 
-Congress Proof-of-Authority (PoA) consensus system contracts for JuChain.
+## ✨ Features
 
-## Overview
+- 🏛️ **Hybrid Consensus Mechanism**: Combines the advantages of PoS (Proof of Stake) and PoA (Proof of Authority) to achieve a balance between decentralization and high performance
+- 🗳️ **Democratic Governance System**: Proposal governance mechanism supporting protocol upgrades and parameter adjustments with validator participation in network governance decisions
+- ⚖️ **Dynamic Validator Set**: Automatically updates the validator list based on staking weight with a limited number of active validators and minimum staking requirement
+- 💰 **Economic Incentive Model**: Sustainable economic model with moderate annual issuance rate, fair reward distribution between validators and delegators, and delegation mechanism for ordinary users to participate
+- 🔒 **Multi-layer Security Protection**: Comprehensive security mechanisms including unbonding period, automatic validator jailing for misbehavior, and re-entry attack protection
 
-This project contains:
-- **System Contracts**: Validators, Proposal, and Punish contracts for network governance
-- **CLI Tool**: Go-based command-line interface for managing validators and proposals
+## 🏗️ Project Structure
 
-## System Contracts
+```
+chain-contract/
+├── contracts/           # Solidity source code
+├── script/              # Foundry deployment scripts
+├── test/                # Foundry test suites
+├── docs/               # Project documentation
+├── foundry.toml        # Foundry configuration
+├── foundry.lock        # Foundry dependency lock file
+├── package.json        # Node.js dependencies
+├── generate-contracts.js # Contract template generator
+├── init_genesis.js     # Genesis file initialization script
+├── check_system_status.js # System status checking utility
+├── extract-bytecode.js # Bytecode extraction utility
+└── README.md           # This file
+```
 
-### Contract Addresses
-- Validators: `0x000000000000000000000000000000000000f000`
-- Punish: `0x000000000000000000000000000000F001`
-- Proposal: `0x000000000000000000000000000000000000f002`
+## 📚 Documentation
+- [**JPoSA Whitepaper**](docs/posa-whitepaper.md) - Whitepaper of JPoSA consensus mechanism
+- [**JPoSA Whitepaper (Chinese)**](docs/posa-whitepaper-zh.md) - Chinese version of JPoSA consensus mechanism whitepaper
+- [**JPoSA Technical Specification**](docs/posa-tech-spec.md) - Detailed technical specification of JPoSA consensus mechanism
+- [**Deployment Guide**](docs/deployment-guide.md) - Complete deployment and configuration guide
 
-### Key Parameters
-- `punishThreshold = 24`: Threshold for confiscating validator rewards
-- `removeThreshold = 48`: Threshold for removing validator from active set
-- `decreaseRate = 24`: Error count reduction rate per epoch
-- `withdrawProfitPeriod = 28800`: Block interval between profit withdrawals
-- `proposalLastingPeriod = 7 days`: Validity period for proposals
 
-### Consensus Mechanism
 
-Congress PoA combines elements of `clique` and `DPoS` algorithms with system contracts for validator management.
+## 📋 System Contracts
 
-**Key Features:**
-1. Automatic validator set updates based on stake ranking
-2. Reward distribution among validators
-3. Punishment mechanism for missed blocks
-4. Governance through proposals and voting
+### **Deployment Flow**
 
-### Becoming a Validator
+1. Compile contracts: `forge build`
+2. Generate contracts: `npm run generate`
+3. Initialize genesis: `npm run init-genesis`
+4. Start chain: `cd ../chain/local-test && ./pm2-init.sh` or `pm2 start ecosystem.config.js`
 
-1. Create a proposal via `Proposal.createProposal(dst, flag, details)`
-2. Current validators vote via `Proposal.voteProposal(id, auth)`
-3. When majority approve, call `Validators.createOrEditValidator(...)` to register information
-4. New validator becomes active in the next epoch cycle
 
-## CLI Tool
+## 🌐 Network Information
 
-Build the CLI:
+### RPC Endpoints
+
+- **Testnet**: `https://testnet-rpc.juchain.org` (Chain ID: 202599)
+- **Mainnet**: `https://rpc.juchain.org` (Chain ID: 210000)
+
+### Block Explorers
+
+- **Testnet Explorer**: https://testnet.juscan.io
+- **Mainnet Explorer**: https://juscan.io
+
+
+## 🛠️ Development Tools
+
+### **Primary: Foundry**
+
+The main development and testing framework.
+
 ```bash
-make build
+# Build contracts
+forge build
+
+# Run tests
+forge test
+
+# Run specific test
+forge test --match-test testProposalCreation
+
+# Run tests with verbosity
+forge test -vvv
 ```
 
-### Network Configuration
+### **Contract Generation**
+
+Generate `contracts/Params.sol` from template.
+
 ```bash
-# Testnet
-./congress-cli --chainId 202599 --rpc_laddr https://testnet-rpc.juchain.org
-
-# Mainnet
-./congress-cli --chainId 210000 --rpc_laddr https://rpc.juchain.org
+# Generate contracts
+npm run generate
 ```
 
-### Common Operations
+### **Genesis Configuration**
 
-#### 1. Create Proposal
+Update blockchain genesis file with compiled contract bytecode.
+
 ```bash
-./congress-cli create_proposal -p <proposer> -t <target> -o add --rpc_laddr <rpc>
-./congress-cli sign -f createProposal.json -k <key> -p <password> --chainId <id>
-./congress-cli send -f createProposal_signed.json --rpc_laddr <rpc>
+# Compile contracts first
+forge build
+
+# Update genesis.json with system contracts
+npm run init-genesis
 ```
 
-#### 2. Vote on Proposal
+## 🧪 Testing
+
+### **Foundry Tests** (Primary)
+
+Complete test coverage with 40+ test cases:
+
 ```bash
-./congress-cli vote_proposal -s <signer> -i <proposalId> -a <true/false> --rpc_laddr <rpc>
-./congress-cli sign -f voteProposal.json -k <key> -p <password> --chainId <id>
-./congress-cli send -f voteProposal_signed.json --rpc_laddr <rpc>
+# Run all tests
+forge test
+
+# Test specific contracts
+forge test --match-contract Proposal
+forge test --match-contract Validators
+forge test --match-contract Punish
 ```
 
-#### 3. Query Validators
+### **Test Coverage**
+
+- **Proposal Management**: Creation, voting, config updates
+- **Validator Lifecycle**: Registration, rewards, punishment
+- **Punishment System**: Thresholds, jailing, missed blocks
+- **Reward Distribution**: Fee sharing, profit withdrawal
+
+## 🏛️ Operational Tooling
+
+`ju-cli` and its generated Go bindings have been extracted into a standalone project. This repository now focuses on Solidity contracts, Foundry tests, and genesis-generation scripts.
+
+
+## 🚀 Quick Start
+
 ```bash
-# List all active validators
-./congress-cli miners --rpc_laddr <rpc>
+# Install nodejs 
+# https://nodejs.org/en/download
+# Install foundry
+# curl -L https://foundry.paradigm.xyz | bash
+# foundryup 
 
-# Get validator details
-./congress-cli miner --rpc_laddr <rpc> -a <validator_address>
+# 1. Install dependencies
+npm install
+
+# 2. Build contracts
+forge build
+
+# 3. Run tests
+forge test
+
+# 4. Generate contracts
+npm run generate
+
+# 5. Initialize genesis (if needed)
+npm run init-genesis
+
+# 6. Generate contract bytecode (if needed)
+npm run build-and-extract
+
 ```
-
-#### 4. Withdraw Profits
-```bash
-./congress-cli withdraw_profits -a <validator_address> --rpc_laddr <rpc>
-./congress-cli sign -f withdrawProfits.json -k <key> -p <password> --chainId <id>
-./congress-cli send -f withdrawProfits_signed.json --rpc_laddr <rpc>
-```
-
-#### 5. Update Configuration
-```bash
-# Configuration IDs:
-# 0: proposalLastingPeriod, 1: punishThreshold, 2: removeThreshold
-# 3: decreaseRate, 4: withdrawProfitPeriod
-./congress-cli create_config_proposal -p <proposer> -c <configId> -v <value> --rpc_laddr <rpc>
-# Then vote using the same process as validator proposal
-```
-
-
-## Genesis Configuration
-
-Configure consensus algorithm as `congress`:
-```json
-"congress": {
-    "period": 3,
-    "epoch": 200
-}
-```
-
-Set contract bytecode in genesis for system contract addresses.
